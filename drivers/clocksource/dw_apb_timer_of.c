@@ -75,7 +75,7 @@ static void add_clocksource(struct device_node *source_timer)
 
 static void __iomem *sched_io_base;
 
-static u32 read_sched_clock(void)
+static u64 read_sched_clock(void)
 {
 	return ~__raw_readl(sched_io_base);
 }
@@ -98,7 +98,7 @@ static void init_sched_clock(void)
 	timer_get_base_and_rate(sched_timer, &sched_io_base, &rate);
 	of_node_put(sched_timer);
 
-	setup_sched_clock(read_sched_clock, 32, rate);
+	sched_clock_register(read_sched_clock, 32, sched_rate);
 }
 
 static const struct of_device_id osctimer_ids[] __initconst = {
