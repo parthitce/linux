@@ -609,7 +609,7 @@ retry:
 		r->entropy_total += nbits;
 		if (r->entropy_total > 128) {
 			r->initialized = 1;
-			wake_up_interruptible(&urandom_init_wait);
+			wake_up_all(&urandom_init_wait);
 		}
 	}
 
