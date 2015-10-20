@@ -75,6 +75,7 @@ static struct workqueue_struct *md_misc_wq;
 static int remove_and_add_spares(struct mddev *mddev,
 				 struct md_rdev *this);
 
+static  struct file_operations md_sync_fops;
 #define MD_BUG(x...) { printk("md: bug in file %s, line %d\n", __FILE__, __LINE__); md_print_devices(); }
 
 /*
@@ -5174,6 +5175,7 @@ static int do_md_run(struct mddev *mddev)
 	revalidate_disk(mddev->gendisk);
 	mddev->changed = 1;
 	kobject_uevent(&disk_to_dev(mddev->gendisk)->kobj, KOBJ_CHANGE);
+	proc_create("mdsync", S_IRUGO, NULL, &md_sync_fops);
 out:
 	return err;
 }
@@ -7149,6 +7151,9 @@ static const struct file_operations md_seq_fops = {
 	.poll		= mdstat_poll,
 };
 
+static  struct file_operations md_sync_fops = {
+	.owner		= THIS_MODULE,
+};
 int register_md_personality(struct md_personality *p)
 {
 	spin_lock(&pers_lock);
