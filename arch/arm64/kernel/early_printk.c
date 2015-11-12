@@ -74,12 +74,21 @@ static void uart8250_32bit_printch(char ch)
 	writel_relaxed(ch, early_base + (UART_TX << 2));
 }
 
+static void owl_serial_printch(char ch)
+{
+	/* wait TX FIFO not full */
+	while (readl_relaxed(early_base + 0x0c) & (0x1 << 6))
+		;
+	writel_relaxed(ch, early_base + 0x08);
+}
+
 struct earlycon_match {
 	const char *name;
 	void (*printch)(char ch);
 };
 
 static const struct earlycon_match earlycon_match[] __initconst = {
+	{ .name = "serial-owl", .printch = owl_serial_printch, },
 	{ .name = "pl011", .printch = pl011_printch, },
 	{ .name = "smh", .printch = smh_printch, },
 	{ .name = "uart8250-8bit", .printch = uart8250_8bit_printch, },

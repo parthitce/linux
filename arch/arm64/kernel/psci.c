@@ -20,6 +20,8 @@
 #include <linux/of.h>
 #include <linux/smp.h>
 #include <linux/slab.h>
+#include <linux/pm.h>
+#include <uapi/linux/psci.h>
 
 #include <asm/compiler.h>
 #include <asm/cpu_ops.h>
@@ -27,6 +29,7 @@
 #include <asm/psci.h>
 #include <asm/smp_plat.h>
 #include <asm/suspend.h>
+#include <asm/system_misc.h>
 
 #define PSCI_POWER_STATE_TYPE_STANDBY		0
 #define PSCI_POWER_STATE_TYPE_POWER_DOWN	1
@@ -187,6 +190,18 @@ static int psci_migrate(unsigned long cpuid)
 	return psci_to_linux_errno(err);
 }
 
+static void psci_sys_reset(char str, const char *cmd)
+{
+	pr_notice("system reset\n");
+	invoke_psci_fn(PSCI_0_2_FN_SYSTEM_RESET, 0, 0, 0);
+}
+
+static void psci_sys_poweroff(void)
+{
+	pr_notice("system power off");
+	invoke_psci_fn(PSCI_0_2_FN_SYSTEM_OFF, 0, 0, 0);
+}
+
 static const struct of_device_id psci_of_match[] __initconst = {
 	{ .compatible = "arm,psci",	},
 	{},
@@ -308,6 +323,10 @@ void __init psci_init(void)
 		psci_function_id[PSCI_FN_MIGRATE] = id;
 		psci_ops.migrate = psci_migrate;
 	}
+
+	pm_power_reset = psci_sys_reset;
+
+	pm_power_off = psci_sys_poweroff;
 
 out_put_node:
 	of_node_put(np);

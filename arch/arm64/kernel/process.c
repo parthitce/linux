@@ -92,8 +92,14 @@ void soft_restart(unsigned long addr)
 void (*pm_power_off)(void);
 EXPORT_SYMBOL_GPL(pm_power_off);
 
+void (*pm_power_reset)(char str, const char *cmd);
+EXPORT_SYMBOL_GPL(pm_power_reset);
+
 void (*arm_pm_restart)(char str, const char *cmd);
 EXPORT_SYMBOL_GPL(arm_pm_restart);
+
+void (*arm_pm_poweroff)(void);
+EXPORT_SYMBOL_GPL(arm_pm_poweroff);
 
 void arch_cpu_idle_prepare(void)
 {
@@ -113,6 +119,16 @@ void arch_cpu_idle(void)
 		cpu_do_idle();
 		local_irq_enable();
 	}
+}
+
+void arch_cpu_idle_enter(void)
+{
+	idle_notifier_call_chain(IDLE_START);
+}
+
+void arch_cpu_idle_exit(void)
+{
+	idle_notifier_call_chain(IDLE_END);
 }
 
 #ifdef CONFIG_HOTPLUG_CPU
@@ -138,13 +154,16 @@ void machine_halt(void)
 void machine_power_off(void)
 {
 	machine_shutdown();
-	if (pm_power_off)
-		pm_power_off();
+	if (arm_pm_poweroff)
+		arm_pm_poweroff();
 }
 
 void machine_restart(char *cmd)
 {
-	machine_shutdown();
+	/* ensure run at the cpu0. https://lkml.org/lkml/2012/8/25/50 */
+	printk("%s: current cpu %d\n", __func__, smp_processor_id());
+	disable_nonboot_cpus();
+	// machine_shutdown();
 
 	/* Disable interrupts first */
 	local_irq_disable();

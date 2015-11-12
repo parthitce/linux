@@ -127,6 +127,16 @@ source "kernel/Kconfig.freezer"
 
 menu "Platform selection"
 
+config ARCH_OWL
+	bool "Actions OWL SoC Family"
+	select ARCH_REQUIRE_GPIOLIB
+	select COMMON_CLK_OWL
+	select PINCTRL
+	select PINCTRL_S900
+	select PM_GENERIC_DOMAINS if PM_RUNTIME
+	help
+	  This enables support for Actions OWL SOC Family
+
 config ARCH_VEXPRESS
 	bool "ARMv8 software model (Versatile Express)"
 	select ARCH_REQUIRE_GPIOLIB
