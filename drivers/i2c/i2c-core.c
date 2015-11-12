@@ -41,6 +41,7 @@
 #include <linux/irqflags.h>
 #include <linux/rwsem.h>
 #include <linux/pm_runtime.h>
+#include <linux/pm_domain.h>
 #include <linux/acpi.h>
 #include <asm/uaccess.h>
 
@@ -248,11 +249,17 @@ static int i2c_device_probe(struct device *dev)
 					client->flags & I2C_CLIENT_WAKE);
 	dev_dbg(dev, "probe\n");
 
-	status = driver->probe(client, i2c_match_id(driver->id_table, client));
-	if (status) {
-		client->driver = NULL;
-		i2c_set_clientdata(client, NULL);
+	status = dev_pm_domain_attach(&client->dev, true);
+	if (status != -EPROBE_DEFER) {
+		status = driver->probe(client, i2c_match_id(driver->id_table,
+					client));
+		if (status) {
+			client->driver = NULL;
+			i2c_set_clientdata(client, NULL);
+			dev_pm_domain_detach(&client->dev, true);
+		}
 	}
+
 	return status;
 }
 
@@ -277,6 +284,8 @@ static int i2c_device_remove(struct device *dev)
 		client->driver = NULL;
 		i2c_set_clientdata(client, NULL);
 	}
+
+	dev_pm_domain_detach(&client->dev, true);
 	return status;
 }
 

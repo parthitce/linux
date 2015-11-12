@@ -16,6 +16,7 @@ config ARM64
 	select COMMON_CLK
 	select CPU_PM if (SUSPEND || CPU_IDLE)
 	select DCACHE_WORD_ACCESS
+	select GENERIC_ALLOCATOR
 	select GENERIC_CLOCKEVENTS
 	select GENERIC_CLOCKEVENTS_BROADCAST if SMP
 	select GENERIC_CPU_AUTOPROBE
@@ -23,6 +24,7 @@ config ARM64
 	select GENERIC_IOMAP
 	select GENERIC_IRQ_PROBE
 	select GENERIC_IRQ_SHOW
+	select GENERIC_SCHED_CLOCK
 	select GENERIC_SMP_IDLE_THREAD
 	select GENERIC_STRNCPY_FROM_USER
 	select GENERIC_STRNLEN_USER
@@ -150,6 +152,32 @@ config ARM_AMBA
 endmenu
 
 menu "Kernel Features"
+
+menu "ARM errata workarounds"
+
+config ARM64_ERRATUM_845719
+	bool "Cortex-A53: 845719: a load might read incorrect data"
+	depends on COMPAT
+	default n
+	help
+	  This option adds an alternative code sequence to work around ARM
+	  erratum 845719 on Cortex-A53 parts up to r0p4.
+
+	  When running a compat (AArch32) userspace on an affected Cortex-A53
+	  part, a load at EL0 from a virtual address that matches the bottom 32
+	  bits of the virtual address used by a recent load at (AArch64) EL1
+	  might return incorrect data.
+
+	  The workaround is to write the contextidr_el1 register on exception
+	  return to a 32-bit task.
+	  Please note that this does not necessarily enable the workaround,
+	  as it depends on the alternative framework, which will only patch
+	  the kernel if an affected CPU is detected.
+
+	  If unsure, say Y.
+
+endmenu
+
 
 config ARM64_64K_PAGES
 	bool "Enable 64KB pages support"
@@ -304,6 +332,31 @@ config HOTPLUG_CPU
 	  Say Y here to experiment with turning CPUs off and on.  CPUs
 	  can be controlled through /sys/devices/system/cpu.
 
+config SWP_EMULATE
+	bool "Emulate SWP/SWPB instructions"
+	help
+	  ARMv6 architecture deprecates use of the SWP/SWPB instructions. ARMv8
+	  oblosetes the use of SWP/SWPB instructions. ARMv7 multiprocessing
+	  extensions introduce the ability to disable these instructions,
+	  triggering an undefined instruction exception when executed. Say Y
+	  here to enable software emulation of these instructions for userspace
+	  (not kernel) using LDREX/STREX. Also creates /proc/cpu/swp_emulation
+	  for statistics.
+
+	  In some older versions of glibc [<=2.8] SWP is used during futex
+	  trylock() operations with the assumption that the code will not
+	  be preempted. This invalid assumption may be more likely to fail
+	  with SWP emulation enabled, leading to deadlock of the user
+	  application.
+
+	  NOTE: when accessing uncached shared regions, LDREX/STREX rely
+	  on an external transaction monitoring block called a global
+	  monitor to maintain update atomicity. If your system does not
+	  implement a global monitor, this option can cause programs that
+	  perform SWP operations to uncached memory to deadlock.
+
+	  If unsure, say Y.
+
 source kernel/Kconfig.preempt
 
 config HZ
@@ -345,6 +398,27 @@ config ARCH_WANT_HUGE_PMD_SHARE
 
 config HAVE_ARCH_TRANSPARENT_HUGEPAGE
 	def_bool y
+
+config ARMV7_COMPAT
+	bool "Kernel support for ARMv7 applications"
+	depends on COMPAT
+	select SWP_EMULATE
+	help
+	 This option enables features that allow that ran on an ARMv7 or older
+	 processor to continue functioning.
+
+	 If you want to execute ARMv7 applications, say Y
+
+config ARMV7_COMPAT_CPUINFO
+	bool "Report backwards compatible cpu features in /proc/cpuinfo"
+	depends on ARMV7_COMPAT
+	default y
+	help
+	 This option makes /proc/cpuinfo list CPU features that an ARMv7 or
+	 earlier kernel would report, but are not optional on an ARMv8 or later
+	 processor.
+
+	 If you want to execute ARMv7 applications, say Y
 
 source "mm/Kconfig"
 
