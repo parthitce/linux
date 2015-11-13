@@ -346,13 +346,14 @@ static void handle_critical_trips(struct thermal_zone_device *tz,
 
 	if (tz->ops->notify)
 		tz->ops->notify(tz, trip, trip_type);
-
+#if 0
 	if (trip_type == THERMAL_TRIP_CRITICAL) {
 		dev_emerg(&tz->device,
 			  "critical temperature reached(%d C),shutting down\n",
 			  tz->temperature / 1000);
 		orderly_poweroff(true);
 	}
+#endif
 }
 
 static void handle_thermal_trip(struct thermal_zone_device *tz, int trip)
