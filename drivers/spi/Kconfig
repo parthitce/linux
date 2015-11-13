@@ -297,6 +297,12 @@ config SPI_ORION
 	help
 	  This enables using the SPI master controller on the Orion chips.
 
+config SPI_OWL
+	tristate "Actions OWL SoC SPI controller"
+	depends on ARCH_OWL
+	help
+	  This enables using the SPI master controller on Actions OWL SoC.
+
 config SPI_PL022
 	tristate "ARM AMBA PL022 SSP controller"
 	depends on ARM_AMBA
