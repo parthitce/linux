@@ -599,7 +599,13 @@ const char *v4l2_ctrl_get_name(u32 id)
 	case V4L2_CID_MIN_BUFFERS_FOR_OUTPUT:	return "Min Number of Output Buffers";
 	case V4L2_CID_ALPHA_COMPONENT:		return "Alpha Component";
 	case V4L2_CID_COLORFX_CBCR:		return "Color Effects, CbCr";
-
+	case V4L2_CID_MOTOR:            return "Motor Postion Set and Get";
+	case V4L2_CID_MOTOR_GET_MAX:            return "Motor Postion Get Range";
+	case V4L2_CID_EXPOSURE_COMP:		return "Exposure Compensation";
+	case V4L2_CID_SENSOR_ID:        return "Get Sensor ID";
+	case V4L2_CID_AF_MODE:        return "Get AF Mode";
+	case V4L2_CID_AF_STATUS:		return "focus status";
+	case V4L2_CID_AF_REGION:		return "zone focus region";
 	/* MPEG controls */
 	/* Keep the order of the 'case's the same as in videodev2.h! */
 	case V4L2_CID_MPEG_CLASS:		return "MPEG Encoder Controls";
@@ -1256,10 +1262,14 @@ static int cluster_changed(struct v4l2_ctrl *master)
 			diff = strcmp(ctrl->string, ctrl->cur.string);
 			break;
 		case V4L2_CTRL_TYPE_INTEGER64:
-			diff = ctrl->val64 != ctrl->cur.val64;
+			/* In order to fit the upper set, by cuiyongtai*/
+//			diff = ctrl->val64 != ctrl->cur.val64;
+			diff = 1;
 			break;
 		default:
-			diff = ctrl->val != ctrl->cur.val;
+			/* In order to fit the upper set, by cuiyongtai*/
+//			diff = ctrl->val != ctrl->cur.val;
+			diff = 1;
 			break;
 		}
 	}

@@ -140,6 +140,9 @@ enum v4l2_colorfx {
 
 /* last CID + 1 */
 #define V4L2_CID_LASTP1                         (V4L2_CID_BASE+43)
+#define V4L2_CID_MOTOR					(V4L2_CID_BASE+45)
+#define V4L2_CID_MOTOR_GET_MAX			(V4L2_CID_BASE+46)
+#define V4L2_CID_SENSOR_ID				(V4L2_CID_BASE+47)
 
 /* USER-class private control IDs */
 
@@ -693,13 +696,43 @@ enum v4l2_scene_mode {
 #define V4L2_AUTO_FOCUS_STATUS_FAILED		(1 << 2)
 
 #define V4L2_CID_AUTO_FOCUS_RANGE		(V4L2_CID_CAMERA_CLASS_BASE+31)
+#define V4L2_CID_EXPOSURE_COMP		(V4L2_CID_CAMERA_CLASS_BASE+33)
+/*设置及获取自动对焦模式*/
+#define V4L2_CID_AF_MODE	(V4L2_CID_CAMERA_CLASS_BASE+34)
+//#define V4L2_CID_AF_MODE	(V4L2_CID_BASE+12)
+
+
+enum af_mode{
+    NONE_AF = 0,            //不支持任何对焦模式
+    SINGLE_AF = (0x1<<1), //单次对焦
+    CONTINUE_AF = (0x1<<2), //连续对焦
+    ZONE_AF = (0x1<<3),     //区域对焦
+    MACRO_AF = (0x1<<4),    //微距对焦
+    MANUAL_AF = (0x1<<5),   //手动对焦
+    FACE_AF = (0x1<<6),     //面部对焦
+    UNDEFINED_AF = (1<<30), //未定义模式，需要应用根据上层算法进行配置
+  };
+
+
+/*获取自动对焦的状态**/
+#define V4L2_CID_AF_STATUS	(V4L2_CID_CAMERA_CLASS_BASE+35)
+
+enum af_status{
+	  AF_STATUS_DISABLE = 0,   //未进行对焦
+    AF_STATUS_UNFINISH,     //对焦未完成
+    AF_STATUS_OK,           //已正确对焦
+    AF_STATUS_FAIL,         //对焦失败
+  };
+  
+/*设置及获取区域对焦的详细信息，此命令字在支持ZONE_AF时起效*/
+#define V4L2_CID_AF_REGION	(V4L2_CID_CAMERA_CLASS_BASE+36)
+
 enum v4l2_auto_focus_range {
 	V4L2_AUTO_FOCUS_RANGE_AUTO		= 0,
 	V4L2_AUTO_FOCUS_RANGE_NORMAL		= 1,
 	V4L2_AUTO_FOCUS_RANGE_MACRO		= 2,
 	V4L2_AUTO_FOCUS_RANGE_INFINITY		= 3,
 };
-
 
 /* FM Modulator class control IDs */
 
@@ -746,6 +779,7 @@ enum v4l2_flash_led_mode {
 	V4L2_FLASH_LED_MODE_NONE,
 	V4L2_FLASH_LED_MODE_FLASH,
 	V4L2_FLASH_LED_MODE_TORCH,
+	V4L2_FLASH_LED_MODE_AUTO,
 };
 
 #define V4L2_CID_FLASH_STROBE_SOURCE		(V4L2_CID_FLASH_CLASS_BASE + 2)

@@ -1712,6 +1712,15 @@ struct v4l2_streamparm {
 	} parm;
 };
 
+/*  af region paramter
+*/
+struct v4l2_afregion {
+	__u32			position_x;
+	__u32			position_y;
+	__u32			width;
+	__u32			height;
+}; 
+
 /*
  *	E V E N T S
  */

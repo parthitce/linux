@@ -346,6 +346,10 @@ struct uvc_buffer {
 	unsigned int error;
 
 	void *mem;
+#ifdef CONFIG_ASOC_CAMERA
+	void *mem_phys;
+    void *mem_virt;
+#endif
 	unsigned int length;
 	unsigned int bytesused;
 

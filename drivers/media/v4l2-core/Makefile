@@ -37,3 +37,7 @@ ccflags-y += -I$(srctree)/drivers/media/dvb-core
 ccflags-y += -I$(srctree)/drivers/media/dvb-frontends
 ccflags-y += -I$(srctree)/drivers/media/tuners
 
+
+obj-y += videobuf-dma-sg.o
+obj-y += videobuf-dma-contig.o
+obj-y += videobuf-vmalloc.o

@@ -36,6 +36,9 @@ unsigned int uvc_no_drop_param;
 static unsigned int uvc_quirks_param = -1;
 unsigned int uvc_trace_param;
 unsigned int uvc_timeout_param = UVC_CTRL_STREAMING_TIMEOUT;
+#ifdef CONFIG_ASOC_CAMERA
+static int uvc_video_device_node_number = -1;
+#endif
 
 /* ------------------------------------------------------------------------
  * Video formats
@@ -1661,6 +1664,9 @@ static void uvc_release(struct video_device *vdev)
 		uvc_delete(dev);
 }
 
+#ifdef CONFIG_ASOC_CAMERA
+extern void uvc_free_urb_buffers(struct uvc_streaming *stream);
+#endif
 /*
  * Unregister the video devices.
  */
@@ -1683,6 +1689,9 @@ static void uvc_unregister_video(struct uvc_device *dev)
 		stream->vdev = NULL;
 
 		uvc_debugfs_cleanup_stream(stream);
+#ifdef CONFIG_ASOC_CAMERA
+		uvc_free_urb_buffers(stream);
+#endif		
 	}
 
 	/* Decrement the stream count and call uvc_delete explicitly if there
@@ -1737,7 +1746,11 @@ static int uvc_register_video(struct uvc_device *dev,
 	stream->vdev = vdev;
 	video_set_drvdata(vdev, stream);
 
+#ifdef CONFIG_ASOC_CAMERA
+	ret = video_register_device(vdev, VFL_TYPE_GRABBER, uvc_video_device_node_number);
+#else
 	ret = video_register_device(vdev, VFL_TYPE_GRABBER, -1);
+#endif
 	if (ret < 0) {
 		uvc_printk(KERN_ERR, "Failed to register video device (%d).\n",
 			   ret);
@@ -2041,7 +2054,10 @@ module_param_named(trace, uvc_trace_param, uint, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(trace, "Trace level bitmask");
 module_param_named(timeout, uvc_timeout_param, uint, S_IRUGO|S_IWUSR);
 MODULE_PARM_DESC(timeout, "Streaming control requests timeout");
-
+#ifdef CONFIG_ASOC_CAMERA
+module_param_named(video_device_node, uvc_video_device_node_number, int, S_IRUGO|S_IWUSR);
+MODULE_PARM_DESC(video_device_node, "Video device node number");
+#endif
 /* ------------------------------------------------------------------------
  * Driver initialization and cleanup
  */

@@ -361,14 +361,6 @@ static int uvc_commit_video(struct uvc_streaming *stream,
  * Clocks and timestamps
  */
 
-static inline void uvc_video_get_ts(struct timespec *ts)
-{
-	if (uvc_clock_param == CLOCK_MONOTONIC)
-		ktime_get_ts(ts);
-	else
-		ktime_get_real_ts(ts);
-}
-
 static void
 uvc_video_clock_decode(struct uvc_streaming *stream, struct uvc_buffer *buf,
 		       const __u8 *data, int len)
@@ -428,7 +420,7 @@ uvc_video_clock_decode(struct uvc_streaming *stream, struct uvc_buffer *buf,
 	stream->clock.last_sof = dev_sof;
 
 	host_sof = usb_get_current_frame_number(stream->dev->udev);
-	uvc_video_get_ts(&ts);
+	ktime_get_ts(&ts);
 
 	/* The UVC specification allows device implementations that can't obtain
 	 * the USB frame number to keep their own frame counters as long as they
@@ -623,6 +615,16 @@ void uvc_video_clock_update(struct uvc_streaming *stream,
 	first = &clock->samples[clock->head];
 	last = &clock->samples[(clock->head - 1) % clock->size];
 
+	/* actions_code(authro:songzhining, comment: check dev_sof validation) */
+	/* Invalid: The difference between host and device is more than 15ms */
+	y1 = (last->dev_sof + 2048 - first->dev_sof) & 2047;
+	y2 = (last->host_sof + 2048 - first->host_sof) & 2047;
+	if (y2 > (y1 + 15)) {
+		uvc_trace(UVC_TRACE_CLOCK, "%s: invalid sof! diff %u, ts %lu.%06lu\n",
+				stream->dev->name, (y2-y1),
+				v4l2_buf->timestamp.tv_sec, v4l2_buf->timestamp.tv_usec);
+		goto done;
+	}
 	/* First step, PTS to SOF conversion. */
 	delta_stc = buf->pts - (1UL << 31);
 	x1 = first->dev_stc - delta_stc;
@@ -1018,7 +1020,10 @@ static int uvc_video_decode_start(struct uvc_streaming *stream,
 			return -ENODATA;
 		}
 
-		uvc_video_get_ts(&ts);
+		if (uvc_clock_param == CLOCK_MONOTONIC)
+			ktime_get_ts(&ts);
+		else
+			ktime_get_real_ts(&ts);
 
 		buf->buf.v4l2_buf.sequence = stream->sequence;
 		buf->buf.v4l2_buf.timestamp.tv_sec = ts.tv_sec;
@@ -1069,6 +1074,11 @@ static void uvc_video_decode_data(struct uvc_streaming *stream,
 	maxlen = buf->length - buf->bytesused;
 	mem = buf->mem + buf->bytesused;
 	nbytes = min((unsigned int)len, maxlen);
+#ifdef UVC_DEBUG
+	printk("buf->length:%d, buf->bytesused:%d, maxlen:%d,len:%d, nbytes:%d\n",
+		buf->length, buf->bytesused, maxlen, len, nbytes);
+	printk("mem:0x%x, buf->mem:0x%x, data:0x%x\n", mem, buf->mem, data);
+#endif
 	memcpy(mem, data, nbytes);
 	buf->bytesused += nbytes;
 
@@ -1305,6 +1315,9 @@ static void uvc_video_complete(struct urb *urb)
 	struct uvc_buffer *buf = NULL;
 	unsigned long flags;
 	int ret;
+#ifdef CONFIG_ASOC_CAMERA
+	static int is_nodev = 0;
+#endif
 
 	switch (urb->status) {
 	case 0:
@@ -1333,15 +1346,27 @@ static void uvc_video_complete(struct urb *urb)
 	stream->decode(urb, stream, buf);
 
 	if ((ret = usb_submit_urb(urb, GFP_ATOMIC)) < 0) {
-		uvc_printk(KERN_ERR, "Failed to resubmit video URB (%d).\n",
-			ret);
+#ifdef CONFIG_ASOC_CAMERA
+		if (ret == -ENODEV) {
+			if (is_nodev == 0) {
+				is_nodev = 1;
+				uvc_queue_cancel(queue, 1);
+			}
+		}
+#endif
+		uvc_printk(KERN_ERR, "Failed to resubmit video URB (%d).\n", ret);
+#ifdef CONFIG_ASOC_CAMERA
+	} else
+		is_nodev = 0;
+#else
 	}
+#endif
 }
 
 /*
  * Free transfer buffers.
  */
-static void uvc_free_urb_buffers(struct uvc_streaming *stream)
+void uvc_free_urb_buffers(struct uvc_streaming *stream)
 {
 	unsigned int i;
 
@@ -1351,7 +1376,13 @@ static void uvc_free_urb_buffers(struct uvc_streaming *stream)
 			usb_free_coherent(stream->dev->udev, stream->urb_size,
 				stream->urb_buffer[i], stream->urb_dma[i]);
 #else
+#ifdef CONFIG_ASOC_CAMERA
+			char *urb_buffer = stream->urb_buffer[i];
+			stream->urb_buffer[i] = NULL;
+			kfree(urb_buffer);
+#else
 			kfree(stream->urb_buffer[i]);
+#endif
 #endif
 			stream->urb_buffer[i] = NULL;
 		}
@@ -1851,25 +1882,12 @@ int uvc_video_enable(struct uvc_streaming *stream, int enable)
 
 	if (!enable) {
 		uvc_uninit_video(stream, 1);
-		if (stream->intf->num_altsetting > 1) {
-			usb_set_interface(stream->dev->udev,
-					  stream->intfnum, 0);
-		} else {
-			/* UVC doesn't specify how to inform a bulk-based device
-			 * when the video stream is stopped. Windows sends a
-			 * CLEAR_FEATURE(HALT) request to the video streaming
-			 * bulk endpoint, mimic the same behaviour.
-			 */
-			unsigned int epnum = stream->header.bEndpointAddress
-					   & USB_ENDPOINT_NUMBER_MASK;
-			unsigned int dir = stream->header.bEndpointAddress
-					 & USB_ENDPOINT_DIR_MASK;
-			unsigned int pipe;
-
-			pipe = usb_sndbulkpipe(stream->dev->udev, epnum) | dir;
-			usb_clear_halt(stream->dev->udev, pipe);
-		}
-
+#ifdef CONFIG_ASOC_CAMERA
+		if (!(stream->dev->state & UVC_DEV_DISCONNECTED))
+			usb_set_interface(stream->dev->udev, stream->intfnum, 0);
+#else
+		usb_set_interface(stream->dev->udev, stream->intfnum, 0);
+#endif
 		uvc_queue_enable(&stream->queue, 0);
 		uvc_video_clock_cleanup(stream);
 		return 0;
