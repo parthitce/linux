@@ -27,7 +27,7 @@ config DRM_USB
 	select USB
 
 config DRM_KMS_HELPER
-	tristate
+	tristate "drm kms helper"
 	depends on DRM
 	select FB
 	select FRAMEBUFFER_CONSOLE if !EXPERT
