@@ -77,7 +77,11 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 	int selected_tasksize = 0;
 	short selected_oom_score_adj;
 	int array_size = ARRAY_SIZE(lowmem_adj);
+#ifdef CONFIG_CMA
 	int other_free = global_page_state(NR_FREE_PAGES) - totalreserve_pages;
+#else
+	int other_free = global_page_state(NR_FREE_PAGES) - totalreserve_pages - global_page_state(NR_CMA_FREE_PAGES);
+#endif
 	int other_file = global_page_state(NR_FILE_PAGES) -
 						global_page_state(NR_SHMEM);
 

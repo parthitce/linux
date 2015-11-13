@@ -111,10 +111,17 @@ static int compat_get_ion_custom_data(
 {
 	compat_uint_t cmd;
 	compat_ulong_t arg;
+	typeof(data->cmd) cmd_mod;
 	int err;
 
+	/* Add by actions:
+	 * When translate cmd, set highest bit to indicate a compat_ioctl,
+	 * the custom ioctl handler can check this bit and known whether arg
+	 * need to be converted. */
+
 	err = get_user(cmd, &data32->cmd);
-	err |= put_user(cmd, &data->cmd);
+	cmd_mod = (typeof(cmd_mod))cmd | (1UL << (sizeof(cmd_mod) * 8 - 1));
+	err |= put_user(cmd_mod, &data->cmd);
 	err |= get_user(arg, &data32->arg);
 	err |= put_user(arg, &data->arg);
 

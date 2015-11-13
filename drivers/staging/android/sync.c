@@ -613,7 +613,19 @@ int sync_fence_wait(struct sync_fence *fence, long timeout)
 
 	if (fence->status < 0) {
 		pr_info("fence error %d on [%p]\n", fence->status, fence);
-		sync_dump();
+		
+		/*
+		 * ActionsCode(hjm, OPTIMIZE : eliminate the side effect of verbose sync_dump on benchmark)
+		 *
+		 * In android system, applications like Antutu, GFXBench_GL, may destroy their rendering 
+		 * eglcontext before the corresponding eglsurface is posted succefully by android adf driver. 
+		 * And as we know, for IMG PowerVR Rogue driver implemention, one egl context is corresponding 
+		 * to one rendering timeline, when the context is destroyed, the rendering timeline will be 
+		 * also destroyed. So when this case happen unfortunately, adf driver will try to wait for the 
+		 * surface fence whose sync points belong to the specific destroyed rendering timeline, 
+		 * resulting in the fence error.
+		 */
+		/* sync_dump(); */
 		return fence->status;
 	}
 

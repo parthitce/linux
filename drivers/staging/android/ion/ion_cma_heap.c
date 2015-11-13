@@ -47,8 +47,13 @@ struct ion_cma_buffer_info {
 static int ion_cma_get_sgtable(struct device *dev, struct sg_table *sgt,
 			       void *cpu_addr, dma_addr_t handle, size_t size)
 {
-	struct page *page = virt_to_page(cpu_addr);
+	struct page *page = NULL;
 	int ret;
+
+	if (is_vmalloc_addr(cpu_addr))
+		page = vmalloc_to_page(cpu_addr);
+	else
+		page = virt_to_page(cpu_addr);
 
 	ret = sg_alloc_table(sgt, 1, GFP_KERNEL);
 	if (unlikely(ret))
@@ -69,9 +74,11 @@ static int ion_cma_allocate(struct ion_heap *heap, struct ion_buffer *buffer,
 
 	dev_dbg(dev, "Request buffer allocation len %ld\n", len);
 
-	if (buffer->flags & ION_FLAG_CACHED)
+/*
+	if (buffer->flags & ION_FLAG_CACHED){
 		return -EINVAL;
-
+	}
+*/
 	if (align > PAGE_SIZE)
 		return -EINVAL;
 
@@ -80,10 +87,10 @@ static int ion_cma_allocate(struct ion_heap *heap, struct ion_buffer *buffer,
 		dev_err(dev, "Can't allocate buffer info\n");
 		return ION_CMA_ALLOCATE_FAILED;
 	}
-
+	pr_info("CMA:alloc++ %ldK \n", len >> 10);
 	info->cpu_addr = dma_alloc_coherent(dev, len, &(info->handle),
 						GFP_HIGHUSER | __GFP_ZERO);
-
+	pr_info("--\n");
 	if (!info->cpu_addr) {
 		dev_err(dev, "Fail to allocate buffer\n");
 		goto err;
@@ -188,7 +195,7 @@ static struct ion_heap_ops ion_cma_ops = {
 	.map_dma = ion_cma_heap_map_dma,
 	.unmap_dma = ion_cma_heap_unmap_dma,
 	.phys = ion_cma_phys,
-	.map_user = ion_cma_mmap,
+	.map_user = ion_heap_map_user, /*ion_cma_mmap,*/
 	.map_kernel = ion_cma_map_kernel,
 	.unmap_kernel = ion_cma_unmap_kernel,
 };
