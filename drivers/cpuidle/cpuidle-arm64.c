@@ -68,6 +68,7 @@ static int arm_enter_idle_state(struct cpuidle_device *dev,
 		return idx;
 	}
 
+#ifndef CONFIG_ARCH_OWL
 	cpu_pm_enter();
 	/*
 	 * Pass idle state index to cpu_suspend which in turn will call
@@ -82,8 +83,10 @@ static int arm_enter_idle_state(struct cpuidle_device *dev,
 	ret = cpu_suspend(idx);
 
 	cpu_pm_exit();
-
 	return ret ? -1 : idx;
+#else
+	return idx;
+#endif
 }
 
 struct cpuidle_driver arm64_idle_driver = {
