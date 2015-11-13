@@ -425,6 +425,15 @@ config BACKLIGHT_AS3711
 	  If you have an Austrian Microsystems AS3711 say Y to enable the
 	  backlight driver.
 
+config BACKLIGHT_OWL_PWM
+	tristate "Actions OWL PWM backlight control"
+	depends on PWM_OWL
+	help
+	  Say Y here if you want to use the PWM peripheral in Actions OWL SOCs
+
+	  To compile this driver as a module, choose M here: the module will be
+	  called owl-pwm-bl.
+
 endif # BACKLIGHT_CLASS_DEVICE
 
 endif # BACKLIGHT_LCD_SUPPORT
