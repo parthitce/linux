@@ -82,4 +82,14 @@ config LOGO_M32R_CLUT224
 	depends on M32R
 	default y
 
+config LOGO_OWL_MONO
+	bool "OWL Linux MONO logo"
+	depends on ARCH_OWL
+	default y
+
+config LOGO_S900_CLUT224
+	bool "OWL S900 Linux CLUT224 logo"
+	depends on ARCH_OWL
+	default y
+
 endif # LOGO

@@ -45,6 +45,10 @@ const struct linux_logo * __init_refok fb_find_logo(int depth)
 		/* SuperH Linux logo */
 		logo = &logo_superh_mono;
 #endif
+#ifdef CONFIG_LOGO_OWL_MONO
+		/* OWL Linux logo */
+		logo = &logo_owl_mono;
+#endif
 	}
 	
 	if (depth >= 4) {
@@ -99,6 +103,10 @@ const struct linux_logo * __init_refok fb_find_logo(int depth)
 #ifdef CONFIG_LOGO_M32R_CLUT224
 		/* M32R Linux logo */
 		logo = &logo_m32r_clut224;
+#endif
+#ifdef CONFIG_LOGO_S900_CLUT224
+		/* OWL S900 Linux logo */
+		logo = &logo_s900_clut224;
 #endif
 	}
 	return logo;
