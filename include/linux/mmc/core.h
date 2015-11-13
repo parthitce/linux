@@ -191,6 +191,7 @@ extern int mmc_try_claim_host(struct mmc_host *host);
 extern int mmc_flush_cache(struct mmc_card *);
 
 extern int mmc_detect_card_removed(struct mmc_host *host);
+extern int sd_mmc_reinit(struct mmc_host *host);
 
 /**
  *	mmc_claim_host - exclusively claim a host

@@ -46,7 +46,6 @@ void mmc_set_timing(struct mmc_host *host, unsigned int timing);
 void mmc_set_driver_type(struct mmc_host *host, unsigned int drv_type);
 void mmc_power_off(struct mmc_host *host);
 void mmc_power_cycle(struct mmc_host *host);
-
 static inline void mmc_delay(unsigned int ms)
 {
 	if (ms < 1000 / HZ) {
@@ -78,5 +77,8 @@ void mmc_add_card_debugfs(struct mmc_card *card);
 void mmc_remove_card_debugfs(struct mmc_card *card);
 
 void mmc_init_context_info(struct mmc_host *host);
+
+int sd_mmc_reinit(struct mmc_host *host);
+
 #endif
 

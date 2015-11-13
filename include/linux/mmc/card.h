@@ -231,6 +231,17 @@ struct mmc_part {
  */
 struct mmc_card {
 	struct mmc_host		*host;		/* the host this device belongs to */
+	struct mmc_card 	*card_a;
+	struct mmc_card 	*card_b;
+	struct mmc_card 	*vircard;
+	struct completion	carda_start_complete;  // for threada run means vircard date ready:start
+	struct completion	cardb_start_complete;		// for threada run means vircard date ready:start
+	struct completion	carda_end_complete;  // for threada run means vircard date ready:start
+	struct completion	cardb_end_complete;		// for threada run means vircard date ready:start
+	unsigned char		 dual_en ;
+	unsigned int         trsfer_size;
+	unsigned int         trsfer_flag;
+	unsigned int         trsfer_status;
 	struct device		dev;		/* the device */
 	unsigned int		rca;		/* relative card address of device */
 	unsigned int		type;		/* card type */

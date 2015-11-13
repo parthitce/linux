@@ -1251,10 +1251,10 @@ int sdio_reset_comm(struct mmc_card *card)
 	u32 ocr;
 	int err;
 
-	printk("%s():\n", __func__);
 	mmc_claim_host(host);
 
 	mmc_go_idle(host);
+	mmc_set_timing(card->host, 0);
 
 	mmc_set_clock(host, host->f_min);
 
@@ -1267,6 +1267,8 @@ int sdio_reset_comm(struct mmc_card *card)
 		err = -EINVAL;
 		goto err;
 	}
+	if (mmc_host_uhs(host))
+		host->ocr |= R4_18V_PRESENT;
 
 	err = mmc_sdio_init_card(host, host->ocr, card, 0);
 	if (err)
