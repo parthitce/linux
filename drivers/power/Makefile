@@ -56,4 +56,5 @@ obj-$(CONFIG_CHARGER_TPS65090)	+= tps65090-charger.o
 obj-$(CONFIG_CHARGER_ATC260X)	+= atc260x_charger.o
 obj-$(CONFIG_CHARGER_ATC2609A)	+= atc2609a_charger.o
 obj-$(CONFIG_BATTERY_ATC2609A)	+= atc2609a_battery.o
+obj-$(CONFIG_BATTERY_BQ27441)	+= bq27441_battery.o
 obj-$(CONFIG_POWER_RESET)	+= reset/
