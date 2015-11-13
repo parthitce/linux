@@ -653,4 +653,23 @@ config INPUT_XEN_KBDDEV_FRONTEND
 	  To compile this driver as a module, choose M here: the
 	  module will be called xen-kbdfront.
 
+config GSENSOR_DETECT
+	tristate "gsensor_detect support"
+	depends on I2C
+	help
+	  Support the gsensor auto detect as an input device
+	  detect the gsesnor automatically.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called gsensor_detect.
+	  
+config GSENSOR_BMA222
+	tristate "bma222 support"
+	depends on I2C
+	help
+	  Support the bma222 as an input device
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called bma222.
+
 endif
