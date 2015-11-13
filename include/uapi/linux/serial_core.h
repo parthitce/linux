@@ -226,4 +226,7 @@
 /* Rocketport EXPRESS/INFINITY */
 #define PORT_RP2	102
 
+/* Actions OWL SoC */
+#define PORT_OWL	103
+
 #endif /* _UAPILINUX_SERIAL_CORE_H */

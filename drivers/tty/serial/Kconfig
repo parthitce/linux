@@ -1491,6 +1491,21 @@ config SERIAL_RP2_NR_UARTS
 	  If multiple cards are present, the default limit of 32 ports may
 	  need to be increased.
 
+config SERIAL_OWL
+	bool "Actions OWL SoC UART Support"
+	depends on ARCH_OWL
+	select SERIAL_CORE
+	help
+	  If you have an Actions OWL SoC
+	  and you want to use serial ports, say Y.  Otherwise, say N.
+
+config SERIAL_OWL_CONSOLE
+	bool "Enable Actions OWL SoC serial console"
+	depends on SERIAL_OWL
+	select SERIAL_CORE_CONSOLE
+	help
+	  Enable an Actions OWL SoC UART port to be the system console.
+
 endmenu
 
 endif # TTY
