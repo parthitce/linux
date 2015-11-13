@@ -1893,6 +1893,7 @@ static int wait_for_avail(struct snd_pcm_substream *substream,
 		wait_time = msecs_to_jiffies(wait_time * 1000);
 	}
 
+	wait_time = 50;
 	for (;;) {
 		if (signal_pending(current)) {
 			err = -ERESTARTSYS;
