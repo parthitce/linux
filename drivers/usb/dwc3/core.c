@@ -64,6 +64,35 @@ static char *maximum_speed = "super";
 module_param(maximum_speed, charp, 0);
 MODULE_PARM_DESC(maximum_speed, "Maximum supported speed.");
 
+extern int owl_dwc3_usb2phy_param_setup(int is_device_mode);
+
+#if SUPPORT_NOT_RMMOD_USBDRV
+#include "plug-core.c"
+#endif
+
+#define MASK_SUPPER_SPEED_FOR_ADFUS
+#ifdef MASK_SUPPER_SPEED_FOR_ADFUS
+static struct dwc3 *adfus_dwc = 0;
+static void dwc3_set_dwc_for_adfus(struct dwc3 *dwc)
+{
+	adfus_dwc = dwc;
+}
+
+void dwc3_mask_supper_speed_for_adfus(void)
+{
+	if(!adfus_dwc) {
+		printk("%s %d _dwc is NULL\n", __func__, __LINE__);
+		return 0;
+	}
+
+	printk("%s %d\n", __func__, __LINE__);
+	adfus_dwc->maximum_speed = DWC3_DCFG_HIGHSPEED;
+	adfus_dwc->gadget.max_speed		= USB_SPEED_HIGH;
+}
+EXPORT_SYMBOL_GPL(dwc3_mask_supper_speed_for_adfus);
+#endif
+
+
 /* -------------------------------------------------------------------------- */
 
 void dwc3_set_mode(struct dwc3 *dwc, u32 mode)
@@ -523,8 +552,13 @@ static int dwc3_probe(struct platform_device *pdev)
 	else
 		mode = DWC3_MODE_DRD;
 
+#if IS_ENABLED(CONFIG_USB_DWC3_DUAL_ROLE)
+	mode = DWC3_MODE_DEVICE;
+#endif
+
 	switch (mode) {
 	case DWC3_MODE_DEVICE:
+		owl_dwc3_usb2phy_param_setup(1);
 		dwc3_set_mode(dwc, DWC3_GCTL_PRTCAP_DEVICE);
 		ret = dwc3_gadget_init(dwc);
 		if (ret) {
@@ -568,6 +602,14 @@ static int dwc3_probe(struct platform_device *pdev)
 
 	pm_runtime_allow(dev);
 
+#if SUPPORT_NOT_RMMOD_USBDRV
+	dwc3_plug_init(dwc);
+#endif
+
+#ifdef MASK_SUPPER_SPEED_FOR_ADFUS
+	dwc3_set_dwc_for_adfus(dwc);
+#endif
+
 	return 0;
 
 err3:
@@ -602,6 +644,11 @@ err0:
 static int dwc3_remove(struct platform_device *pdev)
 {
 	struct dwc3	*dwc = platform_get_drvdata(pdev);
+
+#if SUPPORT_NOT_RMMOD_USBDRV
+	dwc3_plug_exit(dwc);
+#endif
+
 
 	usb_phy_set_suspend(dwc->usb2_phy, 1);
 	usb_phy_set_suspend(dwc->usb3_phy, 1);
@@ -679,6 +726,9 @@ static void dwc3_complete(struct device *dev)
 	spin_unlock_irqrestore(&dwc->lock, flags);
 }
 
+#if SUPPORT_NOT_RMMOD_USBDRV
+#else
+
 static int dwc3_suspend(struct device *dev)
 {
 	struct dwc3	*dwc = dev_get_drvdata(dev);
@@ -747,6 +797,8 @@ static const struct dev_pm_ops dwc3_dev_pm_ops = {
 };
 
 #define DWC3_PM_OPS	&(dwc3_dev_pm_ops)
+#endif
+
 #else
 #define DWC3_PM_OPS	NULL
 #endif

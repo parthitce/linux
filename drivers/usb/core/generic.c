@@ -168,6 +168,14 @@ static int generic_probe(struct usb_device *udev)
 	else {
 		c = usb_choose_configuration(udev);
 		if (c >= 0) {
+
+			if (0x058F == le16_to_cpu(udev->descriptor.idVendor) &&
+				0x6387 == le16_to_cpu(udev->descriptor.idProduct)) {
+				dev_warn(&udev->dev,
+					"delay before set config #%d for udisk(idVendor=0x058F idProduct=0x6387)\n", c);
+				mdelay(10);
+			}
+
 			err = usb_set_configuration(udev, c);
 			if (err && err != -ENODEV) {
 				dev_err(&udev->dev, "can't set config #%d, error %d\n",

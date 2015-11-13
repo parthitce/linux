@@ -32,3 +32,9 @@ obj-$(CONFIG_USB_MXS_PHY)		+= phy-mxs-usb.o
 obj-$(CONFIG_USB_RCAR_PHY)		+= phy-rcar-usb.o
 obj-$(CONFIG_USB_ULPI)			+= phy-ulpi.o
 obj-$(CONFIG_USB_ULPI_VIEWPORT)		+= phy-ulpi-viewport.o
+
+#obj-y		+= phy-debug.o
+
+obj-$(CONFIG_OWL_USB2PHY)		+= phy-owl-usb2.o
+obj-$(CONFIG_OWL_USB3PHY)		+= phy-owl-usb3.o
+

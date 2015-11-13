@@ -50,6 +50,9 @@
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>
 
+#define  SUPPORT_NOT_RMMOD_USBDRV 1
+#define USB_CHARGE_DETECT
+
 /* Global constants */
 #define DWC3_EP0_BOUNCE_SIZE	512
 #define DWC3_ENDPOINTS_NUM	32

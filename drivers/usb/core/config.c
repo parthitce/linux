@@ -267,6 +267,20 @@ static int usb_parse_endpoint(struct device *ddev, int cfgno, int inum,
 		usb_parse_ss_endpoint_companion(ddev, cfgno,
 				inum, asnum, endpoint, buffer, size);
 
+
+	if (to_usb_device(ddev)->speed == USB_SPEED_SUPER) {
+		struct usb_device *udev = to_usb_device(ddev);
+		if ((udev->descriptor.idVendor == 0x2537) && (udev->descriptor.idProduct ==  0x1068)) {
+			if (usb_endpoint_is_bulk_in(&endpoint->desc) && (endpoint->ss_ep_comp.bMaxBurst > 3)) {
+				dev_warn(ddev, "the SuperSpeed USB device (idVerdor=0x%x idProduct=0x%x) is easy to disconnect,"
+					"for fix it, change bulk-in ep bMaxBurst from %d to 3\n",
+					udev->descriptor.idVendor, udev->descriptor.idProduct, endpoint->ss_ep_comp.bMaxBurst);
+
+				endpoint->ss_ep_comp.bMaxBurst = 3;
+			}
+		}
+	}
+
 	/* Skip over any Class Specific or Vendor Specific descriptors;
 	 * find the next endpoint or interface descriptor */
 	endpoint->extra = buffer;

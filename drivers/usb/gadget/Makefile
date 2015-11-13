@@ -87,3 +87,10 @@ obj-$(CONFIG_USB_G_NCM)		+= g_ncm.o
 obj-$(CONFIG_USB_G_ACM_MS)	+= g_acm_ms.o
 obj-$(CONFIG_USB_G_ANDROID)	+= g_android.o
 obj-$(CONFIG_USB_GADGET_TARGET)	+= tcm_usb_gadget.o
+
+
+g_android-y                    += set_serial_number.o
+
+obj-y				+= adfus_wr.o
+obj-m				+= adfus.o
+adfus-objs			:= adfuserver.o

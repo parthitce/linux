@@ -337,6 +337,7 @@ struct usb_bus {
 					 * the ep queue on a short transfer
 					 * with the URB_SHORT_NOT_OK flag set.
 					 */
+	unsigned no_sg_constraint:1;	/* no sg constraint */
 	unsigned sg_tablesize;		/* 0 or largest number of sg list entries */
 
 	int devnum_next;		/* Next open device number in
@@ -673,6 +674,11 @@ static inline bool usb_device_supports_ltm(struct usb_device *udev)
 	if (udev->speed != USB_SPEED_SUPER || !udev->bos || !udev->bos->ss_cap)
 		return false;
 	return udev->bos->ss_cap->bmAttributes & USB_LTM_SUPPORT;
+}
+
+static inline bool usb_device_no_sg_constraint(struct usb_device *udev)
+{
+	return udev && udev->bus && udev->bus->no_sg_constraint;
 }
 
 
