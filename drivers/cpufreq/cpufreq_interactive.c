@@ -331,6 +331,7 @@ static u64 update_load(int cpu)
 	return now;
 }
 
+extern unsigned int cpufreq_interactive_power_opt(unsigned int target_freq, unsigned int new_freq);
 static void cpufreq_interactive_timer(unsigned long data)
 {
 	u64 now;
@@ -382,6 +383,9 @@ static void cpufreq_interactive_timer(unsigned long data)
 				pcpu->target_freq < tunables->hispeed_freq)
 			new_freq = tunables->hispeed_freq;
 	}
+	
+	/* power opt by limiting freq */
+	new_freq = cpufreq_interactive_power_opt(pcpu->target_freq, new_freq);
 
 	if (pcpu->target_freq >= tunables->hispeed_freq &&
 	    new_freq > pcpu->target_freq &&
