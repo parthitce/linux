@@ -87,9 +87,10 @@ static int kszphy_config_intr(struct phy_device *phydev)
 {
 	int temp, rc;
 
-	/* set the interrupt pin active low */
 	temp = phy_read(phydev, MII_KSZPHY_CTRL);
-	temp &= ~KSZPHY_CTRL_INT_ACTIVE_HIGH;
+	/*temp &= ~KSZPHY_CTRL_INT_ACTIVE_HIGH;*/
+	/*active by high not by low */
+	temp |= KSZPHY_CTRL_INT_ACTIVE_HIGH;
 	phy_write(phydev, MII_KSZPHY_CTRL, temp);
 	rc = kszphy_set_interrupt(phydev);
 	return rc < 0 ? rc : 0;
