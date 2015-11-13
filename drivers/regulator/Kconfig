@@ -120,6 +120,13 @@ config REGULATOR_DA9055
 	  This driver can also be built as a module. If so, the module
 	  will be called da9055-regulator.
 
+config REGULATOR_ETA355C
+	tristate "ETA ETA355C regulator driver"
+	depends on I2C
+	help
+	  Say y here to support the regulators found on the ETA ETA355C
+	  PMIC.
+
 config REGULATOR_FAN53555
 	tristate "Fairchild FAN53555 Regulator"
 	depends on I2C
