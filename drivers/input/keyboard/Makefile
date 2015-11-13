@@ -58,3 +58,5 @@ obj-$(CONFIG_KEYBOARD_XTKBD)		+= xtkbd.o
 obj-$(CONFIG_KEYBOARD_W90P910)		+= w90p910_keypad.o
 obj-$(CONFIG_KEYBOARD_ATC260X_ADCKEY)	+= atc260x-adckeypad.o
 obj-$(CONFIG_KEYBOARD_ATC260X_ONOFF)	+= atc260x-onoff.o
+obj-$(CONFIG_KEYBOARD_OWL_GPIOKEY)	+= owl_gpiokey/
+
