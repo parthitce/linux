@@ -156,3 +156,12 @@ obj-$(CONFIG_VEXPRESS_CONFIG)	+= vexpress-config.o vexpress-sysreg.o
 obj-$(CONFIG_VEXPRESS_SPC)	+= vexpress-spc.o
 obj-$(CONFIG_MFD_RETU)		+= retu-mfd.o
 obj-$(CONFIG_MFD_AS3711)	+= as3711.o
+
+atc260x_irkey-objs := atc260x-irkeypad.o
+obj-$(CONFIG_ATC260X_IR)    += atc260x-irkeypad.o
+
+atc260x-objs			:= atc260x-core.o atc260x-auxadc.o atc260x-cmu.o atc260x-pstore.o atc260x-ex-api.o
+obj-$(CONFIG_MFD_ATC260X)	+= atc260x-pm.o
+obj-$(CONFIG_MFD_ATC260X)	+= atc260x.o
+obj-$(CONFIG_MFD_ATC260X_I2C)	+= atc260x-i2c.o
+obj-$(CONFIG_MFD_ATC260X_SPI)	+= atc260x-spi.o
