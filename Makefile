@@ -3,6 +3,7 @@ PATCHLEVEL = 10
 SUBLEVEL = 52
 EXTRAVERSION =
 NAME = TOSSUG Baby Fish
+export LOCALVERSION=
 
 # *DOCUMENTATION*
 # To see a list of typical targets execute "make help"
