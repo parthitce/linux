@@ -19,6 +19,7 @@
 #include <linux/workqueue.h>
 #include <linux/slab.h>
 #include <linux/pm.h>
+#include <linux/regulator/consumer.h>
 
 #define DRIVER_NAME		"synaptics_i2c"
 /* maximum product id is 15 characters */
@@ -184,6 +185,12 @@
 #define NO_DATA_THRES		(MSEC_PER_SEC)
 #define NO_DATA_SLEEP_MSECS	(MSEC_PER_SEC / 4)
 
+
+/* default data about regulator for touchpad vcc*/
+#define TP_POWER_ID			("ldo8")
+#define TP_POWER_MIN_VOL	(3100000)
+#define TP_POWER_MAX_VOL	(3110000)
+
 /* Control touchpad's No Deceleration option */
 static bool no_decel = 1;
 module_param(no_decel, bool, 0644);
@@ -214,6 +221,25 @@ static int scan_rate = 80;
 module_param(scan_rate, int, 0644);
 MODULE_PARM_DESC(scan_rate, "Polling rate in times/sec. Default = 80");
 
+static struct regulator *tp_regulator;
+static inline void regulator_deinit(struct regulator *);
+static struct regulator *regulator_init(const char *, int, int);
+struct tp_cfg_dts {
+	char const *regulator;
+	unsigned int vol_min;
+	unsigned int vol_max;
+} cfg_dts;
+
+typedef struct _I2C_PACKET {
+	u8 state;
+	signed char dx;
+	signed char dy;
+	signed char dw;
+	u8 state1;
+	u8 state2;
+	u8 check_sum;
+} I2C_PACKET;
+
 /* The main device structure */
 struct synaptics_i2c {
 	struct i2c_client	*client;
@@ -227,6 +253,66 @@ struct synaptics_i2c {
 	int			scan_rate_param;
 	int			scan_ms;
 };
+static struct synaptics_i2c *g_synaptics_i2c;
+
+static int tp_of_data_get(void)
+{
+	struct device_node *of_node;
+	unsigned int scope[2];
+	int ret = -1;
+
+	of_node = of_find_compatible_node(NULL, NULL, "synaptics_i2c");
+	if (of_node == NULL) {
+		pr_err("%s,%d,find dts failed!\n",
+			__func__, __LINE__);
+		return -1;
+	}
+
+	/* regulator */
+	if (of_find_property(of_node, "tp_vcc", NULL)) {
+		ret = of_property_read_string(of_node,
+			"tp_vcc", &cfg_dts.regulator);
+		if (ret < 0) {
+			pr_err("can not read tp_vcc power source\n");
+			cfg_dts.regulator = TP_POWER_ID;
+		}
+
+		if (of_property_read_u32_array(of_node,
+			"vol_range", scope, 2)) {
+			pr_err("failed to get voltage range\n");
+			scope[0] = TP_POWER_MIN_VOL;
+			scope[1] = TP_POWER_MAX_VOL;
+		}
+		cfg_dts.vol_min = scope[0];
+		cfg_dts.vol_max = scope[1];
+	}
+	return 0;
+}
+
+static struct regulator
+	*regulator_init(const char *name, int minvol, int maxvol)
+{
+	tp_regulator = regulator_get(NULL, cfg_dts.regulator);
+	pr_info("[%s]regulator init\n", __func__);
+	if (IS_ERR(tp_regulator)) {
+		pr_err("Nova err,regulator_get fail\n!!!");
+		return NULL;
+	}
+
+	if (regulator_set_voltage(tp_regulator, minvol, maxvol)) {
+		pr_err("Nova err,cannot set voltage\n!!!");
+		regulator_put(tp_regulator);
+		return NULL;
+	}
+	regulator_enable(tp_regulator);
+	return tp_regulator;
+}
+
+static inline void regulator_deinit(struct regulator *power)
+{
+	regulator_disable(power);
+	regulator_put(power);
+}
 
 static inline void set_scan_rate(struct synaptics_i2c *touch, int scan_rate)
 {
@@ -337,36 +423,47 @@ static bool synaptics_i2c_get_input(struct synaptics_i2c *touch)
 {
 	struct input_dev *input = touch->input;
 	int xy_delta, gesture;
-	s32 data;
+	unsigned char icheck_sum;
+	/*s32 data;*/
 	s8 x_delta, y_delta;
+	I2C_PACKET tp_buff;
+
 
 	/* Deal with spontanious resets and errors */
-	if (synaptics_i2c_check_error(touch->client))
+/*	if (synaptics_i2c_check_error(touch->client))
+	return 0;
+
+	i2c_master_recv(touch->client, tp_buff, 7); */
+	i2c_master_recv(touch->client, (char *)(&tp_buff.state), 7);
+	icheck_sum = tp_buff.state + tp_buff.dx + tp_buff.dy + tp_buff.dw +
+	tp_buff.state1 + tp_buff.state2;
+
+	if (icheck_sum == tp_buff.check_sum) {
+		gesture = tp_buff.state & 3;
+		x_delta = tp_buff.dx;
+		y_delta = tp_buff.dy;
+	} else {
+		pr_info("TP check_sum Error %d, %d\n",
+				icheck_sum,
+				tp_buff.check_sum);
+		pr_info("TP Buff: %02X-%02X-%02X-%02X %02X-%02X-%02X\n",
+				tp_buff.state,
+				tp_buff.dx,
+				tp_buff.dy,
+				tp_buff.dw,
+				tp_buff.state1,
+				tp_buff.state2,
+				tp_buff.check_sum);
 		return 0;
-
-	/* Get Gesture Bit */
-	data = synaptics_i2c_reg_get(touch->client, DATA_REG0);
-	gesture = (data >> GESTURE) & 0x1;
-
-	/*
-	 * Get Relative axes. we have to get them in one shot,
-	 * so we get 2 bytes starting from REL_X_REG.
-	 */
-	xy_delta = synaptics_i2c_word_get(touch->client, REL_X_REG) & 0xffff;
-
-	/* Separate X from Y */
-	x_delta = xy_delta & 0xff;
-	y_delta = (xy_delta >> REGISTER_LENGTH) & 0xff;
-
+	}
 	/* Report the button event */
 	input_report_key(input, BTN_LEFT, gesture);
 
 	/* Report the deltas */
 	input_report_rel(input, REL_X, x_delta);
-	input_report_rel(input, REL_Y, -y_delta);
+	input_report_rel(input, REL_Y, y_delta);
 	input_sync(input);
-
-	return xy_delta || gesture;
+	return x_delta || y_delta || gesture;
 }
 
 static void synaptics_i2c_reschedule_work(struct synaptics_i2c *touch,
@@ -376,7 +473,12 @@ static void synaptics_i2c_reschedule_work(struct synaptics_i2c *touch,
 
 	spin_lock_irqsave(&touch->lock, flags);
 
-	mod_delayed_work(system_wq, &touch->dwork, delay);
+	/*
+	 * If work is already scheduled then subsequent schedules will not
+	 * change the scheduled time that's why we have to cancel it first.
+	 */
+	__cancel_delayed_work(&touch->dwork);
+	schedule_delayed_work(&touch->dwork, delay);
 
 	spin_unlock_irqrestore(&touch->lock, flags);
 }
@@ -451,7 +553,7 @@ static void synaptics_i2c_work_handler(struct work_struct *work)
 	synaptics_i2c_check_params(touch);
 
 	have_data = synaptics_i2c_get_input(touch);
-	delay = synaptics_i2c_adjust_delay(touch, have_data);
+/*	delay = synaptics_i2c_adjust_delay(touch, have_data); */
 
 	/*
 	 * While interrupt driven, there is no real need to poll the device.
@@ -461,7 +563,7 @@ static void synaptics_i2c_work_handler(struct work_struct *work)
 	 * We poll the device once in THREAD_IRQ_SLEEP_SECS and
 	 * if error is detected, we try to reset and reconfigure the touchpad.
 	 */
-	synaptics_i2c_reschedule_work(touch, delay);
+	/*synaptics_i2c_reschedule_work(touch, delay);*/
 }
 
 static int synaptics_i2c_open(struct input_dev *input)
@@ -469,9 +571,9 @@ static int synaptics_i2c_open(struct input_dev *input)
 	struct synaptics_i2c *touch = input_get_drvdata(input);
 	int ret;
 
-	ret = synaptics_i2c_reset_config(touch->client);
-	if (ret)
-		return ret;
+	/*ret = synaptics_i2c_reset_config(touch->client);*/
+/*	if (ret)
+		return ret; */
 
 	if (polling_req)
 		synaptics_i2c_reschedule_work(touch,
@@ -517,7 +619,8 @@ static void synaptics_i2c_set_input_params(struct synaptics_i2c *touch)
 	__set_bit(BTN_LEFT, input->keybit);
 }
 
-static struct synaptics_i2c *synaptics_i2c_touch_create(struct i2c_client *client)
+static struct synaptics_i2c
+	*synaptics_i2c_touch_create(struct i2c_client *client)
 {
 	struct synaptics_i2c *touch;
 
@@ -540,15 +643,15 @@ static int synaptics_i2c_probe(struct i2c_client *client,
 {
 	int ret;
 	struct synaptics_i2c *touch;
+	pr_info("[%s]probe....\n", __func__);
+	tp_of_data_get();
+	/* regulator init */
+	regulator_init(cfg_dts.regulator,
+	   cfg_dts.vol_min, cfg_dts.vol_max);
 
 	touch = synaptics_i2c_touch_create(client);
 	if (!touch)
 		return -ENOMEM;
-
-	ret = synaptics_i2c_reset_config(client);
-	if (ret)
-		goto err_mem_free;
-
 	if (client->irq < 1)
 		polling_req = true;
 
@@ -569,11 +672,11 @@ static int synaptics_i2c_probe(struct i2c_client *client,
 				  DRIVER_NAME, touch);
 		if (ret) {
 			dev_warn(&touch->client->dev,
-				  "IRQ request failed: %d, "
-				  "falling back to polling\n", ret);
-			polling_req = true;
+				  "IRQ request failed: %d.\n", ret);
+			goto err_input_free;
+/*			polling_req = true;
 			synaptics_i2c_reg_set(touch->client,
-					      INTERRUPT_EN_REG, 0);
+					      INTERRUPT_EN_REG, 0); */
 		}
 	}
 
@@ -625,6 +728,9 @@ static int synaptics_i2c_suspend(struct device *dev)
 	/* Save some power */
 	synaptics_i2c_reg_set(touch->client, DEV_CONTROL_REG, DEEP_SLEEP);
 
+	if (tp_regulator)
+		regulator_disable(tp_regulator);
+
 	return 0;
 }
 
@@ -633,6 +739,12 @@ static int synaptics_i2c_resume(struct device *dev)
 	int ret;
 	struct i2c_client *client = to_i2c_client(dev);
 	struct synaptics_i2c *touch = i2c_get_clientdata(client);
+
+	if (tp_regulator) {
+		regulator_set_voltage(tp_regulator,
+			cfg_dts.vol_min, cfg_dts.vol_max);
+		ret = regulator_enable(tp_regulator);
+	}
 
 	ret = synaptics_i2c_reset_config(client);
 	if (ret)
