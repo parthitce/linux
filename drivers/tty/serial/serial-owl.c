@@ -781,6 +781,13 @@ static int owl_serial_dma_init(struct owl_uart_port *aport)
 	struct device *dev = aport->port.dev;
 	int ret;
 
+	/* Exit early (and quietly) if this UART does not support DMA */
+	if (of_property_count_strings(dev->of_node, "dma-names") < 1) {
+		aport->using_rx_dma = false;
+		aport->using_tx_dma = false;
+		return 0;
+	}
+
 	ret = owl_serial_dma_init_rx(aport);
 	if (!ret)
 		aport->using_rx_dma = true;
