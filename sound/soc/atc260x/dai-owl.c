@@ -351,7 +351,8 @@ static int s900_dai_record_clk_disable(void)
 	//clk_disable(dai_res.i2srx_clk);
 	//clk_disable(dai_res.i2stx_clk);	
 	
-	dai_clk_i2s_count--;
+	if (dai_clk_i2s_count > 0)
+		dai_clk_i2s_count--;
 
 	return 0;
 }
@@ -372,16 +373,18 @@ static int s900_dai_clk_disable(int mode)
 	//clk_disable(dai_res.i2stx_clk);	
 	//atc2609a_audio_disable_clk();
 
-	
-	dai_clk_i2s_count--;
+	if (dai_clk_i2s_count > 0)
+		dai_clk_i2s_count--;
 	break;
 
 	case O_MODE_HDMI:
-	dai_clk_hdmi_count--;
+	if (dai_clk_hdmi_count > 0)
+		dai_clk_hdmi_count--;
 	break;
 
 	case O_MODE_SPDIF:
-	dai_clk_spdif_count--;
+	if (dai_clk_spdif_count > 0)
+		dai_clk_spdif_count--;
 	break;
 	default:
 		return -EINVAL;
@@ -556,7 +559,9 @@ static int s900_dai_mode_set(struct s900_pcm_priv *pcm_priv,
 
 static int s900_dai_record_mode_unset(void)
 {
-	dai_mode_i2s_count--;
+	if (dai_mode_i2s_count > 0)
+		dai_mode_i2s_count--;
+
 	if (dai_mode_i2s_count == 0) {
 		set_dai_reg_base(I2S_SPDIF_NUM);
 		snd_dai_writel(snd_dai_readl(I2S_CTL) & ~0x3, I2S_CTL);
@@ -571,7 +576,9 @@ static int s900_dai_mode_unset(struct s900_pcm_priv *pcm_priv)
 {
 	switch (pcm_priv->output_mode) {
 	case O_MODE_I2S:
-		dai_mode_i2s_count--;
+		if (dai_mode_i2s_count > 0)
+			dai_mode_i2s_count--;
+
 		if (dai_mode_i2s_count == 0) {
 			set_dai_reg_base(I2S_SPDIF_NUM);
 			snd_dai_writel(snd_dai_readl(I2S_CTL) & ~0x3, I2S_CTL);
@@ -582,7 +589,8 @@ static int s900_dai_mode_unset(struct s900_pcm_priv *pcm_priv)
 		break;
 	case O_MODE_HDMI:
 		/* HDMI fifo disable */
-		dai_mode_hdmi_count--;
+		if (dai_mode_hdmi_count > 0)
+			dai_mode_hdmi_count--;
 		if (dai_mode_hdmi_count == 0) {
 			set_dai_reg_base(I2S_SPDIF_NUM);
 			snd_dai_writel(snd_dai_readl(SPDIF_HDMI_CTL) & ~0x2, SPDIF_HDMI_CTL);
