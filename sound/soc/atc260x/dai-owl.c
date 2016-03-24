@@ -233,7 +233,7 @@ static int s900_dai_record_clk_set(int mode, int rate)
 	dai_clk_enabled = 1;
 
 
-	sf_index = get_sf_index(mode, rate);
+	sf_index = get_sf_index(rate, mode);
 	if (sf_index & 0x10)
 		reg_val = 45158400;
 	else
@@ -277,7 +277,7 @@ static int s900_dai_clk_set(int mode, int rate)
 	clk_prepare_enable(dai_res.i2stx_clk);
 	dai_clk_enabled = 1;
 	
-	sf_index = get_sf_index(mode, rate);
+	sf_index = get_sf_index(rate, mode);
 	if (sf_index & 0x10)
 		reg_val = 45158400;
 	else
