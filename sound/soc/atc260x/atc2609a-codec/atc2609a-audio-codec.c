@@ -1296,8 +1296,7 @@ static void atc2609a_audio_shutdown(struct snd_pcm_substream *substream, struct 
 }
 
 #define ATC2609A_RATES SNDRV_PCM_RATE_8000_192000
-#define ATC2609A_FORMATS (SNDRV_PCM_FMTBIT_S16_LE |\
-	SNDRV_PCM_FMTBIT_S20_3LE | SNDRV_PCM_FMTBIT_S24_LE)
+#define ATC2609A_FORMATS (SNDRV_PCM_FMTBIT_S32_LE)
 
 struct snd_soc_dai_ops atc2609a_audio_aif_dai_ops = {
 	.shutdown = atc2609a_audio_shutdown,

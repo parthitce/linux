@@ -43,8 +43,7 @@ static struct snd_pcm_hardware s900_playback_hw_info = {
 				  SNDRV_PCM_INFO_INTERLEAVED |
 				  SNDRV_PCM_INFO_BLOCK_TRANSFER |
 				  SNDRV_PCM_INFO_RESUME,
-	.formats		= SNDRV_PCM_FMTBIT_S16_LE |
-				  SNDRV_PCM_FMTBIT_S32_LE,
+	.formats		= SNDRV_PCM_FMTBIT_S32_LE,
 	.rate_min		= 8000,
 	.rate_max		= 192000,
 	.channels_min		= 2,
@@ -62,8 +61,7 @@ static struct snd_pcm_hardware s900_capture_hw_info = {
 				  SNDRV_PCM_INFO_INTERLEAVED |
 				  SNDRV_PCM_INFO_BLOCK_TRANSFER |
 				  SNDRV_PCM_INFO_RESUME,
-	.formats		= SNDRV_PCM_FMTBIT_S16_LE |
-				  SNDRV_PCM_FMTBIT_S32_LE,
+	.formats		= SNDRV_PCM_FMTBIT_S32_LE,
 	.rate_min		= 8000,
 	.rate_max		= 96000,
 	.channels_min		= 1,

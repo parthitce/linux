@@ -607,7 +607,6 @@ static int s900_dai_hw_params(struct snd_pcm_substream *substream,
 
 	//printk("%s %d\n", __FUNCTION__, __LINE__);
 	switch (params_format(params)) {
-	case SNDRV_PCM_FORMAT_S16_LE:
 	case SNDRV_PCM_FORMAT_S32_LE:
 		break;
 	default:
@@ -660,7 +659,7 @@ struct snd_soc_dai_ops s900_dai_dai_ops = {
 
 #define S900_STEREO_CAPTURE_RATES SNDRV_PCM_RATE_8000_96000
 #define S900_STEREO_PLAYBACK_RATES SNDRV_PCM_RATE_8000_192000
-#define S900_FORMATS SNDRV_PCM_FMTBIT_S16_LE
+#define S900_FORMATS SNDRV_PCM_FMTBIT_S32_LE
 
 struct snd_soc_dai_driver s900_dai = {
 	.name = "owl-audio-i2s",
@@ -670,14 +669,14 @@ struct snd_soc_dai_driver s900_dai = {
 		.channels_min = 1,
 		.channels_max = 8,
 		.rates = S900_STEREO_PLAYBACK_RATES,
-		.formats = SNDRV_PCM_FMTBIT_S16_LE,
+		.formats = SNDRV_PCM_FMTBIT_S32_LE,
 	},
 	.capture = {
 		.stream_name = "s900 dai Capture",
 		.channels_min = 1,
 		.channels_max = 4,
 		.rates = S900_STEREO_CAPTURE_RATES,
-		.formats = SNDRV_PCM_FMTBIT_S16_LE,
+		.formats = SNDRV_PCM_FMTBIT_S32_LE,
 	},
 	.ops = &s900_dai_dai_ops,
 };
