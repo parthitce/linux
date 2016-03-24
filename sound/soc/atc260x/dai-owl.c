@@ -233,7 +233,7 @@ static int s900_dai_record_clk_set(int mode, int rate)
 	dai_clk_enabled = 1;
 
 
-	sf_index = get_sf_index(mode, rate);
+	sf_index = get_sf_index(rate, mode);
 	if (sf_index & 0x10)
 		reg_val = 45158400;
 	else
@@ -277,7 +277,7 @@ static int s900_dai_clk_set(int mode, int rate)
 	clk_prepare_enable(dai_res.i2stx_clk);
 	dai_clk_enabled = 1;
 	
-	sf_index = get_sf_index(mode, rate);
+	sf_index = get_sf_index(rate, mode);
 	if (sf_index & 0x10)
 		reg_val = 45158400;
 	else
@@ -351,7 +351,8 @@ static int s900_dai_record_clk_disable(void)
 	//clk_disable(dai_res.i2srx_clk);
 	//clk_disable(dai_res.i2stx_clk);	
 	
-	dai_clk_i2s_count--;
+	if (dai_clk_i2s_count > 0)
+		dai_clk_i2s_count--;
 
 	return 0;
 }
@@ -372,16 +373,18 @@ static int s900_dai_clk_disable(int mode)
 	//clk_disable(dai_res.i2stx_clk);	
 	//atc2609a_audio_disable_clk();
 
-	
-	dai_clk_i2s_count--;
+	if (dai_clk_i2s_count > 0)
+		dai_clk_i2s_count--;
 	break;
 
 	case O_MODE_HDMI:
-	dai_clk_hdmi_count--;
+	if (dai_clk_hdmi_count > 0)
+		dai_clk_hdmi_count--;
 	break;
 
 	case O_MODE_SPDIF:
-	dai_clk_spdif_count--;
+	if (dai_clk_spdif_count > 0)
+		dai_clk_spdif_count--;
 	break;
 	default:
 		return -EINVAL;
@@ -535,8 +538,8 @@ static int s900_dai_mode_set(struct s900_pcm_priv *pcm_priv,
 
 	case O_MODE_HDMI:
 		/* HDMI&SPDIF fifo reset */
-		set_dai_reg_base(I2S_SPDIF_NUM);
 		if (dai_mode_hdmi_count == 0) {
+			set_dai_reg_base(I2S_SPDIF_NUM);
 			snd_dai_writel(snd_dai_readl(SPDIF_HDMI_CTL) & ~0x3,
 				SPDIF_HDMI_CTL);
 			/* HDMI fifo enable,DRQ enable */
@@ -556,7 +559,9 @@ static int s900_dai_mode_set(struct s900_pcm_priv *pcm_priv,
 
 static int s900_dai_record_mode_unset(void)
 {
-	dai_mode_i2s_count--;
+	if (dai_mode_i2s_count > 0)
+		dai_mode_i2s_count--;
+
 	if (dai_mode_i2s_count == 0) {
 		set_dai_reg_base(I2S_SPDIF_NUM);
 		snd_dai_writel(snd_dai_readl(I2S_CTL) & ~0x3, I2S_CTL);
@@ -571,7 +576,9 @@ static int s900_dai_mode_unset(struct s900_pcm_priv *pcm_priv)
 {
 	switch (pcm_priv->output_mode) {
 	case O_MODE_I2S:
-		dai_mode_i2s_count--;
+		if (dai_mode_i2s_count > 0)
+			dai_mode_i2s_count--;
+
 		if (dai_mode_i2s_count == 0) {
 			set_dai_reg_base(I2S_SPDIF_NUM);
 			snd_dai_writel(snd_dai_readl(I2S_CTL) & ~0x3, I2S_CTL);
@@ -582,7 +589,8 @@ static int s900_dai_mode_unset(struct s900_pcm_priv *pcm_priv)
 		break;
 	case O_MODE_HDMI:
 		/* HDMI fifo disable */
-		dai_mode_hdmi_count--;
+		if (dai_mode_hdmi_count > 0)
+			dai_mode_hdmi_count--;
 		if (dai_mode_hdmi_count == 0) {
 			set_dai_reg_base(I2S_SPDIF_NUM);
 			snd_dai_writel(snd_dai_readl(SPDIF_HDMI_CTL) & ~0x2, SPDIF_HDMI_CTL);
@@ -607,7 +615,6 @@ static int s900_dai_hw_params(struct snd_pcm_substream *substream,
 
 	//printk("%s %d\n", __FUNCTION__, __LINE__);
 	switch (params_format(params)) {
-	case SNDRV_PCM_FORMAT_S16_LE:
 	case SNDRV_PCM_FORMAT_S32_LE:
 		break;
 	default:
@@ -660,7 +667,7 @@ struct snd_soc_dai_ops s900_dai_dai_ops = {
 
 #define S900_STEREO_CAPTURE_RATES SNDRV_PCM_RATE_8000_96000
 #define S900_STEREO_PLAYBACK_RATES SNDRV_PCM_RATE_8000_192000
-#define S900_FORMATS SNDRV_PCM_FMTBIT_S16_LE
+#define S900_FORMATS SNDRV_PCM_FMTBIT_S32_LE
 
 struct snd_soc_dai_driver s900_dai = {
 	.name = "owl-audio-i2s",
@@ -670,14 +677,14 @@ struct snd_soc_dai_driver s900_dai = {
 		.channels_min = 1,
 		.channels_max = 8,
 		.rates = S900_STEREO_PLAYBACK_RATES,
-		.formats = SNDRV_PCM_FMTBIT_S16_LE,
+		.formats = SNDRV_PCM_FMTBIT_S32_LE,
 	},
 	.capture = {
 		.stream_name = "s900 dai Capture",
 		.channels_min = 1,
 		.channels_max = 4,
 		.rates = S900_STEREO_CAPTURE_RATES,
-		.formats = SNDRV_PCM_FMTBIT_S16_LE,
+		.formats = SNDRV_PCM_FMTBIT_S32_LE,
 	},
 	.ops = &s900_dai_dai_ops,
 };
