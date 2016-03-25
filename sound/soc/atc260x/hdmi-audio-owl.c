@@ -591,7 +591,9 @@ static int hdmi_audio_set_dai_sysclk(struct snd_soc_dai *dai,
 }
 
 #define s900_HDMI_RATES SNDRV_PCM_RATE_8000_192000
-#define s900_HDMI_FORMATS (SNDRV_PCM_FMTBIT_S32_LE)
+#define s900_HDMI_FORMATS (SNDRV_PCM_FMTBIT_S16_LE \
+| SNDRV_PCM_FMTBIT_S20_3LE | \
+		SNDRV_PCM_FMTBIT_S24_LE)
 
 struct snd_soc_dai_ops hdmi_aif_dai_ops = {
 	.hw_params = hdmi_audio_hw_params,
