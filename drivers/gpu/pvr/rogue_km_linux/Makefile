@@ -1,5 +1,5 @@
 ########################################################################### ###
-#@Title         Root makefile.  Builds everything else.
+#@Title         Root kernel makefile
 #@Copyright     Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 #@License       Dual MIT/GPLv2
 # 
@@ -39,16 +39,39 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ### ###########################################################################
 
-ALREADY_INVOKED_SUBMAKE :=
-ifeq ($(strip $(PVR_BUILD_DIR)),)
-$(info ** PVR_BUILD_DIR was empty or unset. This should be the name of a directory)
-$(info ** under build/linux, like: export PVR_BUILD_DIR=nohw_linux)
-$(error PVR_BUILD_DIR unset)
-endif
-MAKECMDGOALS ?= build
-.PHONY: $(MAKECMDGOALS)
-.SUFFIXES:
-.DEFAULT $(MAKECMDGOALS):
-	@$(if $(ALREADY_INVOKED_SUBMAKE),:,$(eval ALREADY_INVOKED_SUBMAKE := true)$(MAKE) --no-print-directory -C build/linux/$(PVR_BUILD_DIR) $(MAKECMDGOALS))
+# This top-level kbuild makefile builds all the Linux kernel modules in the
+# DDK. To run kbuild, this makefile is copied to $(TARGET_PRIMARY_OUT)/kbuild/Makefile
+# and make is invoked in $(TARGET_PRIMARY_OUT)/kbuild.
 
-Makefile: ;
+# This makefile doesn't define any kbuild special variables apart from
+# ccflags-y and obj-m. The variables for objects are picked up by including
+# the kbuild makefile fragments named in $(INTERNAL_KBUILD_MAKEFILES). The
+# list of objects that these fragments make is collected in
+# $(INTERNAL_KBUILD_OBJECTS) and $(INTERNAL_EXTRA_KBUILD_OBJECTS). These
+# variables are set according to the build's $(KERNEL_COMPONENTS) and
+# $(EXTRA_PVRSRVKM_COMPONENTS). To add a new kernel module to the build, edit
+# these variables in the per-build Makefile.
+
+TOP := $(src)
+bridge_base := $(TOP)/generated
+
+include $(TOP)/config_kernel.mk
+
+ccflags-y += -D__linux__ -I$(TOP) -include config_kernel.h\
+ -I$(TOP)/include \
+ -I$(TOP)/hwdefs/km \
+ -I$(TOP)/services/include \
+ -I$(TOP)/services/include/shared \
+ -I$(TOP)/services/shared/include \
+ -I$(TOP)/services/shared/common \
+ -I$(TOP)/services/system/$(PVR_SYSTEM) \
+ -I$(TOP)/services/system/include \
+ -I$(TOP)/services/server/common \
+ -I$(TOP)/services/server/devices/rgx \
+ -I$(TOP)/services/server/env/linux \
+ -I$(TOP)/services/server/include
+
+include $(TOP)/services/server/env/linux/Kbuild.mk
+include $(TOP)/services/3rdparty/dc_drmfbdev/Kbuild.mk
+
+obj-$(CONFIG_POWERVR_ROGUE_LINUX) += pvrsrvkm.o dc_drmfbdev.o

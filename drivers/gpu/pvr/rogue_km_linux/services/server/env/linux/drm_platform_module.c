@@ -95,10 +95,19 @@ static struct dev_pm_ops powervr_dev_pm_ops = {
 	.resume		= PVRSRVDriverResume,
 };
 
+static struct of_device_id asPlatIdList[] = {
+	{
+		.compatible = "Imagination,rogue"
+	},
+	{}
+};
+MODULE_DEVICE_TABLE(of,  asPlatIdList);
+
 static struct platform_driver powervr_driver = {
 	.driver = {
 		.name	= DRVNAME,
 		.pm	= &powervr_dev_pm_ops,
+		.of_match_table = asPlatIdList,
 	},
 #if defined(PVR_USE_PRE_REGISTERED_PLATFORM_DEV)
 	.id_table	= powervr_id_table,

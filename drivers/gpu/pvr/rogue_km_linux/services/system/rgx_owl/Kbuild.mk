@@ -39,31 +39,13 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ### ###########################################################################
 
-MODULE_CC := $(CC_SECONDARY)
-MODULE_CXX := $(CXX_SECONDARY)
+pvrsrvkm-y += \
+	services/system/$(PVR_SYSTEM)/sysconfig.o \
+	services/system/$(PVR_SYSTEM)/sysutils.o \
+	services/system/$(PVR_SYSTEM)/gpudvfs.o \
+	services/system/$(PVR_SYSTEM)/owlinit.o
 
-MODULE_CFLAGS := $(ALL_CFLAGS) $($(THIS_MODULE)_cflags)
-MODULE_CXXFLAGS := $(ALL_CXXFLAGS) $($(THIS_MODULE)_cxxflags)
-MODULE_LDFLAGS := $(ALL_LDFLAGS) $($(THIS_MODULE)_ldflags) -L$(MODULE_OUT) -Xlinker -rpath-link=$(MODULE_OUT)
-
-# Since this is a target module, add system-specific include flags.
-MODULE_INCLUDE_FLAGS := $(SYS_INCLUDES) $(MODULE_INCLUDE_FLAGS)
-
-ifneq ($(SUPPORT_ANDROID_PLATFORM),)
-$(error Android builds on this architecture are not supported)
-endif
-
-ifneq ($(BUILD),debug)
-ifeq ($(USE_LTO),1)
-MODULE_LDFLAGS := \
- $(sort $(filter-out -W% -D%,$(ALL_CFLAGS) $(ALL_CXXFLAGS))) \
- $(MODULE_LDFLAGS)
-endif
-endif
-
-MODULE_ARCH_BITNESS := 32
-
-# Neutrino qcc requires "-Wc," prefix for compiler flags
-ifeq ($(SUPPORT_NEUTRINO_PLATFORM),1)
-include $(MAKE_TOP)/common/neutrino/modify_moduledefs.mk
+ifeq ($(SUPPORT_ION),1)
+pvrsrvkm-y += \
+ services/system/$(PVR_SYSTEM)/ion_support_owl.o
 endif

@@ -84,6 +84,20 @@ endif
 # DRM display drivers
 ########################################################################### ###
 
+ifeq ($(DISPLAY_CONTROLLER),dc_drmfbdev)
+$(eval $(call TunableKernelConfigC,DC_FBDEV_FORCE_XRGB8888,,\
+Force the dc_fbdev display driver to use XRGB8888. This is necessary_\
+when the underlying Linux framebuffer driver does not ignore alpha_\
+meaning an alpha value of 0 results in nothing being displayed._\
+))
+
+$(eval $(call TunableKernelConfigC,DC_FBDEV_NUM_PREFERRED_BUFFERS,,\
+The maximum number of display buffers the dc_fbdev display driver_\
+supports. The underlying Linux framebuffer driver must be capable_\
+of allocating sufficient memory for the number of buffers chosen._\
+))
+endif
+
 ifeq ($(DISPLAY_CONTROLLER),drm_fbdev)
 $(eval $(call TunableKernelConfigC,DRM_FBDEV_FORCE_XRGB8888,,\
 Force the drm_fbdev display driver to use XRGB8888. This is necessary_\

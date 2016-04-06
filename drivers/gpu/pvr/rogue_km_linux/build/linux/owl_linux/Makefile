@@ -1,5 +1,4 @@
 ########################################################################### ###
-#@File
 #@Copyright     Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 #@License       Dual MIT/GPLv2
 # 
@@ -39,31 +38,48 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ### ###########################################################################
 
-MODULE_CC := $(CC_SECONDARY)
-MODULE_CXX := $(CXX_SECONDARY)
+include ../config/preconfig.mk
+include ../config/window_system.mk
 
-MODULE_CFLAGS := $(ALL_CFLAGS) $($(THIS_MODULE)_cflags)
-MODULE_CXXFLAGS := $(ALL_CXXFLAGS) $($(THIS_MODULE)_cxxflags)
-MODULE_LDFLAGS := $(ALL_LDFLAGS) $($(THIS_MODULE)_ldflags) -L$(MODULE_OUT) -Xlinker -rpath-link=$(MODULE_OUT)
+PVR_SYSTEM := rgx_owl
+LDM_PLATFORM := 1
+NO_HARDWARE := 0
+RGX_BVNC ?= 1.75.2.30
 
-# Since this is a target module, add system-specific include flags.
-MODULE_INCLUDE_FLAGS := $(SYS_INCLUDES) $(MODULE_INCLUDE_FLAGS)
 
-ifneq ($(SUPPORT_ANDROID_PLATFORM),)
-$(error Android builds on this architecture are not supported)
+SUPPORT_SYSTEM_INTERRUPT_HANDLING := 0
+CACHEFLUSH_TYPE ?= CACHEFLUSH_GENERIC
+SUPPORT_GPU_DVFS ?= 1
+
+PVR_LOADER := drm_platform_module
+
+ifeq ($(SUPPORT_DRM),1)
+PVR_DRM_STATIC_BUS_ID := "\"platform:rgxnohw:00\""
+
+DISPLAY_CONTROLLER := dc_drmfbdev
+else
+DISPLAY_CONTROLLER := dc_example
 endif
 
-ifneq ($(BUILD),debug)
-ifeq ($(USE_LTO),1)
-MODULE_LDFLAGS := \
- $(sort $(filter-out -W% -D%,$(ALL_CFLAGS) $(ALL_CXXFLAGS))) \
- $(MODULE_LDFLAGS)
-endif
+DISPLAY_CONTROLLER_DIR := $(DISPLAY_CONTROLLER)
+DRM_FBDEV_NUM_PREFERRED_BUFFERS := 2
+DC_FBDEV_NUM_PREFERRED_BUFFERS := 2
+KERNEL_COMPONENTS := srvkm $(DISPLAY_CONTROLLER)
+
+ifeq ($(ARCH)$(CROSS_COMPILE),)
+XORG_PVR_SKIP_CONSOLE ?= 1
+else
+XORG_PVR_SKIP_CONSOLE ?= 0
 endif
 
-MODULE_ARCH_BITNESS := 32
+# Should be last
+include ../config/core.mk
+-include ../common/lws.mk
+include ../common/drm.mk
+-include ../common/opencl.mk
+include ../common/pvrgdb.mk
+include ../common/3rdparty.mk
 
-# Neutrino qcc requires "-Wc," prefix for compiler flags
-ifeq ($(SUPPORT_NEUTRINO_PLATFORM),1)
-include $(MAKE_TOP)/common/neutrino/modify_moduledefs.mk
-endif
+
+# dvfs support
+$(eval $(call TunableKernelConfigC,SUPPORT_GPU_DVFS,))

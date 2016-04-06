@@ -39,8 +39,8 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ### ###########################################################################
 
-MODULE_CC := $(CC_SECONDARY)
-MODULE_CXX := $(CXX_SECONDARY)
+MODULE_CC := $(CC)
+MODULE_CXX := $(CXX)
 
 MODULE_CFLAGS := $(ALL_CFLAGS) $($(THIS_MODULE)_cflags)
 MODULE_CXXFLAGS := $(ALL_CXXFLAGS) $($(THIS_MODULE)_cxxflags)
@@ -61,7 +61,7 @@ MODULE_LDFLAGS := \
 endif
 endif
 
-MODULE_ARCH_BITNESS := 32
+MODULE_ARCH_BITNESS := 64
 
 # Neutrino qcc requires "-Wc," prefix for compiler flags
 ifeq ($(SUPPORT_NEUTRINO_PLATFORM),1)
