@@ -1924,8 +1924,9 @@ static int aotg_hub_urb_enqueue(struct usb_hcd *hcd, struct urb *urb,
 		}
 
 		if (!list_empty(&ep->enring_td_list) && !is_ring_running(ep->ring)) {
-			if (ep->ring->dequeue_trb != ep->ring->first_trb)
-				aotg_reorder_iso_td(acthcd, ep->ring);
+			// no need to reorder!
+			//if (ep->ring->dequeue_trb != ep->ring->first_trb)
+				//aotg_reorder_iso_td(acthcd, ep->ring);
 			aotg_start_ring_transfer(acthcd, ep, urb);
 		}
 	}
