@@ -78,6 +78,13 @@
 			pinctrl-0 = <&pwm2_state_default>;
 		};
 	};
+
+	owl_aotg_config {
+                compatible = "actions,owl-aotg-config";
+                usb_cam_shield1 = "e01d0000";
+                usb_cam_shield2 = "e01d8000";
+        };
+
 		i2c2: i2c@e0178000 {
 		i2c_num = <0>;
 		clock-frequency = <400000>;

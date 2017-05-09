@@ -600,6 +600,14 @@ void owl_panel_get_draw_size(struct owl_panel *panel, int *width, int *height)
 		if (*height > 2048)
 			*height /= 2;*/
 	}
+
+	/* S700, HDMI 4k scaling need limit draw size */
+	if (owl_de_is_s700() && *width > *height) {
+		if (*width >= 3840)
+			*width /= 2;
+		if (*height >= 2160)
+			*height /= 2;
+	}
 }
 EXPORT_SYMBOL(owl_panel_get_draw_size);
 

@@ -1000,8 +1000,8 @@ int owl_de_video_info_validate(struct owl_de_video *video,
 			tmp = de_hscaler_min;
 		else if (info->height >= 2160)	/* specail for 4K, 1.5 */
 			tmp = 15;
-		else if (info->height > 1080)	/* above 1920x1080, 2 */
-			tmp = 20;
+		else if (info->height > 1080)	/* above 1920x1080, 2.5 */
+			tmp = 25;
 		else
 			tmp = crop_limits->scaling_height.min;
 

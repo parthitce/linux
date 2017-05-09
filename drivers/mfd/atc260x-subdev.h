@@ -15,7 +15,13 @@ static const struct resource atc2603a_onoff_resources[] = {
 	 .flags = IORESOURCE_IRQ,
 	 },
 };
-
+static const struct resource atc2603a_irkey_resources[] = {
+        {
+                .start = ATC2603A_IRQ_IR,
+                .end   = ATC2603A_IRQ_IR,
+                .flags = IORESOURCE_IRQ,
+        },
+};
 static const struct resource atc2603a_ethernet_resources[] = {
 	{
 	 .start = ATC2603A_IRQ_ETHERNET,
@@ -185,6 +191,13 @@ static const struct mfd_cell sc_atc2603a_cells[] = {
 	 .of_compatible = "actions,atc2603a-adckeypad",
 	 },
 
+    /* IR keypad */
+    {
+        .name = "atc2603a-irkeypad",
+        .of_compatible = "actions,atc2603a-irkeypad",
+        .num_resources = ARRAY_SIZE(atc2603a_irkey_resources),
+        .resources = atc2603a_irkey_resources,
+    },
 	/* Audio */
 	{
 	 .name = "atc2603a-audio",
@@ -381,14 +394,14 @@ static const struct mfd_cell sc_atc2603c_cells[] = {
 	 .of_compatible = "actions,atc2603c-adckeypad",
 	 },
 	/* IR keypad */
-#ifdef CONFIG_KEYBOARD_ATC2603C_IR
+//#ifdef CONFIG_KEYBOARD_ATC2603C_IR
     {
 	.name = "atc2603c-irkeypad",
 	.of_compatible = "actions,atc2603c-irkeypad",
 	.num_resources = ARRAY_SIZE(atc2603c_irkey_resources),
 	.resources = atc2603c_irkey_resources,
     },
-#endif	
+//#endif	
 	/* Audio */
 	{
 	 .name = "atc2603c-audio",

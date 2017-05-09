@@ -68,11 +68,35 @@ static int rtl8201f_config_intr(struct phy_device *phydev)
 	else
 		err = phy_write(phydev, RTL8201F_INER, ~RTL8201F_INER_MASK & phy_read(phydev, RTL8201F_INER));
 
-#if 1//zakktest
-	temp = phy_read(phydev, 16);
-	phy_write(phydev, 16, temp & ~0x1000);//page7 register16 bit12, Rg_rmii_clkdir set 0 for output clock to s900 ethernet MAC
-#endif
+//#if 1//zakktest
+//	temp = phy_read(phydev, 16);
+//	phy_write(phydev, 16, temp & ~0x1000);//page7 register16 bit12, Rg_rmii_clkdir set 0 for output clock to s900 ethernet MAC
+//#endif
 
+	rtl8201f_select_page(phydev, 0);
+
+
+	return err;
+}
+
+static int rtl8201f_config_init(struct phy_device *phydev)
+{
+	int err;
+	int temp;
+
+	rtl8201f_select_page(phydev, 7);
+
+	/* for s700 */
+	temp = phy_read(phydev, 16);
+#ifdef  CONFIG_S700_REALTEK_PHY
+
+	/* for s700 */
+	temp &= ~0x0FF2;	/* CRS/CRS_DV pin set as CRS_DV signal */
+	phy_write(phydev, 16, (temp | (0x4 << 4) | (0x4 << 8)));		/* rmii tx/rx interface timing */
+#else
+	phy_write(phydev, 16, temp & ~0x1000);//page7 register16 bit12, Rg_rmii_clkdir set 0 for output clock to s900 etherne
+#endif
+	printk("%s,reg16:0x%x\n", __func__, phy_read(phydev, 16));
 	rtl8201f_select_page(phydev, 0);
 
 
@@ -188,14 +212,19 @@ static struct phy_driver rtl8201f_driver = {
 		.name		= "RTL8201F 10/100Mbps Ethernet",
 		.phy_id_mask	= 0x001fffff,
 		.features	= PHY_BASIC_FEATURES,
-		.flags		= PHY_HAS_INTERRUPT,
 		.config_aneg	= &genphy_config_aneg,
 		.read_status	= &genphy_read_status,
 		.ack_interrupt	= &rtl8201f_ack_interrupt,
-		.config_intr	= &rtl8201f_config_intr,
+		.config_intr  = &rtl8201f_config_intr,
+		.config_init	= &rtl8201f_config_init,
 		.suspend	= genphy_suspend,
 		.resume		= genphy_resume,
 		.driver		= { .owner = THIS_MODULE,},
+	#ifdef  CONFIG_S700_REALTEK_PHY
+		//.flags		= PHY_HAS_INTERRUPT,
+	#else
+		.flags		= PHY_HAS_INTERRUPT,
+	#endif
 	};
 
 static int __init realtek_init(void)

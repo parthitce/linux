@@ -334,7 +334,7 @@ static struct owl_composite_clock s700_composite_clks[] __initdata = {
 	COMP_DIV_CLK(CLK_UART3, "uart3", 0,
 			C_MUX(uart_clk_mux_p, CMU_UART3CLK, 16, 1,  0),
 			C_GATE(CMU_DEVCLKEN1, 11,  0),
-			C_DIVIDER(CMU_UART3CLK, 0, 8, NULL,  CLK_DIVIDER_ROUND_CLOSEST)),
+			C_DIVIDER(CMU_UART3CLK, 0, 9, NULL,  CLK_DIVIDER_ROUND_CLOSEST)),
 
 	COMP_DIV_CLK(CLK_UART4, "uart4", 0,
 			C_MUX(uart_clk_mux_p, CMU_UART4CLK, 16, 1,  0),

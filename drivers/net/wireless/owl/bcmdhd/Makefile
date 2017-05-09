@@ -16,7 +16,7 @@ CONFIG_BCMDHD_SDIO := y
 ifeq ($(CONFIG_BCMDHD_DISABLE_OOB),y)
 #CONFIG_BCMDHD_OOB := y
 else
-CONFIG_BCMDHD_OOB := y
+#CONFIG_BCMDHD_OOB := y
 endif
 
 DHDCFLAGS = -Wall -Wstrict-prototypes -Dlinux -DBCMDRIVER -DSDTEST       \

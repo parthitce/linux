@@ -86,6 +86,11 @@ config REALTEK_PHY
 	---help---
 	  Currently supports the RTL8201F, RTL8211B and RTL8211E PHYs.
 
+config S700_REALTEK_PHY
+	tristate "Drivers for S700 REALTEK PHY "
+	---help---
+	  Currently supports the S700 RTL8201F, RTL8211B and RTL8211E PHYs.
+
 config NATIONAL_PHY
 	tristate "Drivers for National Semiconductor PHYs"
 	---help---
