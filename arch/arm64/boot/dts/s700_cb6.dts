@@ -443,9 +443,9 @@
 				regulator-max-microvolt = <1250000>;
 				regulator-always-on;
 				pwms = <&pwm 1 2666 0>;	// 1-pwm1   2666-1/(24M/64)*1000000-1   0 -active high
-				table_len = < 15 >;			//length of vdd_cpu_table & pwm_config_table
-				vdd_cpu_table = <900000 925000 950000 975000 1000000 1025000 1050000 1075000 1100000 1125000 1150000 1175000 1200000 1225000 1250000>;	//uV
-				pwm_config_table = <19 18 17 16 15 14 13 12 11 10 9 8 7 6 5>;	//the pwm period of 1.1v 1.2v 1.3v
+				table_len = < 8 >;			//length of vdd_cpu_table & pwm_config_table
+				vdd_cpu_table = <1050000 1075000 1100000 1125000 1150000 1175000 1200000 1250000>;	//uV
+				pwm_config_table = <42 37 31 26 20 14 9 0>;
 			};
 
 			vdd_core_dcdc: vdd-core-dcdc {
@@ -455,9 +455,9 @@
 				regulator-max-microvolt = <1250000>;
 				regulator-always-on;
 				pwms = <&pwm 2 2666 0>;	// 1-pwm1   2666-1/(24M/64)*1000000-1   0 -active high
-				table_len = < 15 >;			//length of vdd_cpu_table & pwm_config_table
-				vdd_cpu_table = <900000 925000 950000 975000 1000000 1025000 1050000 1075000 1100000 1125000 1150000 1175000 1200000 1225000 1250001>;	//uV
-				pwm_config_table = <19 18 17 16 15 14 13 12 11 10 9 8 7 6 5>;	//the pwm period of 1.1v 1.2v 1.3v
+				table_len = < 5 >;			//length of vdd_cpu_table & pwm_config_table
+				vdd_cpu_table = <1100000 1125000 1150000 1175000 1200000>;	//uV
+				pwm_config_table = <55 43 33 18 13>;
 			};
 
 			dcdc1: dcdc1 {
