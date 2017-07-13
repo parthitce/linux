@@ -43,7 +43,7 @@ pvrsrvkm-y += \
  services/server/env/linux/event.o \
  services/server/env/linux/mm.o \
  services/server/env/linux/mmap.o \
- services/server/env/linux/module.o \
+ services/server/env/linux/module_common.o \
  services/server/env/linux/devicemem_mmap_stub.o \
  services/server/env/linux/osfunc.o \
  services/server/env/linux/allocmem.o \
@@ -62,6 +62,7 @@ pvrsrvkm-y += \
  services/shared/common/ra.o \
  services/shared/common/sync.o \
  services/shared/common/dllist.o \
+ services/shared/common/mem_utils.o \
  services/server/common/devicemem_server.o \
  services/server/common/handle.o \
  services/server/common/lists.o \
@@ -81,6 +82,12 @@ pvrsrvkm-y += \
  services/server/common/tlserver.o \
  services/server/common/tlstream.o \
  services/shared/common/uniq_key_splay_tree.o
+
+ifneq ($(PVR_LOADER),)
+pvrsrvkm-y += services/server/env/linux/$(PVR_LOADER).o
+else
+pvrsrvkm-y += services/server/env/linux/module.o
+endif
 
 ifeq ($(SUPPORT_DISPLAY_CLASS),1)
 pvrsrvkm-y += \
@@ -129,7 +136,7 @@ pvrsrvkm-$(CONFIG_EVENT_TRACING) += services/server/env/linux/trace_events.o
 ifneq ($(W),1)
 CFLAGS_mm.o := -Werror
 CFLAGS_mmap.o := -Werror
-CFLAGS_module.o := -Werror
+CFLAGS_module_common.o := -Werror
 CFLAGS_mutils.o := -Werror
 CFLAGS_devicemem_mmap_stub.o := -Werror
 CFLAGS_osfunc.o := -Werror

@@ -45,6 +45,16 @@ typedef struct wifi_adapter_info {
 	uint		slot_num;
 } wifi_adapter_info_t;
 
+#if defined(CUSTOMER_HW)
+struct wifi_platform_data {
+	int (*set_power)(bool val);
+	int (*set_carddetect)(bool val);
+	void *(*mem_prealloc)(int section, unsigned long size);
+	int (*get_mac_addr)(unsigned char *buf);
+	void *(*get_country_code)(char *ccode);
+};
+#endif
+
 typedef struct bcmdhd_wifi_platdata {
 	uint				num_adapters;
 	wifi_adapter_info_t	*adapters;

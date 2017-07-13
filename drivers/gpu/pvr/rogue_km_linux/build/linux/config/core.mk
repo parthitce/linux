@@ -496,6 +496,7 @@ $(eval $(call UserConfigC,OPK_DEFAULT,"\"$(OPK_DEFAULT)\""))
 $(eval $(call UserConfigC,OPK_FALLBACK,"\"$(OPK_FALLBACK)\""))
 
 $(eval $(call BothConfigMake,PVR_SYSTEM,$(PVR_SYSTEM)))
+$(eval $(call KernelConfigMake,PVR_LOADER,$(PVR_LOADER)))
 
 ifeq ($(MESA_EGL),1)
 $(eval $(call UserConfigMake,LIB_IMG_EGL,pvr_dri_support))
@@ -538,7 +539,7 @@ endif
 # User-configurable options
 #
 ifeq ($(DONT_NEED_RGX_BVNC),)
- $(eval $(call TunableBothConfigC,RGX_BVNC_CORE_KM_HEADER,))
+  $(eval $(call TunableBothConfigC,RGX_BVNC_CORE_KM_HEADER,))
  $(eval $(call TunableBothConfigC,RGX_BVNC_CORE_HEADER,))
    $(eval $(call TunableBothConfigC,RGX_BNC_CONFIG_KM_HEADER,))
  $(eval $(call TunableBothConfigC,RGX_BNC_CONFIG_HEADER,))
@@ -554,6 +555,8 @@ Enable parameter dumping in the driver._\
 This adds code to record the parameters being sent to the hardware for_\
 later analysis._\
 ))
+PDUMP_STREAMBUF_SIZE_MB ?= 16
+$(eval $(call TunableBothConfigC,PDUMP_STREAMBUF_MAX_SIZE_MB,$(PDUMP_STREAMBUF_SIZE_MB),))
 $(eval $(call TunableBothConfigC,NO_HARDWARE,,\
 Disable hardware interactions (e.g. register writes) that the driver would_\
 normally perform. A driver built with this option can$(apos)t drive hardware$(comma)_\
@@ -623,6 +626,7 @@ $(eval $(call TunableBothConfigC,LDM_PLATFORM,))
 $(eval $(call TunableBothConfigC,LDM_PCI,))
 $(eval $(call TunableBothConfigC,PVRSRV_ENABLE_FULL_SYNC_TRACKING,))
 $(eval $(call TunableKernelConfigC,PVRSRV_FULL_SYNC_TRACKING_HISTORY_LEN,256))
+$(eval $(call TunableKernelConfigC,PVRSRV_ENABLE_FULL_CCB_DUMP,))
 $(eval $(call TunableKernelConfigC,SYNC_DEBUG,))
 $(eval $(call TunableKernelConfigC,SUPPORT_DUMP_CLIENT_CCB_COMMANDS,))
 $(eval $(call TunableKernelConfigC,PVR_LINUX_DONT_USE_RANGE_BASED_INVALIDATE,))
@@ -645,6 +649,13 @@ because it is not specific to one single device._\
 $(eval $(call TunableBothConfigC,SUPPORT_PVR_VALGRIND,))
 
 
+$(eval $(call TunableBothConfigC,PVRSRV_DEVMEM_SAFE_MEMSETCPY,,\
+Enable this to force the use of *DeviceMemSet/Copy in the drvier _\
+instead of the built-in libc functions. These implemenations are device _\
+memory safe and are used by default on AARCH64 platform._\
+))
+
+$(eval $(call TunableBothConfigC,PVRSRV_BRIDGE_LOGGING,))
 
 
 
@@ -708,7 +719,11 @@ $(eval $(call TunableBothConfigC,PVRSRV_ENABLE_PROCESS_STATS,1,\
 Enable Process Statistics via DebugFS._\
 ))
 
-$(eval $(call TunableKernelConfigC,SUPPORT_SHARED_SLC,,))
+$(eval $(call TunableBothConfigC,SUPPORT_SHARED_SLC,,\
+When the SLC is shared the SLC reset is performed by the System layer when \
+calling RGXInitSLC and not the GPU driver. Define this for system layer \
+SLC handling. \
+))
 
 # PVR_RI_DEBUG is set to enable RI annotation of devmem allocations
 # This is enabled by default for debug builds.
@@ -725,7 +740,12 @@ Collect information about allocations such as descriptive strings_\
 and timing data for more detailed page fault analysis._\
 ))
 
-$(eval $(call TunableKernelConfigC,PVRSRV_ENABLE_MEMORY_STATS,,\
+$(eval $(call TunableKernelConfigC,PVR_DISABLE_KMALLOC_MEMSTATS,,\
+Set to avoid gathering statistical information about kmalloc and vmalloc_\
+allocations._\
+))
+
+$(eval $(call TunableBothConfigC,PVRSRV_ENABLE_MEMORY_STATS,,\
 Enable Memory allocations to be recorded and published via Process Statistics._\
 ))
 
@@ -733,26 +753,36 @@ $(eval $(call TunableKernelConfigC,PVRSRV_ENABLE_FW_TRACE_DEBUGFS,,\
 Enable automatic decoding of Firmware Trace via DebugFS._\
 ))
 
-$(eval $(call TunableKernelConfigC,PVR_LINUX_PHYSMEM_MAX_POOL_PAGES,10240))
+$(eval $(call TunableBothConfigC,PVR_LINUX_PHYSMEM_MAX_POOL_PAGES,10240))
+
+$(eval $(call TunableBothConfigC,PVR_MMAP_USE_VM_INSERT,,\
+If enabled Linux will always use vm_insert_page for CPU mappings._\
+vm_insert_page was found to be slower than remap_pfn_range on ARM kernels_\
+but guarantees full memory accounting for the process that mapped the memory.\
+The slowdown in vm_insert_page is caused by a dcache flush_\
+that is only implemented for ARM and a few other architectures._\
+This tunable can be enabled to debug memory issues. On x86 platforms_\
+we always use vm_insert_page independent of this tunable._\
+))
 
 # ARM-Linux specific: 
 # When allocating uncached or write-combine memory we need to invalidate the
 # CPU cache before we can use the acquired pages. 
 # The threshhold defines at which number of pages we want to do a full 
 # cache flush instead of invalidating pages one by one.
-$(eval $(call TunableKernelConfigC,PVR_LINUX_ARM_PAGEALLOC_FLUSH_THRESHOLD, 256))
+$(eval $(call TunableBothConfigC,PVR_LINUX_ARM_PAGEALLOC_FLUSH_THRESHOLD, 256))
 
 # Choose the threshold at which iterative page-by-page ('n' 1 page allocs) 
 # allocation is replaced with multiple block (1 'n' page alloc) allocation;
 # for PVR_LINUX_PHYSMEM_MAX_ALLOC_ORDER, the valid range is [0:MAX_ORDER-1]
 # NOTE: To disable higher-order allocation, set XXX_MAX_ALLOC_ORDER to zero
-$(eval $(call TunableKernelConfigC,PVR_LINUX_PHYSMEM_MIN_NUM_PAGES, 256 ))
-$(eval $(call TunableKernelConfigC,PVR_LINUX_PHYSMEM_MAX_ALLOC_ORDER, 2 ))
+$(eval $(call TunableBothConfigC,PVR_LINUX_PHYSMEM_MIN_NUM_PAGES, 256 ))
+$(eval $(call TunableBothConfigC,PVR_LINUX_PHYSMEM_MAX_ALLOC_ORDER, 2 ))
 
 # Choose the threshold at which allocation size we want to use vmalloc instead of
 # kmalloc. On highly fragmented systems large kmallocs can fail because it requests 
 # physically contiguous pages. All allocations bigger than this define use vmalloc.
-$(eval $(call TunableKernelConfigC,PVR_LINUX_KMALLOC_ALLOCATION_THRESHOLD, 16384 ))
+$(eval $(call TunableBothConfigC,PVR_LINUX_KMALLOC_ALLOCATION_THRESHOLD, 16384 ))
 
 # Tunable RGX_MAX_TA_SYNCS / RGX_MAX_3D_SYNCS to increase the size of sync array in the DDK
 # If defined, these macros take up the values as defined in the environment,
@@ -769,7 +799,21 @@ two allocations: multiple page size and allocation size minus multiple_\
 page size._\
 ))
 
+$(eval $(call TunableKernelConfigC,PVRSRV_FORCE_SLOWER_VMAP_ON_64BIT_BUILDS,,\
+If enabled, all kernel mappings will use vmap/vunmap._\
+vmap/vunmap is slower than vm_map_ram/vm_unmap_ram and can_\
+even have bad peaks taking up to 100x longer than vm_map_ram._\
+The disadvantage of vm_map_ram is that it can lead to vmalloc space_\
+fragmentation that can lead to vmalloc space exhaustion on 32 bit Linux systems._\
+This flag only affects 64 bit Linux builds, on 32 bit we always default to use vmap_\
+because of the described fragmentation problem._\
+))
 
+
+$(eval $(call TunableKernelConfigC,PVRSRV_DEBUG_LISR_EXECUTION,,\
+Collect information about the last execution of the LISR in order to_\
+debug interrupt handling timeouts._\
+))
 
 endif # INTERNAL_CLOBBER_ONLY
 

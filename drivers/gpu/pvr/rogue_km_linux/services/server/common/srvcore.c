@@ -183,6 +183,8 @@ PVRSRVConnectKM(CONNECTION_DATA *psConnection,
 	
 	*ui32Log2PageSize = GET_LOG2_PAGESIZE();
 
+	psConnection->ui32ClientFlags = ui32Flags;
+
 #if defined(SUPPORT_GPUVIRT_VALIDATION)
 {
 	IMG_UINT32	ui32OSid = 0, ui32OSidReg = 0;
@@ -330,10 +332,6 @@ PVRSRVConnectKM(CONNECTION_DATA *psConnection,
 		*pui8KernelArch = 32;
 	}
 
-	if (ui32Flags & SRV_FLAGS_INIT_PROCESS)
-	{
-		psConnection->bInitProcess = IMG_TRUE;
-	}
 
 #if defined(DEBUG_BRIDGE_KM)
 	{
@@ -410,7 +408,7 @@ PVRSRVHWOpTimeoutKM(IMG_VOID)
 	OSPanic();
 #endif
 	PVR_LOG(("HW operation timeout, dump server info"));
-	PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_LOW,IMG_NULL);
+	PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_MEDIUM, IMG_NULL);
 	return PVRSRV_OK;
 }
 
@@ -625,12 +623,10 @@ PVRSRVInitSrvDisconnectKM(CONNECTION_DATA *psConnection,
 {
 	PVRSRV_ERROR eError;
 
-	if(!psConnection->bInitProcess)
+	if(!(psConnection->ui32ClientFlags & SRV_FLAGS_INIT_PROCESS))
 	{
 		return PVRSRV_ERROR_SRV_DISCONNECT_FAILED;
 	}
-
-	psConnection->bInitProcess = IMG_FALSE;
 
 	PVRSRVSetInitServerState(PVRSRV_INIT_SERVER_RUNNING, IMG_FALSE);
 	PVRSRVSetInitServerState(PVRSRV_INIT_SERVER_RAN, IMG_TRUE);
@@ -694,12 +690,24 @@ IMG_INT BridgedDispatchKM(CONNECTION_DATA * psConnection,
 					&psBridgeOut,
 					&ui32BridgeOutBufferSize);
 	}
-	
-	/* check we are not using a bigger bridge than allocated */
-#if defined(DEBUG)
-	PVR_ASSERT(psBridgePackageKM->ui32InBufferSize <= ui32BridgeInBufferSize);
-	PVR_ASSERT(psBridgePackageKM->ui32OutBufferSize <= ui32BridgeOutBufferSize);
-#endif
+
+	if (psBridgePackageKM->ui32InBufferSize > ui32BridgeInBufferSize)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: Bridge input buffer too small "
+		        "(data size %u, buffer size %u)!", __FUNCTION__,
+		        psBridgePackageKM->ui32InBufferSize, ui32BridgeInBufferSize));
+		err = PVRSRV_ERROR_BUFFER_TOO_SMALL;
+		goto unlock_and_return_fault;
+	}
+
+	if (psBridgePackageKM->ui32OutBufferSize > ui32BridgeOutBufferSize)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: Bridge output buffer too small "
+		        "(data size %u, buffer size %u)!", __FUNCTION__,
+		        psBridgePackageKM->ui32OutBufferSize, ui32BridgeOutBufferSize));
+		err = PVRSRV_ERROR_BUFFER_TOO_SMALL;
+		goto unlock_and_return_fault;
+	}
 
 	if((CopyFromUserWrapper (psConnection,
 					ui32DispatchTableEntry,

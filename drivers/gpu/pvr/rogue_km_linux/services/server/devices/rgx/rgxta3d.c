@@ -144,7 +144,7 @@ PVRSRV_ERROR _DestroyTAContext(RGX_SERVER_RC_TA_DATA *psTAData,
 
 	/* Check if the FW has finished with this resource ... */
 	eError = RGXFWRequestCommonContextCleanUp(psDeviceNode,
-											  FWCommonContextGetFWAddress(psTAData->psServerCommonContext),
+											  psTAData->psServerCommonContext,
 											  psCleanupSync,
 											  RGXFWIF_DM_TA);
 	if (eError == PVRSRV_ERROR_RETRY)
@@ -181,6 +181,7 @@ PVRSRV_ERROR _DestroyTAContext(RGX_SERVER_RC_TA_DATA *psTAData,
 #endif
 	FWCommonContextFree(psTAData->psServerCommonContext);
 	DevmemFwFree(psTAData->psContextStateMemDesc);
+	psTAData->psServerCommonContext = NULL;
 	return PVRSRV_OK;
 }
 
@@ -193,7 +194,7 @@ PVRSRV_ERROR _Destroy3DContext(RGX_SERVER_RC_3D_DATA *ps3DData,
 
 	/* Check if the FW has finished with this resource ... */
 	eError = RGXFWRequestCommonContextCleanUp(psDeviceNode,
-											  FWCommonContextGetFWAddress(ps3DData->psServerCommonContext),
+											  ps3DData->psServerCommonContext,
 											  psCleanupSync,
 											  RGXFWIF_DM_3D);
 	if (eError == PVRSRV_ERROR_RETRY)
@@ -231,6 +232,7 @@ PVRSRV_ERROR _Destroy3DContext(RGX_SERVER_RC_3D_DATA *ps3DData,
 
 	FWCommonContextFree(ps3DData->psServerCommonContext);
 	DevmemFwFree(ps3DData->psContextStateMemDesc);
+	ps3DData->psServerCommonContext = NULL;
 	return PVRSRV_OK;
 }
 
@@ -1178,6 +1180,7 @@ FWRTDataCpuMapError:
 FWRTDataAllocateError:
 	SyncPrimFree(psTmpCleanup->psCleanupSync);
 SyncAlloc:
+	*ppsCleanupData = NULL;
 	OSFreeMem(psTmpCleanup);
 
 AllocError:
@@ -2841,12 +2844,10 @@ PVRSRV_ERROR PVRSRVRGXKickTA3DKM(RGX_SERVER_RENDER_CONTEXT	*psRenderContext,
 			{
 			    goto fail_fdsync;
 			}
-			ui32NumUpdateSyncs = psFDData->nr_updates;
-			puiUpdateFWAddrs = psFDData->update_ufo_addresses;
-			pui32UpdateValues = psFDData->update_values;
-			ui32IntClientTAFenceCount = psFDData->nr_checks;
-			pauiIntClientTAFenceUFOAddress = psFDData->check_ufo_addresses;
-			paui32IntClientTAFenceValue = psFDData->check_values;
+			pvr_sync_get_updates(psFDData, &ui32NumUpdateSyncs,
+				&puiUpdateFWAddrs, &pui32UpdateValues);
+			pvr_sync_get_checks(psFDData, &ui32IntClientTAFenceCount,
+				&pauiIntClientTAFenceUFOAddress, &paui32IntClientTAFenceValue);
 		}
 #endif /* defined(SUPPORT_NATIVE_FENCE_SYNC) */
 
@@ -3369,11 +3370,11 @@ static IMG_BOOL CheckForStalledClientRenderCtxtCommand(PDLLIST_NODE psNode, IMG_
 	RGX_SERVER_RC_3D_DATA			*psRenderCtx3DData = &(psCurrentServerRenderCtx->s3DData);
 	RGX_SERVER_COMMON_CONTEXT		*psCurrentServer3DCommonCtx = psRenderCtx3DData->psServerCommonContext;
 
-	if (PVRSRV_ERROR_CCCB_STALLED == CheckStalledClientCommonContext(psCurrentServerTACommonCtx))
+	if (psCurrentServerTACommonCtx && (PVRSRV_ERROR_CCCB_STALLED == CheckStalledClientCommonContext(psCurrentServerTACommonCtx)))
 	{
 		*peError = PVRSRV_ERROR_CCCB_STALLED;
 	}
-	if (PVRSRV_ERROR_CCCB_STALLED == CheckStalledClientCommonContext(psCurrentServer3DCommonCtx))
+	if (psCurrentServer3DCommonCtx && (PVRSRV_ERROR_CCCB_STALLED == CheckStalledClientCommonContext(psCurrentServer3DCommonCtx)))
 	{
 		*peError = PVRSRV_ERROR_CCCB_STALLED;
 	}
@@ -3494,12 +3495,10 @@ PVRSRVRGXKickSyncTAKM(RGX_SERVER_RENDER_CONTEXT  *psRenderContext,
 		{
 		    goto fail_fdsync;
 		}
-		ui323DClientUpdateCount = psFDData->nr_updates;
-		paui3DClientUpdateUFOAddress = psFDData->update_ufo_addresses;
-		paui323DClientUpdateValue = psFDData->update_values;
-		ui323DClientFenceCount = psFDData->nr_checks;
-		paui3DClientFenceUFOAddress = psFDData->check_ufo_addresses;
-		paui323DClientFenceValue = psFDData->check_values;
+		pvr_sync_get_updates(psFDData, &ui323DClientUpdateCount,
+			&paui3DClientUpdateUFOAddress, &paui323DClientUpdateValue);
+		pvr_sync_get_checks(psFDData, &ui323DClientFenceCount,
+			&paui3DClientFenceUFOAddress, &paui323DClientFenceValue);
 	}
 #endif
 

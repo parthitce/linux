@@ -93,8 +93,10 @@ target_neutral_types := \
  module_group \
  pds_header \
  rgxfw \
+ test_image \
  usc_header \
- rscbitcode_header
+ rscbitcode_header \
+ yuv_test_image
 
 doc_types := \
  doc \

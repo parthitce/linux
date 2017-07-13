@@ -101,11 +101,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif /* EMULATOR */
 #endif
 
-/* Fairly arbitrary sizes - hopefully enough for all bridge calls */
-#define PVRSRV_MAX_BRIDGE_IN_SIZE	0x2000
-#define PVRSRV_MAX_BRIDGE_OUT_SIZE	0x1000
+/* Use a pool for PhysContigPages on x86 32bit so we avoid virtual address space fragmentation by vm_map_ram.
+ * ARM does not have the function to invalidate TLB entries so they have to use the kernel functions directly. */
+#if defined(CONFIG_GENERIC_ALLOCATOR) \
+        && defined(CONFIG_X86) \
+        && !defined(CONFIG_64BIT) \
+        && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))
+#define OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL 1
+#endif
 
 static void *g_pvBridgeBuffers = IMG_NULL;
+static atomic_t g_DriverSuspended;
 
 struct task_struct *OSGetBridgeLockOwner(void);
 
@@ -115,7 +121,7 @@ struct task_struct *OSGetBridgeLockOwner(void);
 	vm_map_ram.
 */
 
-#if defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))
+#if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL)
 #define POOL_SIZE	(4*1024*1024)
 static struct gen_pool *pvrsrv_pool_writecombine = NULL;
 static char *pool_start;
@@ -181,7 +187,7 @@ static inline IMG_BOOL vmap_from_pool(void *pvCPUVAddr)
 	}
 	return IMG_FALSE;
 }
-#endif	/* defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))*/
+#endif	/* #if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL) */
 
 PVRSRV_ERROR OSMMUPxAlloc(PVRSRV_DEVICE_NODE *psDevNode, IMG_SIZE_T uiSize,
 							Px_HANDLE *psMemHandle, IMG_DEV_PHYADDR *psDevPAddr)
@@ -213,8 +219,7 @@ PVRSRV_ERROR OSMMUPxAlloc(PVRSRV_DEVICE_NODE *psDevNode, IMG_SIZE_T uiSize,
 			return PVRSRV_ERROR_UNABLE_TO_SET_CACHE_MODE;
 		}
 	}
-#endif
-#if defined(CONFIG_ARM) || defined(CONFIG_ARM64) || defined (CONFIG_METAG)
+#else
 	{
 		IMG_CPU_PHYADDR sCPUPhysAddrStart, sCPUPhysAddrEnd;
 		IMG_PVOID pvPageVAddr = kmap(psPage);
@@ -226,6 +231,7 @@ PVRSRV_ERROR OSMMUPxAlloc(PVRSRV_DEVICE_NODE *psDevNode, IMG_SIZE_T uiSize,
 									pvPageVAddr + PAGE_SIZE,
 									sCPUPhysAddrStart,
 									sCPUPhysAddrEnd);
+		kunmap(psPage);
 	}
 #endif
 
@@ -288,7 +294,7 @@ PVRSRV_ERROR OSMMUPxMap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle,
 
 	prot = pgprot_writecombine(prot);
 
-#if defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))
+#if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL)
 	uiCPUVAddr = gen_pool_alloc(pvrsrv_pool_writecombine, PAGE_SIZE);
 
 	if (uiCPUVAddr) {
@@ -315,12 +321,16 @@ PVRSRV_ERROR OSMMUPxMap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle,
 
 	/* Not else as if the poll alloc fails it resets uiCPUVAddr to 0 */
 	if (uiCPUVAddr == 0)
-#endif	/* defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0)) */
+#endif	/* #if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL) */
 	{
+#if !defined(CONFIG_64BIT) || defined(PVRSRV_FORCE_SLOWER_VMAP_ON_64BIT_BUILDS)
+		uiCPUVAddr = (IMG_UINTPTR_T) vmap(ppsPage, 1, VM_READ | VM_WRITE, prot);
+#else
 		uiCPUVAddr = (IMG_UINTPTR_T) vm_map_ram(ppsPage,
 												1,
 												-1,
 												prot);
+#endif
 	}
 
 	/* Check that one of the above methods got us an address */
@@ -367,7 +377,7 @@ void OSMMUPxUnmap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle, void *p
 #endif
 #endif
 
-#if defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))
+#if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL)
 	if (vmap_from_pool(pvPtr))
 	{
 		unsigned long addr = (unsigned long)pvPtr;
@@ -382,35 +392,14 @@ void OSMMUPxUnmap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle, void *p
 		gen_pool_free(pvrsrv_pool_writecombine, addr, PAGE_SIZE);
 	}
 	else
-#endif	/* defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0)) */
+#endif	/*#if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL) */
 	{
+#if !defined(CONFIG_64BIT) || defined(PVRSRV_FORCE_SLOWER_VMAP_ON_64BIT_BUILDS)
+		vunmap(pvPtr);
+#else
 		vm_unmap_ram(pvPtr, 1);
+#endif
 	}
-}
-
-/*************************************************************************/ /*!
-@Function       OSMemCopy
-@Description    Copies memory around
-@Input          pvDst    Pointer to dst
-@Output         pvSrc    Pointer to src
-@Input          ui32Size Bytes to copy
-*/ /**************************************************************************/
-void OSMemCopy(void *pvDst, const void *pvSrc, IMG_SIZE_T ui32Size)
-{
-	memcpy(pvDst, pvSrc, ui32Size);
-}
-
-
-/*************************************************************************/ /*!
-@Function       OSMemSet
-@Description    Function that does the same as the C memset() functions
-@Modified      *pvDest     Pointer to start of buffer to be set
-@Input          ui8Value   Value to set each byte to
-@Input          ui32Size   Number of bytes to set
-*/ /**************************************************************************/
-void OSMemSet(void *pvDest, IMG_UINT8 ui8Value, IMG_SIZE_T ui32Size)
-{
-	memset(pvDest, (char) ui8Value, (size_t) ui32Size);
 }
 
 IMG_INT OSMemCmp(void *pvBufA, void *pvBufB, IMG_SIZE_T uiLen)
@@ -476,7 +465,9 @@ PVRSRV_ERROR OSInitEnvData(void)
 		return PVRSRV_ERROR_OUT_OF_MEMORY;
 	}
 
-#if defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))
+	atomic_set(&g_DriverSuspended, 0);
+
+#if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL)
 	/*
 		vm_ram_ram works with 2MB blocks to avoid excessive
 		TLB flushing but our allocations are always small and have
@@ -488,7 +479,7 @@ PVRSRV_ERROR OSInitEnvData(void)
 	{
 		init_pvr_pool();
 	}
-#endif	/* defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0)) */
+#endif	/* #if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL) */
 
 	LinuxInitPagePool();
 
@@ -507,7 +498,7 @@ void OSDeInitEnvData(void)
 
 	LinuxDeinitPagePool();
 
-#if defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) && (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))
+#if defined(OSFUNC_USE_PHYS_CONTIG_PAGES_MAP_POOL)
 	if (pvrsrv_pool_writecombine)
 	{
 		deinit_pvr_pool();
@@ -536,6 +527,23 @@ PVRSRV_ERROR OSGetGlobalBridgeBuffers(IMG_VOID **ppvBridgeInBuffer,
 	*pui32BridgeOutBufferSize = PVRSRV_MAX_BRIDGE_OUT_SIZE;
 
 	return PVRSRV_OK;
+}
+
+IMG_BOOL OSSetDriverSuspended(void)
+{
+	int suspend_level = atomic_inc_return(&g_DriverSuspended);
+	return (1 != suspend_level)? IMG_FALSE: IMG_TRUE;
+}
+
+IMG_BOOL OSClearDriverSuspended(void)
+{
+	int suspend_level = atomic_dec_return(&g_DriverSuspended);
+	return (0 != suspend_level)? IMG_FALSE: IMG_TRUE;
+}
+
+IMG_BOOL OSGetDriverSuspended(void)
+{
+	return (0 < atomic_read(&g_DriverSuspended))? IMG_TRUE: IMG_FALSE;
 }
 
 /*************************************************************************/ /*!

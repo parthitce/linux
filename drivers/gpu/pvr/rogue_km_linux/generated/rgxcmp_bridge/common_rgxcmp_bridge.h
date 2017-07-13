@@ -181,8 +181,8 @@ typedef struct PVRSRV_BRIDGE_IN_RGXKICKSYNCCDM_TAG
 	IMG_HANDLE hComputeContext;
 	IMG_UINT32 ui32ClientFenceCount;
 	IMG_HANDLE * phClientFenceUFOSyncPrimBlock;
-	IMG_UINT32 * pui32ClientFenceValue;
 	IMG_UINT32 * pui32ClientFenceOffset;
+	IMG_UINT32 * pui32ClientFenceValue;
 	IMG_UINT32 ui32ClientUpdateCount;
 	IMG_HANDLE * phClientUpdateUFOSyncPrimBlock;
 	IMG_UINT32 * pui32ClientUpdateOffset;

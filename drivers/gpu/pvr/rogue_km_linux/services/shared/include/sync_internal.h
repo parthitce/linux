@@ -64,8 +64,7 @@ typedef struct SYNC_PRIM_CONTEXT
 	RA_ARENA					*psSubAllocRA;					/*!< RA context */
 	IMG_CHAR					azSpanName[SYNC_PRIM_NAME_SIZE];/*!< Name of the span RA */
 	RA_ARENA					*psSpanRA;						/*!< RA used for span management of SubAllocRA */
-	IMG_UINT32					ui32RefCount;					/*!< Refcount for this context */
-	POS_LOCK					hLock;							/*!< Lock for this context */
+	ATOMIC_T				hRefCount;	/*!< Ref count for this context */
 } SYNC_PRIM_CONTEXT;
 
 typedef struct _SYNC_PRIM_BLOCK_

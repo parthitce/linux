@@ -65,14 +65,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define PVR_DRM_PHYS_HEAP	PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL
 #endif
 
-#if defined(LDM_PLATFORM)
-#define	LDM_DEV	struct platform_device
-#endif /*LDM_PLATFORM */
-
-#if defined(LDM_PCI)
-#define	LDM_DEV	struct pci_dev
-#endif /* LDM_PCI */
-
+#include "module_common.h"
 #include "connection_server.h"
 #include "pvr_drm_external.h"
 #include "pvr_drm_shared.h"

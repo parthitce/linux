@@ -212,6 +212,30 @@ PVRSRVPDumpComment_exit:
 	return 0;
 }
 
+static IMG_INT
+PVRSRVBridgePVRSRVPDumpSetFrame(IMG_UINT32 ui32DispatchTableEntry,
+					  PVRSRV_BRIDGE_IN_PVRSRVPDUMPSETFRAME *psPVRSRVPDumpSetFrameIN,
+					  PVRSRV_BRIDGE_OUT_PVRSRVPDUMPSETFRAME *psPVRSRVPDumpSetFrameOUT,
+					 CONNECTION_DATA *psConnection)
+{
+
+
+
+
+
+
+
+	psPVRSRVPDumpSetFrameOUT->eError =
+		PDumpSetFrameKM(psConnection,
+					psPVRSRVPDumpSetFrameIN->ui32Frame);
+
+
+
+
+
+	return 0;
+}
+
 
 
 /* *************************************************************************** 
@@ -233,6 +257,10 @@ PVRSRV_ERROR InitPDUMPBridge(IMG_VOID)
 					0, 0);
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_PDUMP, PVRSRV_BRIDGE_PDUMP_PVRSRVPDUMPCOMMENT, PVRSRVBridgePVRSRVPDumpComment,
+					IMG_NULL, IMG_NULL,
+					0, 0);
+
+	SetDispatchTableEntry(PVRSRV_BRIDGE_PDUMP, PVRSRV_BRIDGE_PDUMP_PVRSRVPDUMPSETFRAME, PVRSRVBridgePVRSRVPDumpSetFrame,
 					IMG_NULL, IMG_NULL,
 					0, 0);
 

@@ -63,6 +63,7 @@ endif # TARGETING_AARCH64 ?
 
 ifeq ($(SUPPORT_DRM),1)
 PVR_DRM_STATIC_BUS_ID := "\"platform:rgxnohw:00\""
+PVR_LOADER := drm_platform_module
 endif
 
 ifeq ($(SUPPORT_DRM_DC_MODULE),1)

@@ -213,6 +213,45 @@ PVRSRV_ERROR RGXRegisterDevice(PVRSRV_DEVICE_NODE *psDeviceNode);
 ******************************************************************************/
 PVRSRV_ERROR DevDeInitRGX(PVRSRV_DEVICE_NODE *psDeviceNode);
 
+#if !defined(NO_HARDWARE)
+void RGX_WaitForInterruptsTimeout(PVRSRV_RGXDEV_INFO *psDevInfo);
+#endif
+/*!
+*******************************************************************************
+
+ @Function     RGXRegisterGpuUtilStats
+
+ @Description  Initialise data used to compute GPU utilisation statistics
+               for a particular user (identified by the handle passed as
+               argument). This function must be called only once for each
+               different user/handle.
+
+ @Input        phGpuUtilUser - Pointer to handle used to identify a user of
+                               RGXGetGpuUtilStats
+
+ @Return       PVRSRV_ERROR
+
+******************************************************************************/
+PVRSRV_ERROR RGXRegisterGpuUtilStats(IMG_HANDLE *phGpuUtilUser);
+
+
+/*!
+*******************************************************************************
+
+ @Function     RGXUnregisterGpuUtilStats
+
+ @Description  Free data previously used to compute GPU utilisation statistics
+               for a particular user (identified by the handle passed as
+               argument).
+
+ @Input        hGpuUtilUser - Handle used to identify a user of
+                              RGXGetGpuUtilStats
+
+ @Return       PVRSRV_ERROR
+
+******************************************************************************/
+PVRSRV_ERROR RGXUnregisterGpuUtilStats(IMG_HANDLE hGpuUtilUser);
+
 
 /*!
 *******************************************************************************

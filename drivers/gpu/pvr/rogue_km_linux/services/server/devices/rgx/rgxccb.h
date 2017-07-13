@@ -107,6 +107,9 @@ typedef struct _RGX_CCB_CMD_HELPER_DATA_ {
 
 #define PADDING_COMMAND_SIZE	(sizeof(RGXFWIF_CCB_CMD_HEADER))
 
+PVRSRV_ERROR RGXCCBPDumpDrainCCB(RGX_CLIENT_CCB *psClientCCB,
+					IMG_UINT32 ui32PDumpContinuous);
+
 PVRSRV_ERROR RGXCreateCCB(PVRSRV_DEVICE_NODE	*psDeviceNode,
 						  IMG_UINT32			ui32CCBSizeLog2,
 						  CONNECTION_DATA		*psConnectionData,
@@ -162,6 +165,9 @@ IMG_UINT32 RGXCmdHelperGetCommandSize(IMG_UINT32 ui32CmdCount,
 								   RGX_CCB_CMD_HELPER_DATA *asCmdHelperData);
 
 IMG_VOID DumpStalledCCBCommand(PRGXFWIF_FWCOMMONCONTEXT sFWCommonContext, RGX_CLIENT_CCB  *psCurrentClientCCB, DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrintf);
+#if defined(PVRSRV_ENABLE_FULL_SYNC_TRACKING) || defined(PVRSRV_ENABLE_FULL_CCB_DUMP)
+IMG_VOID DumpCCB(PRGXFWIF_FWCOMMONCONTEXT sFWCommonContext, RGX_CLIENT_CCB  *psCurrentClientCCB, DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrintf);
+#endif
 
 PVRSRV_ERROR CheckForStalledCCB(RGX_CLIENT_CCB  *psCurrentClientCCB);
 #endif /* __RGXCCB_H__ */

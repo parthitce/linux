@@ -100,30 +100,6 @@ PVRSRVBridgePVRSRVPDumpIsCapturing(IMG_UINT32 ui32DispatchTableEntry,
 }
 
 static IMG_INT
-PVRSRVBridgePVRSRVPDumpSetFrame(IMG_UINT32 ui32DispatchTableEntry,
-					  PVRSRV_BRIDGE_IN_PVRSRVPDUMPSETFRAME *psPVRSRVPDumpSetFrameIN,
-					  PVRSRV_BRIDGE_OUT_PVRSRVPDUMPSETFRAME *psPVRSRVPDumpSetFrameOUT,
-					 CONNECTION_DATA *psConnection)
-{
-
-
-
-
-
-
-
-	psPVRSRVPDumpSetFrameOUT->eError =
-		PDumpSetFrameKM(psConnection,
-					psPVRSRVPDumpSetFrameIN->ui32Frame);
-
-
-
-
-
-	return 0;
-}
-
-static IMG_INT
 PVRSRVBridgePVRSRVPDumpGetFrame(IMG_UINT32 ui32DispatchTableEntry,
 					  PVRSRV_BRIDGE_IN_PVRSRVPDUMPGETFRAME *psPVRSRVPDumpGetFrameIN,
 					  PVRSRV_BRIDGE_OUT_PVRSRVPDUMPGETFRAME *psPVRSRVPDumpGetFrameOUT,
@@ -274,10 +250,6 @@ PVRSRV_ERROR InitPDUMPCTRLBridge(IMG_VOID)
 	PVR_LOGR_IF_ERROR(OSLockCreate(&pPDUMPCTRLBridgeLock, LOCK_TYPE_PASSIVE), "OSLockCreate");
 
 	SetDispatchTableEntry(PVRSRV_BRIDGE_PDUMPCTRL, PVRSRV_BRIDGE_PDUMPCTRL_PVRSRVPDUMPISCAPTURING, PVRSRVBridgePVRSRVPDumpIsCapturing,
-					pPDUMPCTRLBridgeLock, pbyPDUMPCTRLBridgeBuffer,
-					20,  8);
-
-	SetDispatchTableEntry(PVRSRV_BRIDGE_PDUMPCTRL, PVRSRV_BRIDGE_PDUMPCTRL_PVRSRVPDUMPSETFRAME, PVRSRVBridgePVRSRVPDumpSetFrame,
 					pPDUMPCTRLBridgeLock, pbyPDUMPCTRLBridgeBuffer,
 					20,  8);
 

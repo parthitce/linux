@@ -71,6 +71,7 @@ ifeq ($(SUPPORT_ADF),1)
 endif
 
 ifeq ($(SUPPORT_DRM_DC_MODULE),1)
+ PVR_LOADER := drm_pci_module
  ifeq ($(TC_MEMORY_CONFIG),TC_MEMORY_HOST)
   DISPLAY_CONTROLLER ?= drm_nulldisp
  else

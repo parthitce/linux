@@ -576,6 +576,7 @@ DoTLStreamReserve(IMG_HANDLE hStream,
 				pui32Buf = (IMG_UINT32*)&psTmp->pbyBuffer[ui32LWrite];
 				*pui32Buf = PVRSRVTL_SET_PACKET_WRITE_FAILED ;
 				ui32LWrite += sizeof(PVRSRVTL_PACKETHDR);
+				ui32LWrite %= psTmp->ui32Size;
 				iFreeSpace -= sizeof(PVRSRVTL_PACKETHDR);
 			}
 

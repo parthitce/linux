@@ -84,7 +84,8 @@ static IMG_VOID *gpvTempBuffer = IMG_NULL;
 #define PDUMP_PERSISTENT_HASH_SIZE 10
 
 #define PDUMP_PRM_FILE_NAME_MAX	32         /*|< Size of parameter name used*/
-#define PDUMP_PRM_FILE_SIZE_MAX	0x7FDFFFFF /*!< Default maximum file size to split output files, 2GB-2MB as fwrite limits it to 2GB-1 on 32bit systems */
+#define PRM_FILE_SIZE_MAX	0x7FDFFFFFU /*!< Default maximum file size to split output files, 2GB-2MB as fwrite limits it to 2GB-1 on 32bit systems */
+#define FRAME_UNSET			0xFFFFFFFFU /*|< Used to signify no or invalid frame number */
 
 
 static HASH_TABLE *g_psPersistentHash = IMG_NULL;
@@ -118,7 +119,7 @@ typedef struct
 } PDUMP_PARAMETERS;
 
 static PDUMP_SCRIPT     g_PDumpScript    = { { 0, 0, 0} };
-static PDUMP_PARAMETERS g_PDumpParameters = { { 0, 0, 0}, {0, 0, 0}, 0, PDUMP_PRM_FILE_SIZE_MAX};
+static PDUMP_PARAMETERS g_PDumpParameters = { { 0, 0, 0}, {0, 0, 0}, 0, PRM_FILE_SIZE_MAX};
 
 
 #if defined(PDUMP_DEBUG_OUTFILES)
@@ -155,7 +156,7 @@ typedef struct _PDUMP_CTRL_STATE_
 	IMG_UINT32          ui32Flags;          /*!< Unused */
 
 	IMG_UINT32          ui32DefaultCapMode; /*!< Capture mode of the dump */
-	PDUMP_CAPTURE_RANGE sDefaultRange;      /*|< The default capture range */
+	PDUMP_CAPTURE_RANGE sCaptureRange;      /*|< The capture range for capture mode 'framed' */
 	IMG_UINT32          ui32CurrentFrame;   /*!< Current frame number */
 
 	IMG_BOOL            bCaptureOn;         /*!< Current capture status, is current frame in range */
@@ -171,8 +172,8 @@ static PDUMP_CTRL_STATE g_PDumpCtrl =
 
 	0,              /*!< Value obtained from OS PDump layer during initialisation */
 	{
-		0xFFFFFFFF,
-		0xFFFFFFFF,
+		FRAME_UNSET,
+		FRAME_UNSET,
 		1
 	},
 	0,
@@ -227,9 +228,9 @@ static IMG_VOID PDumpCtrlUpdateCaptureStatus(IMG_VOID)
 {
 	if (g_PDumpCtrl.ui32DefaultCapMode == DEBUG_CAPMODE_FRAMED)
 	{
-		if ((g_PDumpCtrl.ui32CurrentFrame >= g_PDumpCtrl.sDefaultRange.ui32Start) &&
-			(g_PDumpCtrl.ui32CurrentFrame <= g_PDumpCtrl.sDefaultRange.ui32End) &&
-			(((g_PDumpCtrl.ui32CurrentFrame - g_PDumpCtrl.sDefaultRange.ui32Start) % g_PDumpCtrl.sDefaultRange.ui32Interval) == 0))
+		if ((g_PDumpCtrl.ui32CurrentFrame >= g_PDumpCtrl.sCaptureRange.ui32Start) &&
+			(g_PDumpCtrl.ui32CurrentFrame <= g_PDumpCtrl.sCaptureRange.ui32End) &&
+			(((g_PDumpCtrl.ui32CurrentFrame - g_PDumpCtrl.sCaptureRange.ui32Start) % g_PDumpCtrl.sCaptureRange.ui32Interval) == 0))
 		{
 			g_PDumpCtrl.bCaptureOn = IMG_TRUE;
 		}
@@ -269,17 +270,17 @@ static IMG_VOID PDumpCtrlSetDefaultCaptureParams(IMG_UINT32 ui32Mode, IMG_UINT32
 	PVR_ASSERT(ui32End >= ui32Start);
 	PVR_ASSERT((ui32Mode == DEBUG_CAPMODE_FRAMED) || (ui32Mode == DEBUG_CAPMODE_CONTINUOUS));
 
-	/*
-		Set the default capture range to that supplied by the PDump client tool
+	/* Set the capture range to that supplied by the PDump client tool
 	 */
 	g_PDumpCtrl.ui32DefaultCapMode = ui32Mode;
-	g_PDumpCtrl.sDefaultRange.ui32Start = ui32Start;
-	g_PDumpCtrl.sDefaultRange.ui32End = ui32End;
-	g_PDumpCtrl.sDefaultRange.ui32Interval = ui32Interval;
+	g_PDumpCtrl.sCaptureRange.ui32Start = ui32Start;
+	g_PDumpCtrl.sCaptureRange.ui32End = ui32End;
+	g_PDumpCtrl.sCaptureRange.ui32Interval = ui32Interval;
 
-	/*
-		Reset the current frame on reset of the default capture range, helps
-		avoid inter-pdump start frame issues when the driver is not reloaded.
+	/* Reset the current frame on reset of the capture range, the helps to
+	 * avoid inter-pdump start frame issues when the driver is not reloaded.
+	 * No need to call PDumpCtrlUpdateCaptureStatus() direct as the set
+	 * current frame call will.
 	 */
 	PDumpCtrlSetCurrentFrame(0);
 }
@@ -306,14 +307,14 @@ static INLINE IMG_BOOL PDumpCtrlCaptureOn(IMG_VOID)
 
 static INLINE IMG_BOOL PDumpCtrlCaptureRangePast(IMG_VOID)
 {
-	return (g_PDumpCtrl.ui32CurrentFrame > g_PDumpCtrl.sDefaultRange.ui32End);
+	return (g_PDumpCtrl.ui32CurrentFrame > g_PDumpCtrl.sCaptureRange.ui32End);
 }
 
 /* Used to imply if the PDump client is connected or not. */
 static INLINE IMG_BOOL PDumpCtrlCaptureRangeUnset(IMG_VOID)
 {
-	return ((g_PDumpCtrl.sDefaultRange.ui32Start == 0xFFFFFFFFU) &&
-			(g_PDumpCtrl.sDefaultRange.ui32End == 0xFFFFFFFFU));
+	return ((g_PDumpCtrl.sCaptureRange.ui32Start == FRAME_UNSET) &&
+			(g_PDumpCtrl.sCaptureRange.ui32End == FRAME_UNSET));
 }
 
 static IMG_BOOL PDumpCtrlIsLastCaptureFrame(IMG_VOID)
@@ -321,7 +322,7 @@ static IMG_BOOL PDumpCtrlIsLastCaptureFrame(IMG_VOID)
 	if (g_PDumpCtrl.ui32DefaultCapMode == DEBUG_CAPMODE_FRAMED)
 	{
 		/* Is the next capture frame within the range end limit? */
-		if ((g_PDumpCtrl.ui32CurrentFrame + g_PDumpCtrl.sDefaultRange.ui32Interval) > g_PDumpCtrl.sDefaultRange.ui32End)
+		if ((g_PDumpCtrl.ui32CurrentFrame + g_PDumpCtrl.sCaptureRange.ui32Interval) > g_PDumpCtrl.sCaptureRange.ui32End)
 		{
 			return IMG_TRUE;
 		}
@@ -1457,7 +1458,7 @@ PVRSRV_ERROR PDumpSetDefaultCaptureParamsKM(IMG_UINT32 ui32Mode,
 
 	if (ui32MaxParamFileSize == 0)
 	{
-		g_PDumpParameters.ui32MaxFileSize = PDUMP_PRM_FILE_SIZE_MAX;
+		g_PDumpParameters.ui32MaxFileSize = PRM_FILE_SIZE_MAX;
 	}
 	else
 	{
@@ -2698,6 +2699,32 @@ IMG_VOID PDumpConnectionNotify(IMG_VOID)
 }
 
 /**************************************************************************
+ * Function Name  : PDumpDisconnectionNotify
+ * Description    : Called by the connection_server to tell PDump core that
+ *                  the PDump capture and control client has disconnected
+ **************************************************************************/
+void PDumpDisconnectionNotify(void)
+{
+	PVRSRV_ERROR eErr;
+
+	if (PDumpCtrlCaptureOn())
+	{
+		PVR_LOG(("PDump killed, output files may be invalid or incomplete!"));
+
+		/* Disable capture in server, in case PDump client was killed and did
+		 * not get a chance to reset the capture parameters.
+		 */
+		eErr = PDumpSetDefaultCaptureParamsKM( DEBUG_CAPMODE_FRAMED,
+		                                       FRAME_UNSET, FRAME_UNSET, 1, 0);
+		PVR_LOG_IF_ERROR(eErr, "PVRSRVPDumpSetDefaultCaptureParams");
+	}
+	else
+	{
+		PVR_LOG(("PDump disconnected"));
+	}
+}
+
+/**************************************************************************
  * Function Name  : PDumpIfKM
  * Inputs         : pszPDumpCond - string for condition
  * Outputs        : None
@@ -2832,8 +2859,8 @@ IMG_VOID PDumpCommonDumpState(IMG_BOOL bDumpOSLayerState)
 			&g_PDumpCtrl, g_PDumpCtrl.bInitPhaseActive, g_PDumpCtrl.ui32Flags) );
 	PVR_LOG(("--- PDUMP COMMON: ui32DefaultCapMode( %d ) ui32CurrentFrame( %d )",
 			g_PDumpCtrl.ui32DefaultCapMode, g_PDumpCtrl.ui32CurrentFrame) );
-	PVR_LOG(("--- PDUMP COMMON: sDefaultRange.ui32Start( %d ) sDefaultRange.ui32End( %d ) sDefaultRange.ui32Interval( %d )",
-			g_PDumpCtrl.sDefaultRange.ui32Start, g_PDumpCtrl.sDefaultRange.ui32End, g_PDumpCtrl.sDefaultRange.ui32Interval) );
+	PVR_LOG(("--- PDUMP COMMON: sCaptureRange.ui32Start( %x ) sCaptureRange.ui32End( %x ) sCaptureRange.ui32Interval( %u )",
+			g_PDumpCtrl.sCaptureRange.ui32Start, g_PDumpCtrl.sCaptureRange.ui32End, g_PDumpCtrl.sCaptureRange.ui32Interval) );
 	PVR_LOG(("--- PDUMP COMMON: bCaptureOn( %d ) bSuspended( %d ) bInPowerTransition( %d )",
 			g_PDumpCtrl.bCaptureOn, g_PDumpCtrl.bSuspended, g_PDumpCtrl.bInPowerTransition) );
 
@@ -2869,7 +2896,7 @@ PVRSRV_ERROR PDumpRegisterConnection(SYNC_CONNECTION_DATA *psSyncConnectionData,
 	dllist_init(&psPDumpConnectionData->sListHead);
 	psPDumpConnectionData->ui32RefCount = 1;
 	psPDumpConnectionData->bLastInto = IMG_FALSE;
-	psPDumpConnectionData->ui32LastSetFrameNumber = 0xFFFFFFFFU;
+	psPDumpConnectionData->ui32LastSetFrameNumber = FRAME_UNSET;
 	psPDumpConnectionData->bLastTransitionFailed = IMG_FALSE;
 
 	/*

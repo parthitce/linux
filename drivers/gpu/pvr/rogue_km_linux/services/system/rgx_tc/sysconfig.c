@@ -289,7 +289,7 @@ IMG_VOID SystemISRHandler(PVRSRV_DEVICE_CONFIG *psDevConfig)
 }
 #endif /* defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING) */
 
-#if defined(TC_APOLLO_ES2)
+#if defined(TC_APOLLO_ES2) || defined(TC_APOLLO_BONNIE)
 
 static IMG_VOID SPI_Write(IMG_VOID *pvLinRegBaseAddr,
 			  IMG_UINT32 ui32Offset,
@@ -386,14 +386,16 @@ static IMG_UINT32 SAI_Read(void *base, IMG_UINT32 addr)
 static PVRSRV_ERROR ApolloHardReset(SYS_DATA *psSysData)
 {
 	IMG_UINT32 ui32ClkResetN;
+#if !defined(TC_APOLLO_BONNIE)
 	IMG_UINT32 ui32DUTCtrl;
-
+#endif
 	IMG_BOOL bAlignmentOK = IMG_FALSE;
 	IMG_INT resetAttempts = 0;
 
 	//This is required for SPI reset which is not yet implemented.
 	//IMG_UINT32 ui32AuxResetsN;
 
+#if !defined(TC_APOLLO_BONNIE)
 	//power down
 	ui32DUTCtrl = OSReadHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_DUT_CONTROL_1);
 	ui32DUTCtrl &= ~DUT_CTRL_VCC_0V9EN;
@@ -401,12 +403,13 @@ static PVRSRV_ERROR ApolloHardReset(SYS_DATA *psSysData)
 	ui32DUTCtrl |= DUT_CTRL_VCC_IO_INH;
 	ui32DUTCtrl |= DUT_CTRL_VCC_CORE_INH;
 	OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_DUT_CONTROL_1, ui32DUTCtrl);
+#endif
 
 	OSSleepms(500);
 
 	//set clock speed here, before reset.
-#if 0
-	//This is if 0 out since the current FPGA builds do not like their core clocks being set (it takes apollo down).
+#if defined(TC_APOLLO_BONNIE)
+	//The ES2 FPGA builds do not like their core clocks being set (it takes apollo down).
 	OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, 0x1000 | TCF_PLL_PLL_CORE_CLK0, ui32CoreClockSpeed / 1000000);
 	OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, 0x1000 | TCF_PLL_PLL_CORE_DRP_GO, 1);
 #endif
@@ -425,6 +428,7 @@ static PVRSRV_ERROR ApolloHardReset(SYS_DATA *psSysData)
 
 	OSSleepms(100);
 
+#if !defined(TC_APOLLO_BONNIE)
 	//Enable the voltage control regulators on DUT
 	ui32DUTCtrl = OSReadHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_DUT_CONTROL_1);
 	ui32DUTCtrl |= DUT_CTRL_VCC_0V9EN;
@@ -434,7 +438,7 @@ static PVRSRV_ERROR ApolloHardReset(SYS_DATA *psSysData)
 	OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_DUT_CONTROL_1, ui32DUTCtrl);
 
 	OSSleepms(300);
-
+#endif
 
 	//Take DCM, DDR, PDP1, and PDP2 out of reset
 	ui32ClkResetN |= (0x1 << DDR_RESETN_SHIFT);
@@ -443,8 +447,10 @@ static PVRSRV_ERROR ApolloHardReset(SYS_DATA *psSysData)
 	ui32ClkResetN |= (0x1 << PDP2_RESETN_SHIFT);
 	OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_CLK_AND_RST_CTRL, ui32ClkResetN);
 
+#if !defined(TC_APOLLO_BONNIE)
 	//Set ODT to a specific value that seems to provide the most stable signals.
 	SPI_Write(psSysData->pvSystemRegCpuVBase, 0x11, 0x413130);
+#endif
 
 	//Take DUT out of reset
 	ui32ClkResetN |= (0x1 << DUT_RESETN_SHIFT);
@@ -554,10 +560,12 @@ static PVRSRV_ERROR ApolloHardReset(SYS_DATA *psSysData)
 		PVR_DPF((PVR_DBG_ERROR, "      If you continue to see this message you may want to report it to IMGWORKS."));
 	}
 
+#if !defined(TC_APOLLO_BONNIE)
 	/* Enable the temperature sensor */
 	SPI_Write(psSysData->pvSystemRegCpuVBase, 0xc, 0); //power up
 	SPI_Write(psSysData->pvSystemRegCpuVBase, 0xc, 2); //reset
 	SPI_Write(psSysData->pvSystemRegCpuVBase, 0xc, 6); //init & run
+#endif
 
 	{
 		IMG_UINT32 ui32RevID = OSReadHWReg32(psSysData->pvSystemRegCpuVBase, 0x10);
@@ -583,6 +591,9 @@ static PVRSRV_ERROR PCIInitDev(SYS_DATA *psSysData, void *hDevice)
 	IMG_CPU_PHYADDR	sApolloRegCpuPBase;
 	IMG_UINT32 uiApolloRegSize;
 	PVRSRV_ERROR eError;
+#if defined(TC_APOLLO_BONNIE)
+	IMG_UINT32 ui32Value;
+#endif
 
 #if defined(LDM_PCI)
 	PVR_ASSERT(hDevice);
@@ -701,6 +712,18 @@ static PVRSRV_ERROR PCIInitDev(SYS_DATA *psSysData, void *hDevice)
 	{
 		goto ErrorCleanupFlashingModule;
 	}
+	
+#if defined(TC_APOLLO_BONNIE)
+	/* Enable ASTC via SPI */
+	if (SPI_Read(psSysData->pvSystemRegCpuVBase, 0xf, &ui32Value) != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "Unable to read register for ASTC"));
+	}
+	
+	ui32Value |= 0x1 << 4;
+
+	SPI_Write(psSysData->pvSystemRegCpuVBase, 0xf, ui32Value);
+#endif
 
 	/* Override the system name if we can get the system info string */
 	psSysData->pszSystemInfoString = GetSystemInfoString(psSysData);
@@ -783,6 +806,7 @@ PVRSRV_ERROR SysDebugInfo(PVRSRV_SYSTEM_CONFIG *psSysConfig, DUMPDEBUG_PRINTF_FU
 
 	PVR_DUMPDEBUG_LOG(("------[ rgx_tc system debug ]------"));
 
+#if !defined(TC_APOLLO_BONNIE)
 	/* Read the temperature */
 	eError = SPI_Read(psSysData->pvSystemRegCpuVBase, TCF_TEMP_SENSOR_SPI_OFFSET, &ui32RegVal);
 	if (eError != PVRSRV_OK)
@@ -792,11 +816,14 @@ PVRSRV_ERROR SysDebugInfo(PVRSRV_SYSTEM_CONFIG *psSysConfig, DUMPDEBUG_PRINTF_FU
 	}
 
 	PVR_DUMPDEBUG_LOG(("Chip temperature: %d degrees C", TCF_TEMP_SENSOR_TO_C(ui32RegVal)));
+#endif
 
 	eError = SPI_Read(psSysData->pvSystemRegCpuVBase, 0x2, &ui32RegVal);
 	PVR_DUMPDEBUG_LOG(("PLL status: %x", ui32RegVal));
 
+#if !defined(TC_APOLLO_BONNIE)
 SysDebugInfo_exit:
+#endif
 	return eError;
 }
 

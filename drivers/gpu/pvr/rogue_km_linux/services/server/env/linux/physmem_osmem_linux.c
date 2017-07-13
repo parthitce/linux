@@ -296,6 +296,16 @@ _AddEntryToPool(struct page *psPage, IMG_UINT32 ui32CPUCacheFlags)
 static inline void
 _RemoveEntryFromPoolUnlocked(LinuxPagePoolEntry *psPagePoolEntry)
 {
+#if defined(PVRSRV_ENABLE_PROCESS_STATS)
+	/* MemStats usually relies on having the bridge lock held, however
+	 * the page pool code may call PVRSRVStatsIncrMemAllocPoolStat and
+	 * PVRSRVStatsDecrMemAllocPoolStat without the bridge lock held, so
+	 * the page pool lock is used to ensure these calls are mutually
+	 * exclusive
+	 */
+	PVRSRVStatsDecrMemAllocPoolStat(PAGE_SIZE);
+#endif
+
 	list_del(&psPagePoolEntry->sPagePoolItem);
 	g_ui32PagePoolEntryCount--;
 }
@@ -322,15 +332,7 @@ _RemoveFirstEntryFromPool(IMG_UINT32 ui32CPUCacheFlags)
 	PVR_ASSERT(g_ui32PagePoolEntryCount > 0);
 	psPagePoolEntry = list_first_entry(psPoolHead, LinuxPagePoolEntry, sPagePoolItem);
 	_RemoveEntryFromPoolUnlocked(psPagePoolEntry);
-#if defined(PVRSRV_ENABLE_PROCESS_STATS)
-	/* MemStats usually relies on having the bridge lock held, however
-	 * the page pool code may call PVRSRVStatsIncrMemAllocPoolStat and
-	 * PVRSRVStatsDecrMemAllocPoolStat without the bridge lock held, so
-	 * the page pool lock is used to ensure these calls are mutually
-	 * exclusive
-	 */
-	PVRSRVStatsDecrMemAllocPoolStat(PAGE_SIZE);
-#endif
+
 	psPage = psPagePoolEntry->psPage;
 	_LinuxPagePoolEntryFree(psPagePoolEntry);
 	_PagePoolUnlock();
@@ -604,6 +606,7 @@ _PoisonPages(struct page *page,
                 uiSrcByteIndex = 0;
             }
         }
+        flush_dcache_page(page); 
         kunmap(page + uiSubPageIndex);
     }
 }
@@ -697,37 +700,99 @@ _ApplyOSPagesAttribute(struct page **ppsPage, IMG_UINT32 uiNumPages, IMG_BOOL bF
 #if defined (CONFIG_X86)
 					   struct page **ppsUnsetPages, IMG_UINT32 uiUnsetPagesIndex,
 #endif
-					   IMG_UINT32 ui32CPUCacheFlags, unsigned int gfp_flags)
+					   IMG_UINT32 ui32CPUCacheFlags)
 {
 	PVRSRV_ERROR eError = PVRSRV_OK;
+	struct page **ppsPagesTemp = ppsPage;
+	IMG_UINT32 uiPageArrayLength = uiNumPages; 
 	
-	if (ppsPage != IMG_NULL)
+	if (ppsPagesTemp != IMG_NULL)
 	{
-#if defined (CONFIG_ARM) || defined(CONFIG_ARM64) || defined (CONFIG_METAG)
-		/*  On ARM kernels we can be given pages which still remain in the cache.
-			In order to make sure that the data we write through our mappings
-			doesn't get over written by later cache evictions we invalidate the
-			pages that get given to us.
-	
-			Note:
-			This still seems to be true if we request cold pages, it's just less
-			likely to be in the cache. */
-
-		if (ui32CPUCacheFlags != PVRSRV_MEMALLOCFLAG_CPU_CACHED)
+#if defined (CONFIG_X86)
+		
+		/* In case our allocation is CPU cached 
+		 * we have to flush our x86 specific page array */
+		ppsPagesTemp = ppsUnsetPages;
+		uiPageArrayLength = uiUnsetPagesIndex;
+		
+		/* On x86 we have to set page cache attributes for non-cached pages. 
+		 * The call is implicitly taking care of all flushing/invalidating
+		 * and therefore we can skip the usual cache maintainance after this. */
+		if (PVRSRV_CPU_CACHE_MODE(ui32CPUCacheFlags) == PVRSRV_MEMALLOCFLAG_CPU_UNCACHED ||
+			PVRSRV_CPU_CACHE_MODE(ui32CPUCacheFlags) == PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE)
 		{
-			IMG_UINT32 ui32Idx;
-
-			if (uiNumPages < PVR_LINUX_ARM_PAGEALLOC_FLUSH_THRESHOLD)
+			/*  On X86 if we already have a mapping we need to change the mode of
+				current mapping before we map it ourselves	*/
+			int ret = IMG_FALSE;
+			IMG_UINT32 uiPageIndex;
+			PVR_UNREFERENCED_PARAMETER(bFlush);
+	
+			switch (ui32CPUCacheFlags)
 			{
-				for (ui32Idx = 0; ui32Idx < uiNumPages;  ++ui32Idx)
+				case PVRSRV_MEMALLOCFLAG_CPU_UNCACHED:
+					ret = set_pages_array_uc(ppsUnsetPages, uiUnsetPagesIndex);
+					if (ret)
+					{
+						eError = PVRSRV_ERROR_UNABLE_TO_SET_CACHE_MODE;
+						PVR_DPF((PVR_DBG_ERROR, "Setting Linux page caching mode to UC failed, returned %d", ret));
+					}
+					break;
+	
+				case PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE:
+					ret = set_pages_array_wc(ppsUnsetPages, uiUnsetPagesIndex);
+					if (ret)
+					{
+						eError = PVRSRV_ERROR_UNABLE_TO_SET_CACHE_MODE;
+						PVR_DPF((PVR_DBG_ERROR, "Setting Linux page caching mode to WC failed, returned %d", ret));
+					}
+					break;
+	
+				case PVRSRV_MEMALLOCFLAG_CPU_CACHED:
+					break;
+	
+				default:
+					break;
+			}
+	
+			if (ret)
+			{
+				for(uiPageIndex = 0; uiPageIndex < uiPageArrayLength; uiPageIndex++)
+				{
+					_FreeOSPage(ui32CPUCacheFlags,
+								0,
+								IMG_FALSE,
+								IMG_FALSE,
+								ppsPagesTemp[uiPageIndex]);
+				}
+				goto e_exit;
+			}
+		}
+		else
+#else
+		PVR_UNREFERENCED_PARAMETER(ui32CPUCacheFlags);
+#endif
+		{
+			/*  On ARM kernels we can be given pages which still remain in the cache.
+				In order to make sure that the data we write through our mappings
+				doesn't get over written by later cache evictions we invalidate the
+				pages that get given to us.
+		
+				Note:
+				This still seems to be true if we request cold pages, it's just less
+				likely to be in the cache. */
+			IMG_UINT32 ui32Idx;
+	
+			if (uiPageArrayLength < PVR_LINUX_ARM_PAGEALLOC_FLUSH_THRESHOLD)
+			{
+				for (ui32Idx = 0; ui32Idx < uiPageArrayLength;  ++ui32Idx)
 				{
 					IMG_CPU_PHYADDR sCPUPhysAddrStart, sCPUPhysAddrEnd;
 					IMG_PVOID pvPageVAddr;
-
-					pvPageVAddr = kmap(ppsPage[ui32Idx]);
-					sCPUPhysAddrStart.uiAddr = page_to_phys(ppsPage[ui32Idx]);
+	
+					pvPageVAddr = kmap(ppsPagesTemp[ui32Idx]);
+					sCPUPhysAddrStart.uiAddr = page_to_phys(ppsPagesTemp[ui32Idx]);
 					sCPUPhysAddrEnd.uiAddr = sCPUPhysAddrStart.uiAddr + PAGE_SIZE;
-
+	
 					/* If we're zeroing, we need to make sure the cleared memory is pushed out
 					   of the cache before the cache lines are invalidated */
 					if (bFlush)
@@ -744,8 +809,8 @@ _ApplyOSPagesAttribute(struct page **ppsPage, IMG_UINT32 uiNumPages, IMG_BOOL bF
 													sCPUPhysAddrStart,
 													sCPUPhysAddrEnd);
 					}
-
-					kunmap(ppsPage[ui32Idx]);
+	
+					kunmap(ppsPagesTemp[ui32Idx]);
 				}
 			}
 			else
@@ -753,56 +818,11 @@ _ApplyOSPagesAttribute(struct page **ppsPage, IMG_UINT32 uiNumPages, IMG_BOOL bF
 				OSCPUOperation(PVRSRV_CACHE_OP_FLUSH);
 			}
 		}
-#endif
+	}
 
 #if defined (CONFIG_X86)
-		/*  On X86 if we already have a mapping we need to change the mode of
-			current mapping before we map it ourselves	*/
-		int ret = IMG_FALSE;
-		IMG_UINT32 uiPageIndex;
-		PVR_UNREFERENCED_PARAMETER(bFlush);
-
-		switch (ui32CPUCacheFlags)
-		{
-			case PVRSRV_MEMALLOCFLAG_CPU_UNCACHED:
-				ret = set_pages_array_uc(ppsUnsetPages, uiUnsetPagesIndex);
-				if (ret)
-				{
-					eError = PVRSRV_ERROR_UNABLE_TO_SET_CACHE_MODE;
-					PVR_DPF((PVR_DBG_ERROR, "Setting Linux page caching mode to UC failed, returned %d", ret));
-				}
-				break;
-
-			case PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE:
-				ret = set_pages_array_wc(ppsUnsetPages, uiUnsetPagesIndex);
-				if (ret)
-				{
-					eError = PVRSRV_ERROR_UNABLE_TO_SET_CACHE_MODE;
-					PVR_DPF((PVR_DBG_ERROR, "Setting Linux page caching mode to WC failed, returned %d", ret));
-				}
-				break;
-
-			case PVRSRV_MEMALLOCFLAG_CPU_CACHED:
-				break;
-
-			default:
-				break;
-		}
-
-		if (ret)
-		{
-			for(uiPageIndex = 0; uiPageIndex < uiNumPages; uiPageIndex++)
-			{
-				_FreeOSPage(ui32CPUCacheFlags,
-							0,
-							IMG_FALSE,
-							IMG_FALSE,
-							ppsPage[uiPageIndex]);
-			}
-		}
+e_exit:	
 #endif
-	}
-	
 	return eError;
 }
 
@@ -931,8 +951,7 @@ _AllocOSZeroOrderPages(struct _PMR_OSPAGEARRAY_DATA_ *psPageArrayData,
 									 ppsUnsetPages,
 									 uiUnsetPagesIndex,
 #endif
-									 ui32CPUCacheFlags,
-									 gfp_flags);
+									 ui32CPUCacheFlags);
 	
 e_freed_pages:
 #if defined(CONFIG_X86)
@@ -955,6 +974,7 @@ _AllocOSHigherOrderPages(struct _PMR_OSPAGEARRAY_DATA_ *psPageArrayData,
 	IMG_UINT32 uiPageIndex;	
 	IMG_UINT32 uiMsbNumPages;
 	IMG_BOOL bPageFromPool = IMG_FALSE;
+	IMG_UINT32 uiCutOffOrder = g_uiCutOffOrder;
 	IMG_INT32 aiOrderCount[ALLOC_ORDER_ARRAY_SIZE];	
 	struct page **ppsPageArray = psPageArrayData->pagearray;
 #if defined(CONFIG_X86)
@@ -975,24 +995,28 @@ _AllocOSHigherOrderPages(struct _PMR_OSPAGEARRAY_DATA_ *psPageArrayData,
 	}
 #endif
 
-	/* Disable retry/wait  */
-	gfp_flags |= __GFP_NORETRY;
-	gfp_flags &= ~__GFP_WAIT;
+	if (uiCutOffOrder)
+	{
+		/* Disable retry/wait at order > 0 */
+		PVR_ASSERT(psPageArrayData->uiNumPages > 1);
+		gfp_flags |= __GFP_NORETRY;
+		gfp_flags &= ~__GFP_WAIT;
+	}
 
 	/* Re-express uiNumPages in multi-order up to cut-off order */
-	for (uiOrder = 0; uiOrder <= g_uiCutOffOrder; ++uiOrder)
+	for (uiOrder = 0; uiOrder <= uiCutOffOrder; ++uiOrder)
 	{
 		aiOrderCount[uiOrder] = psPageArrayData->uiNumPages & (1<<uiOrder) ? 1 : 0;
 	}
-	
+
 	/* Accumulate top order bits into cut-off order bin */
 	uiMsbNumPages =  psPageArrayData->uiNumPages >> (g_uiCutOffOrder+1);
-	aiOrderCount[g_uiCutOffOrder] += uiMsbNumPages ? uiMsbNumPages << 1 : 0;
+	aiOrderCount[uiCutOffOrder] += uiMsbNumPages ? uiMsbNumPages << 1 : 0;
 
 	/* Allocate variable higher-order pages as per order-array specification.
 	   There's currently no support for compound pages, the "minimum contiguity unit" 
 	   that is supported is equal to the _host_ cpu page size (i.e. PAGE_SHIFT) */
-	for (uiOrder=g_uiCutOffOrder, uiPageIndex=0; uiPageIndex < psPageArrayData->uiNumPages; )
+	for (uiOrder=uiCutOffOrder, uiPageIndex=0; uiPageIndex < psPageArrayData->uiNumPages; )
 	{
 		/* Has this order bucket been exhausted */
 		for  ( ; ! aiOrderCount[uiOrder]; --uiOrder)
@@ -1035,7 +1059,7 @@ _AllocOSHigherOrderPages(struct _PMR_OSPAGEARRAY_DATA_ *psPageArrayData,
 		}
 		else
 		{
-			if (uiOrder > 0)
+			if (uiOrder)
 			{
 				/*
 				  The strategy employed to cope with memory fragmentation is two fold:
@@ -1050,6 +1074,13 @@ _AllocOSHigherOrderPages(struct _PMR_OSPAGEARRAY_DATA_ *psPageArrayData,
 				IMG_INT32 uiFailedOrder = uiOrder;
 				IMG_INT32 uiLowOrder = uiFailedOrder >> 1;
 				g_uiCutOffOrder = uiFailedOrder - 1;
+
+				if (! uiLowOrder)
+				{
+					/* Enable retry/wait at order-0 */
+					gfp_flags &= ~__GFP_NORETRY;
+					gfp_flags |= __GFP_WAIT;
+				}
 
 				/* Accumulate remaining failed order into lower order */
 				for  ( ; aiOrderCount[uiFailedOrder]; --aiOrderCount[uiFailedOrder])
@@ -1090,8 +1121,7 @@ _AllocOSHigherOrderPages(struct _PMR_OSPAGEARRAY_DATA_ *psPageArrayData,
 									 ppsUnsetPages,
 									 uiUnsetPagesIndex,
 #endif
-									 ui32CPUCacheFlags,
-									 gfp_flags);
+									 ui32CPUCacheFlags);
 
 e_freed_pages:
 #if defined(CONFIG_X86)
@@ -1157,11 +1187,13 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
 	uiUseHighOrderFlag = psPageArrayData->uiNumPages >= PVR_LINUX_PHYSMEM_MIN_NUM_PAGES;
 	if (uiUseHighOrderFlag && g_uiCutOffOrder)
 	{
+		/* We neeed to throttle up slowly towards the maximum allowed order */
 		eError = _AllocOSHigherOrderPages(psPageArrayData, ui32CPUCacheFlags, gfp_flags);
+		g_uiCutOffOrder += (g_uiCutOffOrder < PVR_LINUX_PHYSMEM_MAX_ALLOC_ORDER) ? 1:0;
 	}
 	else 
 	{
-		/* When to re-enable high-order is a trade-off (accuracy/ouija-board vs. simplicity) */
+		/* When to re-enable high-order is a trade-off (accuracy vs. simplicity) */
 		eError = _AllocOSZeroOrderPages(psPageArrayData, ui32CPUCacheFlags, gfp_flags);
 		g_uiCutOffOrder += uiUseHighOrderFlag;
 	}
@@ -1784,10 +1816,17 @@ PMRAcquireKernelMappingDataOSMem(PMR_IMPL_PRIVDATA pvPriv,
 		goto e0;
 	}
 	
+#if !defined(CONFIG_64BIT) || defined(PVRSRV_FORCE_SLOWER_VMAP_ON_64BIT_BUILDS)
+	pvAddress = vmap(&psOSPageArrayData->pagearray[ui32PageOffset],
+	                 ui32PageCount,
+	                 VM_READ | VM_WRITE,
+	                 prot);
+#else
 	pvAddress = vm_map_ram(&psOSPageArrayData->pagearray[ui32PageOffset],
 						   ui32PageCount,
 						   -1,
 						   prot);
+#endif
 	if (pvAddress == IMG_NULL)
 	{
 		eError = PVRSRV_ERROR_OUT_OF_MEMORY;
@@ -1818,7 +1857,11 @@ static void PMRReleaseKernelMappingDataOSMem(PMR_IMPL_PRIVDATA pvPriv,
 
     psOSPageArrayData = pvPriv;
     psData = hHandle;
+#if !defined(CONFIG_64BIT) || defined(PVRSRV_FORCE_SLOWER_VMAP_ON_64BIT_BUILDS)
+    vunmap(psData->pvBase);
+#else
     vm_unmap_ram(psData->pvBase, psData->ui32PageCount);
+#endif
     OSFreeMem(psData);
 }
 

@@ -44,6 +44,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <stddef.h>
 
 #include "rgxpower.h"
+#include "rgxinit.h"
 #include "rgx_fwif_km.h"
 #include "rgxutils.h"
 #include "rgxfwutils.h"
@@ -794,38 +795,38 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 				eError = PVRSRVPollForValueKM(&g_ui32HostSampleIRQCount,
 									          psDevInfo->psRGXFWIfTraceBuf->ui32InterruptCount,
 									          0xffffffff);
-#endif /* NO_HARDWARE */
 
 				if (eError != PVRSRV_OK)
 				{
 					PVR_DPF((PVR_DBG_ERROR,"RGXPrePowerState: Wait for pending interrupts failed. Host:%d, FW: %d",
 					g_ui32HostSampleIRQCount,
 					psDevInfo->psRGXFWIfTraceBuf->ui32InterruptCount));
-				}
-				else
-				{
-					/* Update GPU frequency and timer correlation related data */
-					RGXGPUFreqCalibratePrePowerState(psDeviceNode);
 
-					/* Update GPU state counters */
-					_RGXUpdateGPUUtilStats(psDevInfo);
+					RGX_WaitForInterruptsTimeout(psDevInfo);
+				}
+#endif /* NO_HARDWARE */
+
+				/* Update GPU frequency and timer correlation related data */
+				RGXGPUFreqCalibratePrePowerState(psDeviceNode);
+
+				/* Update GPU state counters */
+				_RGXUpdateGPUUtilStats(psDevInfo);
 
 #if defined(PVR_DVFS)
-					eError = SuspendDVFS();
-					if (eError != PVRSRV_OK)
-					{
-						PVR_DPF((PVR_DBG_ERROR,"RGXPostPowerState: Failed to suspend DVFS"));
-						return eError;
-					}
-#endif
-					eError = RGXStop(psDevInfo);
-					if (eError != PVRSRV_OK)
-					{
-						PVR_DPF((PVR_DBG_ERROR,"RGXPrePowerState: RGXStop failed (%s)", PVRSRVGetErrorStringKM(eError)));
-						eError = PVRSRV_ERROR_DEVICE_POWER_CHANGE_FAILURE;
-					}
-					psDevInfo->bIgnoreFurtherIRQs = IMG_TRUE;
+				eError = SuspendDVFS();
+				if (eError != PVRSRV_OK)
+				{
+					PVR_DPF((PVR_DBG_ERROR,"RGXPostPowerState: Failed to suspend DVFS"));
+					return eError;
 				}
+#endif
+				eError = RGXStop(psDevInfo);
+				if (eError != PVRSRV_OK)
+				{
+					PVR_DPF((PVR_DBG_ERROR,"RGXPrePowerState: RGXStop failed (%s)", PVRSRVGetErrorStringKM(eError)));
+					eError = PVRSRV_ERROR_DEVICE_POWER_CHANGE_FAILURE;
+				}
+				psDevInfo->bIgnoreFurtherIRQs = IMG_TRUE;
 			}
 			else
 			{

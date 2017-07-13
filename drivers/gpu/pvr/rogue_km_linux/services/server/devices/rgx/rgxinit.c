@@ -110,7 +110,70 @@ static IMG_VOID RGX_DeInitHeaps(DEVICE_MEMORY_INFO *psDevMemoryInfo);
 
 IMG_UINT32 g_ui32HostSampleIRQCount = 0;
 
+#if defined(PVRSRV_DEBUG_LISR_EXECUTION)
+
+/* bits used by the LISR to provide a trace of its last execution */
+#define RGX_LISR_IGNORED	(1 << 0)
+#define RGX_LISR_EVENT_EN		(1 << 2)
+#define RGX_LISR_PROCESSED		(1 << 4)
+
+typedef struct _LISR_EXECUTION_INFO_
+{
+	/* bit mask showing execution flow of last LISR invocation */
+	IMG_UINT32 ui32State;
+	/* snapshot from the last LISR invocation, regardless of
+	 * whether an interrupt was handled
+	 */
+	IMG_UINT32 ui32InterruptCountSnapshot;
+	/* time of the last LISR invocation */
+	IMG_UINT64 ui64Clockns;
+} LISR_EXECUTION_INFO;
+
+/* information about the last execution of the LISR */
+static LISR_EXECUTION_INFO g_sLISRExecutionInfo;
+
+#endif
+
 #if !defined(NO_HARDWARE)
+
+void RGX_WaitForInterruptsTimeout(PVRSRV_RGXDEV_INFO *psDevInfo)
+{
+	PVR_DPF((PVR_DBG_ERROR, "_WaitForInterruptsTimeout: FW Count: 0x%X Host Count: 0x%X",
+						psDevInfo->psRGXFWIfTraceBuf->ui32InterruptCount,
+									g_ui32HostSampleIRQCount));
+
+#if defined(PVRSRV_DEBUG_LISR_EXECUTION)
+
+	PVR_DPF((PVR_DBG_ERROR, "Last RGX_LISRHandler State: 0x%08X InterruptCountSnapshot: 0x%X Clock: %llu",
+									g_sLISRExecutionInfo.ui32State,
+									g_sLISRExecutionInfo.ui32InterruptCountSnapshot,
+									g_sLISRExecutionInfo.ui64Clockns));
+#else
+	PVR_DPF((PVR_DBG_ERROR, "No further information available. Please enable PVRSRV_DEBUG_LISR_EXECUTION"));
+#endif
+
+
+	if(psDevInfo->psRGXFWIfTraceBuf->ePowState != RGXFWIF_POW_OFF)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "_WaitForInterruptsTimeout: FW pow state is not OFF (is %u)",
+						(unsigned int) psDevInfo->psRGXFWIfTraceBuf->ePowState));
+	}
+
+	if(g_ui32HostSampleIRQCount != psDevInfo->psRGXFWIfTraceBuf->ui32InterruptCount)
+	{
+		/* we are handling any unhandled interrupts here so align the host
+		 * count with the FW count
+		 */
+		g_ui32HostSampleIRQCount = psDevInfo->psRGXFWIfTraceBuf->ui32InterruptCount;
+
+		OSScheduleMISR(psDevInfo->pvMISRData);
+
+		if(psDevInfo->pvAPMISRData != NULL)
+		{
+			OSScheduleMISR(psDevInfo->pvAPMISRData);
+		}
+	}
+}
 
 /*
 	RGX LISR Handler
@@ -127,8 +190,17 @@ static IMG_BOOL RGX_LISRHandler (IMG_VOID *pvData)
 	psDevConfig = psDeviceNode->psDevConfig;
 	psDevInfo = psDeviceNode->pvDevice;
 
+#if defined(PVRSRV_DEBUG_LISR_EXECUTION)
+	g_sLISRExecutionInfo.ui32InterruptCountSnapshot = psDevInfo->psRGXFWIfTraceBuf->ui32InterruptCount;
+	g_sLISRExecutionInfo.ui32State = 0;
+	g_sLISRExecutionInfo.ui64Clockns = OSClockns64();
+#endif
+
 	if (psDevInfo->bIgnoreFurtherIRQs)
 	{
+#if defined(PVRSRV_DEBUG_LISR_EXECUTION)
+		g_sLISRExecutionInfo.ui32State |= RGX_LISR_IGNORED;
+#endif
 		return IMG_FALSE;
 	}
 
@@ -136,6 +208,9 @@ static IMG_BOOL RGX_LISRHandler (IMG_VOID *pvData)
 
 	if (ui32IRQStatus & RGX_CR_META_SP_MSLVIRQSTATUS_TRIGVECT2_EN)
 	{
+#if defined(PVRSRV_DEBUG_LISR_EXECUTION)
+		g_sLISRExecutionInfo.ui32State |= RGX_LISR_EVENT_EN;
+#endif
 		OSWriteHWReg32(psDevInfo->pvRegsBaseKM, RGX_CR_META_SP_MSLVIRQSTATUS, RGX_CR_META_SP_MSLVIRQSTATUS_TRIGVECT2_CLRMSK);
 		
 #if defined(RGX_FEATURE_OCPBUS)
@@ -148,6 +223,9 @@ static IMG_BOOL RGX_LISRHandler (IMG_VOID *pvData)
 		}
 
 		bInterruptProcessed = IMG_TRUE;
+#if defined(PVRSRV_DEBUG_LISR_EXECUTION)
+		g_sLISRExecutionInfo.ui32State |= RGX_LISR_PROCESSED;
+#endif
 		
 		/* Sample the current count from the FW _after_ we've cleared the interrupt. */
 		g_ui32HostSampleIRQCount = psDevInfo->psRGXFWIfTraceBuf->ui32InterruptCount;
@@ -187,7 +265,7 @@ static IMG_VOID RGXCheckFWActivePowerState(IMG_VOID *psDevice)
 }
 
 
-static PVRSRV_ERROR RGXRegisterGpuUtilStats(IMG_HANDLE *phGpuUtilUser)
+PVRSRV_ERROR RGXRegisterGpuUtilStats(IMG_HANDLE *phGpuUtilUser)
 {
 	RGXFWIF_GPU_UTIL_STATS *psAggregateStats;
 
@@ -211,7 +289,7 @@ static PVRSRV_ERROR RGXRegisterGpuUtilStats(IMG_HANDLE *phGpuUtilUser)
 	return PVRSRV_OK;
 }
 
-static PVRSRV_ERROR RGXUnregisterGpuUtilStats(IMG_HANDLE hGpuUtilUser)
+PVRSRV_ERROR RGXUnregisterGpuUtilStats(IMG_HANDLE hGpuUtilUser)
 {
 	RGXFWIF_GPU_UTIL_STATS *psAggregateStats;
 
@@ -329,18 +407,6 @@ static PVRSRV_ERROR RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNode,
 	psAggregateStats->ui64GpuStatActiveHigh += psReturnStats->ui64GpuStatActiveHigh;
 	psAggregateStats->ui64GpuStatBlocked    += psReturnStats->ui64GpuStatBlocked;
 
-	/* Check that the return stats make sense */
-	if(psReturnStats->ui64GpuStatCumulative == 0)
-	{
-		/* We can enter here only if all the RGXFWIF_GPU_UTIL_GET_PERIOD
-		 * returned 0, which means something has gone very wrong with the timers
-		 * or the aggregate stats...
-		 */
-		PVR_DPF((PVR_DBG_WARNING,"RGXGetGpuUtilStats could not get reliable data because"
-		                         "the timers or the aggregate stats are wrongly configured."));
-		return PVRSRV_ERROR_RESOURCE_UNAVAILABLE;
-	}
-
 
 	/***** (4) Convert return stats to microseconds *****/
 
@@ -349,7 +415,22 @@ static PVRSRV_ERROR RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNode,
 	psReturnStats->ui64GpuStatActiveHigh = OSDivide64(psReturnStats->ui64GpuStatActiveHigh, 1000, &i);
 	psReturnStats->ui64GpuStatBlocked    = OSDivide64(psReturnStats->ui64GpuStatBlocked, 1000, &i);
 	psReturnStats->ui64GpuStatCumulative = OSDivide64(psReturnStats->ui64GpuStatCumulative, 1000, &i);
-	psReturnStats->bValid                = IMG_TRUE;
+
+	/* Check that the return stats make sense */
+	if(psReturnStats->ui64GpuStatCumulative == 0)
+	{
+		/* We can enter here only if all the RGXFWIF_GPU_UTIL_GET_PERIOD
+		 * returned 0. This could happen if the GPU frequency value
+		 * is not well calibrated and the FW is updating the GPU state
+		 * while the Host is reading it.
+		 * When such an event happens frequently, timers or the aggregate
+		 * stats might not be accurate...
+		 */
+		PVR_DPF((PVR_DBG_WARNING, "RGXGetGpuUtilStats could not get reliable data."));
+		return PVRSRV_ERROR_RESOURCE_UNAVAILABLE;
+	}
+
+	psReturnStats->bValid = IMG_TRUE;
 
 	return PVRSRV_OK;
 }

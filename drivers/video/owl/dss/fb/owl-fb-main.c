@@ -42,6 +42,8 @@
 struct owl_fb_info {
 	int			id;
 
+	u32			pseudo_palette[17];
+
 	struct fb_info		*fbi;
 
 	struct owl_panel	*panel;
@@ -287,6 +289,35 @@ static int owl_fb_pan_display(struct fb_var_screeninfo *var,
 	return 0;
 }
 
+static int owl_fb_setcolreg(u32 regno, u32 red, u32 green, u32 blue, u32 transp,
+			    struct fb_info *fbi)
+{
+	u32 *pal = fbi->pseudo_palette;
+	u32 cr = red >> (16 - fbi->var.red.length);
+	u32 cg = green >> (16 - fbi->var.green.length);
+	u32 cb = blue >> (16 - fbi->var.blue.length);
+	u32 value;
+
+	struct device *dev = fbi->dev;
+
+	dev_dbg(dev, "%s\n", __func__);
+
+	if (regno >= 16)
+		return -EINVAL;
+
+	value = (cr << fbi->var.red.offset) |
+		(cg << fbi->var.green.offset) |
+		(cb << fbi->var.blue.offset);
+	if (fbi->var.transp.length > 0) {
+		u32 mask = (1 << fbi->var.transp.length) - 1;
+		mask <<= fbi->var.transp.offset;
+		value |= mask;
+	}
+	pal[regno] = value;
+
+	return 0;
+}
+
 static struct fb_ops owl_fb_ops = {
 	.owner          = THIS_MODULE,
 	.fb_blank       = owl_fb_blank,
@@ -294,6 +325,7 @@ static struct fb_ops owl_fb_ops = {
 	.fb_check_var   = owl_fb_check_var,
 	.fb_set_par     = owl_fb_set_par,
 	.fb_pan_display = owl_fb_pan_display,
+	.fb_setcolreg	= owl_fb_setcolreg,
 	.fb_fillrect    = cfb_fillrect,
 	.fb_copyarea    = cfb_copyarea,
 	.fb_imageblit   = cfb_imageblit,
@@ -318,6 +350,8 @@ static void ofbi_init_var(struct owl_fb_info *ofbi)
 
 	fbi->flags = FBINFO_FLAG_DEFAULT;
 	fbi->fbops = &owl_fb_ops;
+
+	fbi->pseudo_palette = ofbi->pseudo_palette;
 
 	var->nonstd = 0;
 

@@ -666,12 +666,6 @@ static IMG_VOID _RGXDecodeBIFReqTags(RGXDBG_BIF_ID	eBankID,
 				}
 				switch (ui32GroupEnc)
 				{
-#if defined(RGX_FEATURE_XT_TOP_INFRASTRUCTURE)
-					case 0x0: pszGroupEnc = "PDS_REQ"; break;
-					case 0x1: pszGroupEnc = "USC_REQ"; break;
-					case 0x2: pszGroupEnc = "MADD_REQ"; break;
-					case 0x3: pszGroupEnc = "USCB_USC"; break;
-#else
 					case 0x0: pszGroupEnc = "TPUA_USC"; break;
 					case 0x1: pszGroupEnc = "TPUB_USC"; break;
 					case 0x2: pszGroupEnc = "USCA_USC"; break;
@@ -683,7 +677,6 @@ static IMG_VOID _RGXDecodeBIFReqTags(RGXDBG_BIF_ID	eBankID,
 					case 0x5: pszGroupEnc = "UPUC_USC"; break;
 					case 0x6: pszGroupEnc = "TPUC_USC"; break;
 					case 0x7: pszGroupEnc = "PDSRW"; break;
-#endif
 #endif
 				}
 				switch (ui32Group)
@@ -1804,9 +1797,6 @@ static IMG_VOID _RGXDumpRGXBIFBank(DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrintf,
 			}
 		}
 
-		/* psInfo should always be non-NULL if the process was found */
-		PVR_ASSERT((psInfo != IMG_NULL) || !bFound);
-
 		if(psInfo != IMG_NULL)
 		{
 			_PrintFaultInfo(pfnDumpDebugPrintf, psInfo, NULL);
@@ -2878,7 +2868,7 @@ IMG_VOID RGXDebugRequestProcess(DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrintf,
 
 		 	/* Dump the IRQ info */
 			{
-				PVR_DUMPDEBUG_LOG(("RGX FW IRQ count = %d, last sampled in MISR = %d",
+				PVR_DUMPDEBUG_LOG(("RGX FW IRQ count = %d, last sampled in LISR = %d",
 				                  psDevInfo->psRGXFWIfTraceBuf->ui32InterruptCount,
 				                  g_ui32HostSampleIRQCount));
 			}
@@ -3004,8 +2994,11 @@ IMG_VOID RGXDebugRequestProcess(DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrintf,
 			}
 
 			{
+#if defined(PVRSRV_ENABLE_FULL_SYNC_TRACKING) || defined(PVRSRV_ENABLE_FULL_CCB_DUMP)
+				PVR_DUMPDEBUG_LOG(("------[ Full CCB Status ]------"));
+#else
 				PVR_DUMPDEBUG_LOG(("------[ Stalled FWCtxs ]------"));
-
+#endif
 				CheckForStalledTransferCtxt(psDevInfo, pfnDumpDebugPrintf);
 				CheckForStalledRenderCtxt(psDevInfo, pfnDumpDebugPrintf);
 				CheckForStalledComputeCtxt(psDevInfo, pfnDumpDebugPrintf);

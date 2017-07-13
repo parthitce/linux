@@ -6,8 +6,11 @@
 #define DISPLAY_CONTROLLER dc_drmfbdev
 #define RELEASE 
 #define RGX_BVNC_CORE_KM_HEADER "cores/rgxcore_km_1.75.2.30.h" 
+#define RGX_BVNC_CORE_HEADER "cores/rgxcore_1.75.2.30.h"
 #define RGX_BNC_CONFIG_KM_HEADER "configs/rgxconfig_km_1.V.2.30.h" 
+#define RGX_BNC_CONFIG_HEADER "configs/rgxconfig_1.V.2.30.h"
 #define SUPPORT_DBGDRV_EVENT_OBJECTS 
+#define PDUMP_STREAMBUF_MAX_SIZE_MB 16
 #define SYS_USING_INTERRUPTS 
 #define CACHEFLUSH_TYPE CACHEFLUSH_GENERIC
 #define SUPPORT_INSECURE_EXPORT 

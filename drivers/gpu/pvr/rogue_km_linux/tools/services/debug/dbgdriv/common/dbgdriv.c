@@ -586,7 +586,7 @@ static IMG_UINT32 WriteExpandingBuffer(PDBG_STREAM psStream,IMG_UINT8 * pui8InBu
 				Find new buffer size, double the current size or increase by 1MB
 			*/
 			ui32NewBufSize = MIN(psStream->ui32Size<<1,psStream->ui32Size+(1<<20));
-			ui32NewBufSize = MIN(ui32NewBufSize, (16<<20));
+			ui32NewBufSize = MIN(ui32NewBufSize, (PDUMP_STREAMBUF_MAX_SIZE_MB<<20));
 
 			PVR_DPF((PVR_DBGDRIV_MESSAGE, "Expanding buffer size = %x, new size = %x",
 					psStream->ui32Size, ui32NewBufSize));
@@ -1071,6 +1071,8 @@ static IMG_VOID InvalidateAllStreams(IMG_VOID)
 	while (psStream != IMG_NULL)
 	{
 		DBGDrivInvalidateStream(psStream);
+		DBGDrivInvalidateStream(psStream->psInitStream);
+		DBGDrivInvalidateStream(psStream->psDeinitStream);
 		psStream = psStream->psNext;
 	}
 	return;

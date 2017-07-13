@@ -680,7 +680,7 @@ int
 PVRSRV_BridgeDispatchKM(struct drm_device unref__ *dev, void *arg, struct drm_file *pDRMFile)
 #else
 long
-PVRSRV_BridgeDispatchKM(struct file *pFile, unsigned int unref__ ioctlCmd, unsigned long arg)
+PVRSRV_BridgeDispatchKM(struct file *pFile, unsigned int ioctlCmd, unsigned long arg)
 #endif
 {
 #if defined(SUPPORT_DRM)
@@ -696,6 +696,11 @@ PVRSRV_BridgeDispatchKM(struct file *pFile, unsigned int unref__ ioctlCmd, unsig
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Connection is closed", __FUNCTION__));
 		return -EFAULT;
+	}
+
+	if(OSGetDriverSuspended())
+	{
+		return -EINTR;
 	}
 
 #if defined(SUPPORT_DRM)
@@ -726,6 +731,14 @@ PVRSRV_BridgeDispatchKM(struct file *pFile, unsigned int unref__ ioctlCmd, unsig
 	{
 		return -EFAULT;
 	}
+
+	if (PVRSRV_GET_BRIDGE_ID(ioctlCmd) != psBridgePackageKM->ui32BridgeID ||
+	    psBridgePackageKM->ui32Size != sizeof(PVRSRV_BRIDGE_PACKAGE))
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: Inconsistent data passed from user space",
+				__FUNCTION__));
+		return PVRSRV_ERROR_INVALID_PARAMS;
+	}
 #endif
 
 #if defined(DEBUG_BRIDGE_CALLS)
@@ -752,7 +765,7 @@ int
 long
 #endif
 PVRSRV_BridgeCompatDispatchKM(struct file *pFile,
-			      unsigned int unref__ ioctlCmd,
+			      unsigned int ioctlCmd,
 			      unsigned long arg)
 {
 	struct bridge_package_from_32
@@ -777,8 +790,13 @@ PVRSRV_BridgeCompatDispatchKM(struct file *pFile,
 		return -EFAULT;
 	}
 
+	if(OSGetDriverSuspended())
+	{
+		return -EINTR;
+	}
+
 	/* make sure there is no padding inserted by compiler */
-	PVR_ASSERT(sizeof(struct bridge_package_from_32) == 7 * sizeof(IMG_UINT32));
+	BUILD_BUG_ON(sizeof(struct bridge_package_from_32) != 7 * sizeof(IMG_UINT32));
 
 	if(!OSAccessOK(PVR_VERIFY_READ, (void *) arg,
 				   sizeof(struct bridge_package_from_32)))
@@ -796,7 +814,17 @@ PVRSRV_BridgeCompatDispatchKM(struct file *pFile,
 		return -EFAULT;
 	}
 
-	PVR_ASSERT(params_addr->size == sizeof(struct bridge_package_from_32));
+#if defined(SUPPORT_DRM)
+	if (params_addr->size != sizeof(struct bridge_package_from_32))
+#else
+	if (PVRSRV_GET_BRIDGE_ID(ioctlCmd) != PVRSRV_GET_BRIDGE_ID(params_addr->bridge_id) ||
+	    params_addr->size != sizeof(struct bridge_package_from_32))
+#endif
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: Inconsistent data passed from user space",
+		        __FUNCTION__));
+		return PVRSRV_ERROR_INVALID_PARAMS;
+	}
 
 	params_for_64.ui32BridgeID = PVRSRV_GET_BRIDGE_ID(params_addr->bridge_id);
 	params_for_64.ui32FunctionID = params_addr->function_id;

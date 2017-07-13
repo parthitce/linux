@@ -46,6 +46,10 @@ ifeq ($(RGX_BVNC),12.4.1.48)
  $(eval $(call TunableKernelConfigC,TC_APOLLO_TCF5,1))
 endif
 
+ifeq ($(RGX_BVNC),4.31.4.55)
+ $(eval $(call TunableKernelConfigC,TC_APOLLO_BONNIE,1))
+endif
+
 ifeq ($(PVR_SYSTEM),$(filter $(PVR_SYSTEM),rgx_tc rgx_tc_es2 plato))
 $(eval $(call TunableKernelConfigC,TC_MEMORY_CONFIG,$(TC_MEMORY_CONFIG),\
 Selects the memory configuration to be used. The choices are:_\

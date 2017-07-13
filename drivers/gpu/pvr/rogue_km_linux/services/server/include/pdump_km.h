@@ -106,6 +106,7 @@ typedef PVRSRV_ERROR (*PFN_PDUMP_TRANSITION)(IMG_PVOID *pvData, IMG_BOOL bInto, 
 									const IMG_CHAR **ppszZeroPageFilename);
 
 	IMG_VOID PDumpConnectionNotify(IMG_VOID);
+	void PDumpDisconnectionNotify(void);
 
 	PVRSRV_ERROR PDumpStartInitPhaseKM(IMG_VOID);
 	PVRSRV_ERROR PDumpStopInitPhaseKM(IMG_MODULE_ID eModuleID);
@@ -406,6 +407,14 @@ PDumpConnectionNotify(IMG_VOID)
 	return;
 }
 
+#ifdef INLINE_IS_PRAGMA
+#pragma inline(PDumpDisconnectionNotify)
+#endif
+static INLINE void
+PDumpDisconnectionNotify(void)
+{
+	return;
+}
 
 #ifdef INLINE_IS_PRAGMA
 #pragma inline(PDumpCreateLockKM)

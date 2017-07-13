@@ -55,6 +55,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <services_kernel_client.h>
 #endif
 
+#if defined(__QNXNTO__)
+#include <string.h>
+#endif
+
 #include "img_types.h"
 #include "pvrsrv_device.h"
 #include "device.h"
@@ -154,9 +158,24 @@ PVRSRV_ERROR OSThreadCreatePriority(IMG_HANDLE *phThread,
 */ /**************************************************************************/
 PVRSRV_ERROR OSThreadDestroy(IMG_HANDLE hThread);
 
-IMG_VOID OSMemCopy(IMG_VOID *pvDst, const IMG_VOID *pvSrc, IMG_SIZE_T ui32Size);
-#define OSCachedMemCopy OSMemCopy
-#define OSDeviceMemCopy OSMemCopy
+void PVRSRVDeviceMemSet(void *pvDest, IMG_UINT8 ui8Value, size_t ui32Size);
+void PVRSRVDeviceMemCopy(void *pvDst, const void *pvSrc, size_t ui32Size);
+
+#if defined(__arm64__) || defined(__aarch64__) || defined (PVRSRV_DEVMEM_SAFE_MEMSETCPY)
+#define OSDeviceMemSet(a,b,c) PVRSRVDeviceMemSet((a), (b), (c))
+#define OSDeviceMemCopy(a,b,c) PVRSRVDeviceMemCopy((a), (b), (c))
+#define OSMemSet(a,b,c)  PVRSRVDeviceMemSet((a), (b), (c))
+#define OSMemCopy(a,b,c)  PVRSRVDeviceMemCopy((a), (b), (c))
+#else
+#define OSDeviceMemSet(a,b,c) memset((a), (b), (c))
+#define OSDeviceMemCopy(a,b,c) memcpy((a), (b), (c))
+#define OSMemSet(a,b,c)  memset((a), (b), (c))
+#define OSMemCopy(a,b,c)  memcpy((a), (b), (c))
+#endif
+
+#define OSCachedMemSet(a,b,c) memset((a), (b), (c))
+#define OSCachedMemCopy(a,b,c) memcpy((a), (b), (c))
+
 IMG_VOID *OSMapPhysToLin(IMG_CPU_PHYADDR BasePAddr, IMG_SIZE_T ui32Bytes, IMG_UINT32 ui32Flags);
 IMG_BOOL OSUnMapPhysToLin(IMG_VOID *pvLinAddr, IMG_SIZE_T ui32Bytes, IMG_UINT32 ui32Flags);
 
@@ -183,9 +202,7 @@ IMG_VOID OSInvalidateCPUCacheRangeKM(IMG_PVOID pvVirtStart,
 IMG_PID OSGetCurrentProcessID(IMG_VOID);
 IMG_CHAR *OSGetCurrentProcessName(IMG_VOID);
 IMG_UINTPTR_T OSGetCurrentThreadID(IMG_VOID);
-IMG_VOID OSMemSet(IMG_VOID *pvDest, IMG_UINT8 ui8Value, IMG_SIZE_T ui32Size);
-#define OSCachedMemSet OSMemSet
-#define OSDeviceMemSet OSMemSet
+
 IMG_INT OSMemCmp(IMG_VOID *pvBufA, IMG_VOID *pvBufB, IMG_SIZE_T uiLen);
 
 PVRSRV_ERROR OSMMUPxAlloc(PVRSRV_DEVICE_NODE *psDevNode, IMG_SIZE_T uiSize,
@@ -327,11 +344,18 @@ PVRSRV_ERROR OSBridgeCopyToUser (IMG_PVOID pvProcess,
 						IMG_SIZE_T ui32Bytes);
 #endif
 
+/* Fairly arbitrary sizes - hopefully enough for all bridge calls */
+#define PVRSRV_MAX_BRIDGE_IN_SIZE	0x2000
+#define PVRSRV_MAX_BRIDGE_OUT_SIZE	0x1000
+
 PVRSRV_ERROR OSGetGlobalBridgeBuffers (IMG_VOID **ppvBridgeInBuffer,
 							IMG_UINT32 *pui32BridgeInBufferSize,
 							IMG_VOID **ppvBridgeOutBuffer,
 							IMG_UINT32 *pui32BridgeOutBufferSize);
 
+IMG_BOOL OSSetDriverSuspended(void);
+IMG_BOOL OSClearDriverSuspended(void);
+IMG_BOOL OSGetDriverSuspended(void);
 
 IMG_VOID OSWriteMemoryBarrier(IMG_VOID);
 IMG_VOID OSMemoryBarrier(IMG_VOID);
