@@ -1,0 +1,232 @@
+/* lcd config */
+
+/ {
+	dsi: dsi@e0310000 {
+		compatible = "actions,s700-dsi", "simple-bus";
+		reg = <0 0xe0310000 0 0x88>,
+		      <0 0xe0168000 0 0x100>;
+		reg-names = "regs", "cmu_base";
+
+		clocks = <&clock CLK_DSI>, <&clock CLK_CSI>;
+		clock-names = "dsi", "csi";
+
+		dmas = <&dma DMA_DRQ_DSI_TX>, <&dma DMA_DRQ_DSI_RX>;
+		dma-names = "tx", "rx";
+
+		resets = <&reset RESET_DSI>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&dsi_state_default>;
+
+		panel_configs = <&config0>;
+
+		config0: mipi_configs {
+			lcd_mode = <1>;     /* 0: command mode 1: video mode */
+			lane_count = <4>;   /* 0: 1, 1: 1~2, 2: 1~3, 3: 1~4 */
+			lane_polarity = <0>;    /* 0: normal,1: reversed */
+			lane_swap = <0x3210>;   /* sequence of data lines */
+
+			burst_bllp = <60>;  /* 0 ~ 333, just burst mode needed,
+					     * It will affect the frame rate */
+			video_mode = <0>;   /* 0:sync mode,1:de mode,2:burst mode */
+			pclk_rate = <70>;  /* 137MHz, HSCLK, divider X */
+		};
+
+		/* sharp gmp */
+		panel@gmp {
+			compatible = "actions,panel-gmp";
+
+			/* panel's fixed info */
+			width_mm = <135>;
+			height_mm = <216>;
+			bpp = <24>;
+
+			is_primary = <1>;
+
+			/* operation delay in ms */
+			power_on_delay = <10>;
+			power_off_delay = <0>;
+			enable_delay = <10>;
+			disable_delay = <0>;
+
+			power-gpio = <&gpiod 30 0>;  /* hight active */
+			power1-gpio = <&gpiod 31 0>;  /* low active */
+			reset-gpio = <&gpioc 23 1>; /* low active */
+
+			/* screen init command info */
+			mipi_init_cmd-0 = <&scmd0>;
+			mipi_init_cmd-1 = <&scmd1>;
+			mipi_init_cmd-2 = <&scmd2>;
+			mipi_init_cmd-3 = <&scmd3>;
+			mipi_init_cmd-4 = <&scmd4>;
+			mipi_init_cmd-5 = <&scmd5>;
+			mipi_init_cmd-6 = <&scmd6>;
+			mipi_init_cmd-7 = <&scmd7>;
+			mipi_init_cmd-8 = <&scmd8>;
+			mipi_init_cmd-9 = <&scmd9>;
+			mipi_init_cmd-10 = <&scmd10>;
+			mipi_init_cmd-11 = <&scmd11>;
+			mipi_init_cmd-12 = <&scmd12>;
+			mipi_init_cmd-13 = <&scmd13>;
+			mipi_init_cmd-14 = <&scmd14>;
+			mipi_init_cmd-15 = <&scmd15>;
+			mipi_init_cmd-16 = <&scmd16>;
+			mipi_init_cmd-17 = <&scmd17>;
+
+			videomode-0 = <&mode0>;
+			/* 800*1280 */
+			mode0: videomode {
+				refresh_rate = <60>;
+				xres = <800>;
+				yres = <1280>;
+
+				/* in pico second, 0.000 000 000 001s */
+				pixel_clock = <14285>;
+
+				hsw = <4>;
+				hbp = <32>;
+				/* if the burst mode transmission, hfp need to includ burst_bllp */
+				hfp = <132>;
+
+				vsw = <4>;
+				vbp = <32>;
+				/* vfp can be as small as possible,
+				 * it related to preline time */
+				vfp = <22>;
+
+				/* 0: FB_VMODE_NONINTERLACED, 1:FB_VMODE_INTERLACED */
+				vmode = <0>;
+			};
+
+			/* mipi_init_cmd */
+
+			scmd0: cmd0 {
+			      data_type = <0x39>;
+			      address = <0xB9>;
+			      parameters = [FF 83 94];
+			      delay = <0>;
+			};
+
+			scmd1: cmd1 {
+			      data_type = <0x39>;
+			      address = <0xBA>;
+			      parameters = [73 83];
+			      delay = <0>;
+			};
+
+			scmd2: cmd2 {
+			      data_type = <0x39>;
+			      address = <0xB1>;
+			      parameters = [6C 0F 0F 25 04 11 F1 81 68 9A 23 80 C0 D2 58];
+			      delay = <0>;
+			};
+
+			scmd3: cmd3 {
+			      data_type = <0x39>;
+			      address = <0xB2>;
+			      parameters = [00 64 0F 09 20 1C 08 08 1C 4D 00];
+			      delay = <0>;
+			};
+
+			scmd4: cmd4 {
+			      data_type = <0x39>;
+			      address = <0xB4>;
+			      parameters = [00 FF 07 58 07 58 07 58 01 70 01 70];
+			      delay = <0>;
+			};
+
+			scmd5: cmd5 {
+			      data_type = <0x39>;
+			      address = <0xD2>;
+			      parameters = [00];
+			      delay = <0>;
+			};
+
+			scmd6: cmd6 {
+			      data_type = <0x39>;
+			      address = <0xD3>;
+			      parameters = [00 00 00 01 07 08 08 32 10 01 00 01 32 10 0A 00 0A 00 32 10 08 00 33 33 03 03 37 0D 0D 37 08 08];
+			      delay = <0>;
+			};
+
+			scmd7: cmd7 {
+			      data_type = <0x39>;
+			      address = <0xD5>;
+			      parameters = [19 19 19 19 21 20 21 20 23 22 23 22 18 18 18 18 18 18 18 18 19 19 19 19 18 18 03 02 03 02 01 00 01 00 07 06 07 06 05 04 05 04 18 18];
+			      delay = <0>;
+			};
+
+			scmd8: cmd8 {
+			      data_type = <0x39>;
+			      address = <0xE0>;
+			      parameters = [00 00 02 28 2D 3D 0F 32 06 09 0C 17 0E 12 14 12 14 07 11 12 18 00 00 03 28 2C 3D 0F 32 06 09 0B 16 0F 11 14 13 13 07 11 11 17];
+			      delay = <0>;
+			};
+
+			scmd9: cmd9 {
+			      data_type = <0x39>;
+			      address = <0xB6>;
+			      parameters = [46 46];
+			      delay = <0>;
+			};
+
+			scmd10: cmd10 {
+			      data_type = <0x39>;
+			      address = <0xCC>;
+			      parameters = [01];
+			      delay = <0>;
+			};
+
+			scmd11: cmd11 {
+			      data_type = <0x39>;
+			      address = <0xC6>;
+			      parameters = [BD];
+			      delay = <0>;
+			};
+
+			scmd12: cmd12 {
+			      data_type = <0x39>;
+			      address = <0xC7>;
+			      parameters = [00 C0 40 C0];
+			      delay = <0>;
+			};
+
+			scmd13: cmd13 {
+			      data_type = <0x39>;
+			      address = <0xC0>;
+			      parameters = [30 14];
+			      delay = <0>;
+			};
+
+			scmd14: cmd14 {
+			      data_type = <0x39>;
+			      address = <0xBD>;
+			      parameters = [02];
+			      delay = <0>;
+			};
+
+
+			scmd15: cmd15 {
+			      data_type = <0x39>;
+			      address = <0xD8>;
+			      parameters = [FF FF EF BF FF F0 FF FF EF BF FF F0];
+			      delay = <0>;
+			};
+
+			scmd16: cmd16 {
+			      data_type = <0x39>;
+			      address = <0x11>;
+			      parameters = [00];
+			      delay = <100>;
+			};
+
+			scmd17: cmd17 {
+			      data_type = <0x39>;
+			      address = <0x29>;
+			      parameters = [00];
+			      delay = <120>;
+			};
+		};
+	};
+
+};

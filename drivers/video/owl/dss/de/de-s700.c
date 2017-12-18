@@ -621,8 +621,9 @@ static struct owl_de_path_ops de_s700_path_ops = {
 static struct owl_de_path de_s700_paths[] = {
 	{
 		.id			= 0,
-		.name			= "hdmi",
-		.supported_displays	= OWL_DISPLAY_TYPE_HDMI,
+		.name			= "tv",
+		.supported_displays	= OWL_DISPLAY_TYPE_HDMI
+					| OWL_DISPLAY_TYPE_CVBS,
 		.ops			= &de_s700_path_ops,
 	},
 	{
@@ -631,12 +632,6 @@ static struct owl_de_path de_s700_paths[] = {
 		.supported_displays	= OWL_DISPLAY_TYPE_LCD
 					| OWL_DISPLAY_TYPE_DSI
 					| OWL_DISPLAY_TYPE_DUMMY,
-		.ops			= &de_s700_path_ops,
-	},
-	{	/* a fake path, use same registers as HDMI */
-		.id			= 0,
-		.name			= "cvbs",
-		.supported_displays	= OWL_DISPLAY_TYPE_CVBS,
 		.ops			= &de_s700_path_ops,
 	},
 };
@@ -858,7 +853,7 @@ static void __video_crop_set(struct owl_de_video *video)
 		 * RGB layers share one macro layer:
 		 * Set macro layer size to draw size(TODO, maybe improper).
 		 */
-		owl_panel_get_draw_size(video->path->panel,
+		owl_panel_get_draw_size(video->path->current_panel,
 					&ml_width, &ml_height);
 		/*
 		 * If all layers have no scale ,not YUV layers and have no overlap,
@@ -943,7 +938,7 @@ static void __video_display_set(struct owl_de_video *video)
 		sl_x = info->real_pos_x;
 		sl_y = info->real_pos_y;
 
-		owl_panel_get_disp_area(video->path->panel, &ml_x, &ml_y,
+		owl_panel_get_disp_area(video->path->current_panel, &ml_x, &ml_y,
 					&out_width, &out_height);
 		if (ML_ID(video) != ml_id_for_scaler0 &&
 		    ML_ID(video) != ml_id_for_scaler1) {
@@ -1061,7 +1056,7 @@ static void __video_scaling_set(struct owl_de_video *video)
 			      info->height : info->out_height);
 	} else {
 		/* RGB layers share one macro layer(TODO, maybe improper) */
-		owl_panel_get_draw_size(video->path->panel, &width, &height);
+		owl_panel_get_draw_size(video->path->current_panel, &width, &height);
 
 		/*
 		 * If all layers have no scale ,not YUV layers and have no overlap,
@@ -1076,7 +1071,7 @@ static void __video_scaling_set(struct owl_de_video *video)
 		    }
 		}
 
-		owl_panel_get_disp_area(video->path->panel, &disp_x, &disp_y,
+		owl_panel_get_disp_area(video->path->current_panel, &disp_x, &disp_y,
 					&out_width, &out_height);
 	}
 

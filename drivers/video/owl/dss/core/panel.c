@@ -242,7 +242,6 @@ int owl_panel_register(struct device *parent, struct owl_panel *panel)
 		pr_err("add panel to DE path failed!\n");
 		goto add_to_de_path_failed;
 	}
-	panel_update_path_info(panel);
 
 	/*
 	 * match with display controller
@@ -252,6 +251,12 @@ int owl_panel_register(struct device *parent, struct owl_panel *panel)
 		pr_err("add panel to ctrl failed!\n");
 		goto add_to_ctrl_failed;
 	}
+
+	/*
+	 * updated DE current panel info
+	 */
+	owl_de_path_update_panel(panel);
+	panel_update_path_info(panel->path->current_panel);
 
 	mutex_lock(&g_panel_list_lock);
 	list_add(&panel->list, &g_panel_list);
@@ -298,8 +303,23 @@ bool owl_panel_get_pri_panel_resolution(int *width, int *height)
         if (PANEL_IS_PRIMARY(panel)) {
             path = panel->path;
             pr_debug("primay display width %d , height %d\n", path->info.width, path->info.height);
-            *width = path->info.width;
-            *height = path->info.height;
+
+	    if (panel->draw_width == 0 || panel->draw_height == 0) {
+		    *width = path->info.width;
+		    *height = path->info.height;
+	    } else {
+		    *width = panel->draw_width;
+		    *height = panel->draw_height;
+	    }
+            
+	    /* S700, HDMI 4k scaling need limit draw size */
+            if (owl_de_is_s700()) {
+                if (*width >= 3840)
+                    *width /= 2;
+                if (*height >= 2160)
+                    *height /= 2;
+            }
+
             return true;
         }
     }
@@ -373,8 +393,17 @@ EXPORT_SYMBOL(owl_panel_get_mode);
 
 int owl_panel_set_mode(struct owl_panel *panel, struct owl_videomode *mode)
 {
+	struct owl_de_path *path = panel->path;
+
 	memcpy(&panel->mode, mode, sizeof(struct owl_videomode));
-	panel_update_path_info(panel);
+
+	/*
+	 * if there are more than one panels attached to path,
+	 * we should update path's current panel before path info updated.
+	 */
+	owl_de_path_update_panel(panel);
+
+	panel_update_path_info(path->current_panel);
 	panel_update_timing_info(panel);
 
 	return 0;
@@ -602,7 +631,7 @@ void owl_panel_get_draw_size(struct owl_panel *panel, int *width, int *height)
 	}
 
 	/* S700, HDMI 4k scaling need limit draw size */
-	if (owl_de_is_s700() && *width > *height) {
+	if (owl_de_is_s700()) {
 		if (*width >= 3840)
 			*width /= 2;
 		if (*height >= 2160)

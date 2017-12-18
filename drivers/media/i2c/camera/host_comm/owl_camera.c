@@ -246,7 +246,40 @@ static inline void module_mipi_parse_params(int channel,
         if (of_property_read_u32(entry, "lane3_map",
         	&mipi_cfg->lane3_map))
 	            module_info("can't find lane3_map parameter!\n");
+    } else {
+        /*MIPI Params, New Added, Auto calcurate*/
+        unsigned int clk_term_time, clk_settle_time, data_term_time, data_settle_time;
+
+        clk_term_time = CSI_T_CLK_TERM_EN * (mipi_cfg->csi_clk / 1000000) / 1000;
+        if (clk_term_time < 5)
+            clk_term_time = 0;
+        else
+            clk_term_time = clk_term_time - 5;
+        clk_settle_time = CSI_T_CLK_SETTLE * (mipi_cfg->csi_clk / 1000000) / 1000;
+        if (clk_settle_time < 5)
+            clk_settle_time = 0;
+        else
+            clk_settle_time = clk_settle_time - 5;
+        data_term_time = CSI_T_DATA_TERM_EN * (mipi_cfg->csi_clk / 1000000) / 1000;
+        if (data_term_time < 5)
+            data_term_time = 0;
+        else
+            data_term_time = data_term_time - 5;
+        data_settle_time = CSI_T_DATA_SETTLE * (mipi_cfg->csi_clk / 1000000) / 1000;
+        if (data_settle_time < 5)
+            data_settle_time = 0;
+        else
+            data_settle_time = data_settle_time - 5;
+
+        mipi_cfg->clk_term_time = clk_term_time;
+        mipi_cfg->clk_settle_time = clk_settle_time;
+        mipi_cfg->data_term_time = data_term_time;
+        mipi_cfg->data_settle_time = data_settle_time;
     }
+    pr_info("clk_settle_time = %d \n", mipi_cfg->clk_settle_time);
+    pr_info("clk_term_time = %d \n", mipi_cfg->clk_term_time);
+    pr_info("data_settle_time = %d \n", mipi_cfg->data_settle_time);
+    pr_info("data_term_time = %d \n", mipi_cfg->data_term_time);
 }
 
 static int mipi_csi_init(struct soc_camera_device *icd)
@@ -302,7 +335,11 @@ static inline int set_row_range(struct soc_camera_device *icd)
 	unsigned int start = cam_param->top;
 
 #ifdef MODULE_SI
-	unsigned int end = cam_param->top + icd->user_height - 1;
+	unsigned int end = cam_param->top + icd->user_height  - 1;
+	if (cam_param->flags & SENSOR_FLAG_SI_TVIN) {
+		end = cam_param->top + icd->user_height / 2 - 1;
+		module_info("%s, si tvin\n", __func__);
+	}
 #elif defined MODULE_ISP
 	unsigned int end = cam_param->top + cam_param->real_h - 1;
 #endif
@@ -639,6 +676,9 @@ static void capture_start(struct camera_dev *cam_dev,
 	if (V4L2_MBUS_CSI2 == cam_param->bus_type)
 		mipi_csi_init(icd);
 #ifdef MODULE_SI
+	if (module_info->flags & SENSOR_FLAG_SI_TVIN)
+		reg_write(0x0, GMODULEMAPADDR, TVIN_CR, MODULE_BASE);
+	
 	reg_write(reg_read(GMODULEMAPADDR, MODULE_ENABLE, MODULE_BASE) &
 		  ((~0x1 << 19)), GMODULEMAPADDR, MODULE_ENABLE, MODULE_BASE);
 #endif
@@ -790,6 +830,11 @@ static void capture_start(struct camera_dev *cam_dev,
 		module_enable = (module_enable & (~(1 << 18)))
 		    | (module_setting->hs_pol << 18);
 		/*color seq */
+	
+	if (module_info->flags & SENSOR_FLAG_SI_TVIN) {
+		module_enable = (module_enable & (~(3 << 26))) |
+		    (module_setting->color_seq << 26);
+	}
 
 		/*
 		   channel mux setting:
@@ -814,9 +859,16 @@ static void capture_start(struct camera_dev *cam_dev,
 	if (HOST_MODULE_CHANNEL_0 == cam_param->channel) {
 		reg_write(reg_read(GMODULEMAPADDR, MODULE_ENABLE, MODULE_BASE) |
 			  0x53, GMODULEMAPADDR, MODULE_ENABLE, MODULE_BASE);
+		reg_write(0x1, GMODULEMAPADDR, SI_CH1_VTD_CTL, MODULE_BASE);
 	} else {
 		reg_write(reg_read(GMODULEMAPADDR, MODULE_ENABLE, MODULE_BASE) |
 			  0x95, GMODULEMAPADDR, MODULE_ENABLE, MODULE_BASE);
+		reg_write(0x1, GMODULEMAPADDR, SI_CH2_VTD_CTL, MODULE_BASE);
+		
+		if (module_info->flags & SENSOR_FLAG_SI_TVIN) {
+			reg_write(reg_read(GMODULEMAPADDR, MODULE_ENABLE, MODULE_BASE) |
+					0x8095, GMODULEMAPADDR, MODULE_ENABLE, MODULE_BASE);
+		}
 	}
 #elif defined MODULE_ISP
 	if (HOST_MODULE_CHANNEL_0 == cam_param->channel) {
@@ -2260,11 +2312,14 @@ static void camera_videobuf_queue(struct videobuf_queue *vq,
 	list_add_tail(&vb->queue, &cam_param->capture);
 
 	if (!cam_param->cur_frm) {
-		cam_param->cur_frm = list_entry(cam_param->capture.next,
-						struct videobuf_buffer, queue);
-		cam_param->cur_frm->state = VIDEOBUF_ACTIVE;
+        //Fix for TVIN problem: upload null frame when the first frame.
+		if (!(cam_param->flags & SENSOR_FLAG_SI_TVIN)) {
+		    cam_param->cur_frm = list_entry(cam_param->capture.next,
+		    				struct videobuf_buffer, queue);
+		    cam_param->cur_frm->state = VIDEOBUF_ACTIVE;
 
-		list_del_init(&cam_param->cur_frm->queue);
+		    list_del_init(&cam_param->cur_frm->queue);
+        }
 		cam_param->prev_frm = NULL;
 
 		updata_module_info(sd, cam_param);
@@ -2272,6 +2327,29 @@ static void camera_videobuf_queue(struct videobuf_queue *vq,
 		set_rect(icd);
 		set_frame(icd, cam_param->cur_frm);
 		capture_start(cam_dev, icd);
+	
+#ifdef MODULE_SI
+		if (cam_param->flags & SENSOR_FLAG_SI_TVIN) {
+			unsigned int reg_val;
+			int i;
+
+			reg_val = reg_read(GMODULEMAPADDR, SI_CH2_VTD_CTL, MODULE_BASE);
+			reg_val = REG_SET_VAL(reg_val, 0x1, 0, 0);
+			reg_write(reg_val, GMODULEMAPADDR, SI_CH2_VTD_CTL, MODULE_BASE);
+		
+			for (i = 0x00; i <= 0x90; i += 4) {
+				reg_val = reg_read(GMODULEMAPADDR, 0xE0268000 + i, MODULE_BASE);
+				module_info("hhy 0xE02680%x 0x%x\n", i, reg_val);
+			}
+			
+			reg_val = reg_read(GMODULEMAPADDR, SI_CH2_VTD_CTL, MODULE_BASE);
+			module_info("hhy SI_CH2_VTD_CTL 0x%x\n", reg_val);
+
+			reg_val = reg_read(GMODULEMAPADDR, SI_CH2_VTD_CTL, MODULE_BASE);
+			reg_val = REG_SET_VAL(reg_val, 0x0, 0, 0);
+			reg_write(reg_val, GMODULEMAPADDR, SI_CH2_VTD_CTL, MODULE_BASE);
+		}
+#endif
 	}
 }
 
@@ -2420,14 +2498,16 @@ static int gpio_init(struct device_node *fdt_node,
 
 static void gpio_exit(struct dts_gpio *gpio, bool active)
 {
-	if (gpio->num >= 0) {
-		if (active)
-			gpio_set_value(gpio->num, gpio->active_level);
-		else
-			gpio_set_value(gpio->num, !gpio->active_level);
+    if (gpio != NULL) {
+	    if (gpio->num >= 0) {
+	    	if (active)
+	    		gpio_set_value(gpio->num, gpio->active_level);
+	    	else
+	    		gpio_set_value(gpio->num, !gpio->active_level);
 
-		gpio_free(gpio->num);
-	}
+	    	gpio_free(gpio->num);
+	    }
+    }
 }
 
 static int module_gpio_init(struct device_node *fdt_node,
@@ -2438,6 +2518,74 @@ static int module_gpio_init(struct device_node *fdt_node,
 	const char *avdd_src = NULL;
 	const char *rear_avdd_src = NULL;
 	const char *front_avdd_src = NULL;
+    const char *hdmi_in_pwdn = NULL;
+    const char *hdmi_in_reset = NULL;
+
+	if (of_property_read_string(fdt_node, "hdmiin-pwdn-gpios", &hdmi_in_pwdn)) {
+        pr_err("read tc pwdn config failed");
+    }
+	if (of_property_read_string(fdt_node, "hdmiin-reset-gpios", &hdmi_in_reset)) {
+        pr_err("read tc reset config failed");
+    }
+    if (hdmi_in_pwdn != NULL && hdmi_in_reset != NULL) {
+	    enum of_gpio_flags flags;
+        spinfo->gpio_hdmiin_reset.num = of_get_named_gpio_flags(fdt_node, "hdmiin-reset-gpios", 0, &flags);
+	    spinfo->gpio_hdmiin_reset.active_level = 1;
+        spinfo->gpio_hdmiin_pwdn.num = of_get_named_gpio_flags(fdt_node, "hdmiin-pwdn-gpios", 0, &flags);
+	    spinfo->gpio_hdmiin_pwdn.active_level = 1;
+
+        return 0;
+    }
+
+	if (of_property_read_string(fdt_node, "avdd-src", &avdd_src)) {
+		module_info("get avdd-src faild");
+	    if (of_property_read_string(fdt_node, "rear-avdd-src", &rear_avdd_src)) {
+		    module_info("get rear-avdd-src faild");
+        }
+	    if (of_property_read_string(fdt_node, "front-avdd-src", &front_avdd_src)) {
+		    module_info("get front-avdd-src faild");
+        }
+        if (rear_avdd_src == NULL && front_avdd_src == NULL) {
+		    module_info("get all avdd-src faild");
+		    goto free_reset;
+        }
+	}
+
+    if (avdd_src != NULL) {
+	    if (!strcmp(avdd_src, "regulator")) {
+	    	module_info("avdd using regulator");
+	    } else if (!strcmp(avdd_src, "gpio")) {
+	    	if (gpio_init(fdt_node, "avdd-gpios",
+	    		      &spinfo->gpio_power, GPIO_HIGH)) {
+	    		gpio_exit(&spinfo->gpio_power, GPIO_LOW);
+	    		goto free_reset;
+	    	}
+	    }
+    }
+
+    if (rear_avdd_src != NULL) {
+	    if (!strcmp(rear_avdd_src, "regulator")) {
+	    	module_info("rear_avdd using regulator");
+	    } else if (!strcmp(rear_avdd_src, "gpio")) {
+	    	if (gpio_init(fdt_node, "rear-avdd-gpios",
+	    		      &spinfo->gpio_rear_power, GPIO_HIGH)) {
+	    		gpio_exit(&spinfo->gpio_rear_power, GPIO_LOW);
+	    		goto free_reset;
+	    	}
+	    }
+    }
+
+    if (front_avdd_src != NULL) {
+	    if (!strcmp(front_avdd_src, "regulator")) {
+	    	module_info("front_avdd using regulator");
+	    } else if (!strcmp(front_avdd_src, "gpio")) {
+	    	if (gpio_init(fdt_node, "front-avdd-gpios",
+	    		      &spinfo->gpio_front_power, GPIO_HIGH)) {
+	    		gpio_exit(&spinfo->gpio_front_power, GPIO_LOW);
+	    		goto free_reset;
+	    	}
+	    }
+    }
 
 	if (of_property_read_string(fdt_node, "board_type", &board_type)) {
 		module_err("get board_type faild");
@@ -2491,7 +2639,6 @@ static int module_gpio_init(struct device_node *fdt_node,
 		}
 		if (gpio_init(fdt_node, "pwdn-rear-gpios", &spinfo->gpio_rear,
 			      GPIO_HIGH)) {
-			gpio_exit(&spinfo->gpio_front, GPIO_LOW);
 			goto free_reset;
 		}
 		spinfo->flag = SENSOR_DUAL;
@@ -2500,55 +2647,6 @@ static int module_gpio_init(struct device_node *fdt_node,
 		goto free_reset;
 	}
 
-	if (of_property_read_string(fdt_node, "avdd-src", &avdd_src)) {
-		module_info("get avdd-src faild");
-	    if (of_property_read_string(fdt_node, "rear-avdd-src", &rear_avdd_src)) {
-		    module_info("get rear-avdd-src faild");
-        }
-	    if (of_property_read_string(fdt_node, "front-avdd-src", &front_avdd_src)) {
-		    module_info("get front-avdd-src faild");
-        }
-        if (rear_avdd_src == NULL && front_avdd_src == NULL) {
-		    module_info("get all avdd-src faild");
-		    goto free_reset;
-        }
-	}
-
-    if (avdd_src != NULL) {
-	    if (!strcmp(avdd_src, "regulator")) {
-	    	module_info("avdd using regulator");
-	    } else if (!strcmp(avdd_src, "gpio")) {
-	    	if (gpio_init(fdt_node, "avdd-gpios",
-	    		      &spinfo->gpio_power, GPIO_HIGH)) {
-	    		gpio_exit(&spinfo->gpio_power, GPIO_LOW);
-	    		goto free_reset;
-	    	}
-	    }
-    }
-
-    if (rear_avdd_src != NULL) {
-	    if (!strcmp(rear_avdd_src, "regulator")) {
-	    	module_info("rear_avdd using regulator");
-	    } else if (!strcmp(rear_avdd_src, "gpio")) {
-	    	if (gpio_init(fdt_node, "rear-avdd-gpios",
-	    		      &spinfo->gpio_rear_power, GPIO_HIGH)) {
-	    		gpio_exit(&spinfo->gpio_rear_power, GPIO_LOW);
-	    		goto free_reset;
-	    	}
-	    }
-    }
-
-    if (front_avdd_src != NULL) {
-	    if (!strcmp(front_avdd_src, "regulator")) {
-	    	module_info("front_avdd using regulator");
-	    } else if (!strcmp(front_avdd_src, "gpio")) {
-	    	if (gpio_init(fdt_node, "front-avdd-gpios",
-	    		      &spinfo->gpio_front_power, GPIO_HIGH)) {
-	    		gpio_exit(&spinfo->gpio_front_power, GPIO_LOW);
-	    		goto free_reset;
-	    	}
-	    }
-    }
 	return 0;
 
  free_reset:
@@ -2583,6 +2681,9 @@ static struct camera_dev *cam_dev_alloc(struct device *dev,
 	spin_lock_init(&cdev->lock);
 
 	cdev->mfp = NULL;
+	cdev->csi_dvp_mfp = NULL;
+	cdev->csi_mipi_mfp = NULL;
+	cdev->si_tvin_mfp = NULL;
 	cdev->module_clk = NULL;
 	cdev->csi_clk = NULL;
 	cdev->ch_clk[HOST_MODULE_CHANNEL_0] = NULL;
@@ -2598,6 +2699,28 @@ static struct camera_dev *cam_dev_alloc(struct device *dev,
 		module_err("gpio init error\n");
 		goto egpio;
 	}
+
+#ifdef MODULE_SI
+	
+	module_info("%s, get si pinctrl!\n", __func__);
+	//cdev->csi_dvp_mfp = pinctrl_get_select(dev, "csi_dvp");
+	//if (IS_ERR(cdev->csi_dvp_mfp)) {
+	//	pr_err("%s, get csi_dvp pinctrl failed!\n", __func__);
+	//}
+
+	cdev->csi_mipi_mfp= pinctrl_get_select(dev, "csi_mipi");
+	//cdev->csi_mipi_mfp= pinctrl_get_select(dev, "default");
+	if (IS_ERR(cdev->csi_dvp_mfp)) {
+		pr_err("%s, get csi_mipi pinctrl failed!\n", __func__);
+	}
+	
+	cdev->si_tvin_mfp = pinctrl_get_select(dev, "si_tvin");
+	if (IS_ERR(cdev->csi_dvp_mfp)) {
+		pr_err("%s, get si_tvin pinctrl failed!\n", __func__);
+	}
+
+#endif
+
 #ifdef MODULE_ISP
 	cdev->mfp = pinctrl_get_select_default(dev);
 	if (IS_ERR(cdev->mfp))

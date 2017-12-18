@@ -149,7 +149,7 @@
 
 		pwm0_state_default: pwm0_default {
 			pwm0_mfp {
-				actions,groups = "mfp1_31_29_ks_in0";
+				actions,groups = "mfp1_31_29_ks_in2";
 				actions,function = "pwm0";
 			};
 		};

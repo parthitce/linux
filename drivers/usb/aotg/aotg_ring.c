@@ -1426,8 +1426,11 @@ void aotg_ring_irq_handler(struct aotg_hcd *acthcd)
 {
 	unsigned int irq_mask;
 	unsigned long flags;
+	bool dma_nest = false;
 
 	spin_lock_irqsave(&acthcd->lock, flags);
+	if (acthcd->check_trb_mutex == 1)
+		dma_nest = true;
 	acthcd->check_trb_mutex = 1;
 
 	do {
@@ -1438,6 +1441,11 @@ void aotg_ring_irq_handler(struct aotg_hcd *acthcd)
 			return;
 		}
 		clear_ring_irq(acthcd, irq_mask);
+
+		if (dma_nest == true) {
+			spin_unlock_irqrestore(&acthcd->lock, flags);
+			return;
+		}
 
 		handle_ring_dma_tx(acthcd, irq_mask);
 	} while (irq_mask);

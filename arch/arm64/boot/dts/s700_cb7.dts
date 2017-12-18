@@ -23,7 +23,8 @@
 /memreserve/ 0x18FFF000 0x1000;
 
 #include "s700.dtsi"
-
+#include "s700_panel_rgb_lvds.dtsi"
+/* #include "s700_panel_mipi.dtsi" */
 / {
 	model = "s700";
 	compatible = "actions,s700";
@@ -151,80 +152,6 @@
 		delay_af_pwm = <20>; /*in ms*/
 	};
 
-	dsi: dsi@e0310000 {
-		status = "disabled";
-	};
-
-	lcd: lcd@e02a0000 {
-	
-	
-		pinctrl-names = "default";
-		pinctrl-0 = <&lcd0_state_default>;
-
-		panel_configs = <&config0>;
-		/*
-		 * lcd_configs, used to configure lcd controller,
-		 * its values should set according to lcd panel's spec.
-		 * Currently, the configration is for fpga panel.
-		 */
-		config0: lcd_configs {
-			port_type = <0>;	/* 0, RGB; 1, CPU; 2, LVDS; 3, EDP */
-
-			vsync_inversion = <0>;
-			hsync_inversion = <0>;
-			dclk_inversion = <0>;
-			lde_inversion = <0>;
-
-			pclk_parent = <0>;	/* 0, DISPLAY PLL; 1, NAND PLL */
-			pclk_rate = <60000000>;/* 72MHz, DISPLAY PLL, divider 10 */
-		};
-
-		/* lcd panel */
-		panel@glp {
-			compatible = "actions,panel-glp";
-
-			/* panel's fixed info */
-			width_mm = <197>;
-			height_mm = <147>;
-			bpp = <24>;
-
-			is_primary = <1>;
-
-			/* operation delay in ms */
-			power_on_delay = <0>;
-			power_off_delay = <0>;
-			enable_delay = <0>;
-			disable_delay = <0>;
-
-			power-gpio = <&gpiob 4 0>; /*GPIOA23, high power on */
-
-			videomode-0 = <&mode0>;
-
-			/* 800x1280p60 */
-			mode0: videomode {
-				refresh_rate = <60>;
-
-				xres = <1024>;
-				yres = <600>;
-				/*
-				 * pclk_rate = 66M
-				 * pixel_clock = picoseconds / pclk_rate
-				 */
-				pixel_clock = <20000>;
-
-				hsw = <20>;
-				hbp = <138>;
-				hfp = <162>;
-
-				vsw = <3>;
-				vbp = <22>;
-				vfp = <10>;
-
-				/* 0: FB_VMODE_NONINTERLACED, 1:FB_VMODE_INTERLACED */
-				vmode = <0>;
-			};
-		};
-	};
 
 	ethernet_gpio_regulator: ethernet_gpio_regulator {
 		compatible = "regulator-fixed";
@@ -266,8 +193,51 @@
 			compatible = "actions,panel-ghp";
 
 			is_primary = <0>;
+
+			draw_width = <1920>;
+			draw_height = <1080>;
+
+			videomode-0 = <&default_mode>;
+
+			/* default mode used when EDID read error */
+			default_mode:videomode {
+				refresh_rate = <60>;
+				xres = <1280>;
+				yres = <720>;
+			};
+
 		};
 	};
+
+	cvbs@e02b0000 {
+		compatible = "actions,s700-cvbs", "simple-bus";
+		reg = <0 0xe02b0000 0 0x80>;
+		reg-names = "regs";
+		clocks = <&clock CLK_TVOUT>, <&clock CLK_CVBS_PLL>;
+		clock-names = "tvout", "cvbs_pll";
+
+		interrupts = <GIC_SPI 47 IRQ_TYPE_LEVEL_HIGH>;
+		resets = <&reset RESET_TVOUT>;
+		reset-names = "cvbs";
+
+		panel@gcp {
+			compatible = "actions,panel-gcp";
+
+			is_primary = <0>;
+
+			draw_width = <1920>;
+			draw_height = <1080>;
+
+			videomode-0 = <&def_mode>;
+
+			def_mode:videomode {
+				xres = <720>;
+				yres = <576>;
+				refresh_rate = <25>;
+			};
+		};
+	};
+
 
 	monitor {
 		compatible = "actions,s700-usbmonitor";
@@ -361,7 +331,7 @@
 				variance = <10>;                    /* filter will not output until the difference between every two ADC samples in the filter queue goes below this value */
 				poll_interval =  <10>;              /* sample period, in ms */
 				left_adc_val =  <0 90 175 270 400>;     /* for key code translator, each value defines a lower bound of ADC value of a key */
-				right_adc_val = <30 120 220 320 450>;   /* for key code translator, each value defines a upper bound of ADC value of a key */
+				right_adc_val = <30 120 220 380 721>;   /* for key code translator, each value defines a upper bound of ADC value of a key */
 				key_val = <KEY_HOME KEY_MENU KEY_VOLUMEUP KEY_VOLUMEDOWN KEY_BACK>; /* for key code translator, each value defines the key_code of a key */
 				adc_channel_name = "AUX0";          /* the ADC channel used for sampling, valid names are REMCON AUX0 AUX1 AUX2 (AUX3) */
 				compatible = "actions,atc2603c-adckeypad";
@@ -425,8 +395,8 @@
 				rsense = <20>;/*unit:mohm*/
 				bat_type = <1>;/*0:4.18v; 1:4.2v; 2:4.3v; 3:4.35v*/
 				bl_on_current_usb_pc = <200>;
-				bl_off_current_usb_pc = <500>;
-				bl_on_current_usb_adp = <400>;
+				bl_off_current_usb_pc = <400>;
+				bl_on_current_usb_adp = <200>;
 				bl_off_current_usb_adp = <800>;
 				bl_on_current_wall_adp = <400>;
 				bl_off_current_wall_adp = <1400>;
@@ -434,6 +404,54 @@
 				ext_charger = <0>;
 				usb_adapter_as_ac = <1>;/*0:usb ada keep itself; 1:usb ada used as DCIN when usb plug and batv<3.3v during minicharge*/
 				usb_pc_ctl_mode = <1>; /*0:disable vbus ctl;1:current limited;2:voltage limited*/
+			};
+			atc2603c-battery{
+				compatible = "actions,atc2603c-battery";
+				capacity = <5300 >;                              /*mAh, the full capacity of battery used*/
+				taper_voltage = <4167>;                         /*mV,the one close to the full capacity*/
+				taper_current = <300>; 
+				min_over_chg_protect_voltage = <4275>;				/*mA,the one close to the full capacity*/
+				terminal_voltage = <3400>;                        /*mV,the lowest voltage of battery permitted*/
+				suspend_current = <17000>;                       /* uA,the current of suspend*/
+				shutdown_current = <50>;                        /* uA,the current of shutdown*/
+				print_switch = <0>;                               /*0:open the switch of printing information 1:the opposite*/
+				log_switch = <0>;                                 /*0:open the switch of recording charging log 1:the opposite*/
+				support_battery_temperature = <0>;				/*0:not support 1:support*/
+				
+
+				ocv_soc_00 = <3377 3470 3563 3657 3660 3663 3666 3669 3671 3674>;        /* capacity:from 1% to 10%*/
+				ocv_soc_10 = <3677 3680 3687 3695 3703 3711 3716 3722 3728 3734>;       /* capacity:from 11% to 20%*/
+				ocv_soc_20 = <3737 3740 3743 3746 3749 3752 3755 3759 3760 3762>;        /* capacity:from 21% to 30%*/
+				ocv_soc_30 = <3763 3765 3766 3768 3769 3771 3773 3775 3778 3780>;       /* capacity:from 31% to 40%*/
+                                ocv_soc_40 = <3782 3785 3787 3790 3793 3797 3800 3804 3807 3811>;        /* capacity:from 41% to 50%*/
+                                ocv_soc_50 = <3814 3818 3823 3829 3834 3840 3846 3851 3857 3863>;        /* capacity:from 51% to 60%*/
+                                ocv_soc_60 = <3870 3877 3885 3892 3899 3907 3914 3922 3928 3934>;        /* capacity:from 61% to 70%*/
+                                ocv_soc_70 = <3940 3946 3952 3958 3964 3971 3978 3985 3992 3999>;        /* capacity:from 71% to 80%*/
+                                ocv_soc_80 = <4006 4013 4020 4028 4036 4044 4052 4060 4068 4076>;        /* capacity:from 81% to 90%*/
+                                ocv_soc_90 = <4084 4092 4101 4110 4120 4129 4138 4148 4157 4167>;        /* capacity:from 91% to 100%*/
+
+				//ocv_soc_00 = <3477 3534 3591 3624 3637 3649 3661 3667 3673 3677>;    	 /* capacity:from 1% to 10%*/
+				//ocv_soc_10 = <3682 3685 3690 3693 3700 3706 3712 3716 3722 3728 >;	 /* capacity:from 11% to 20%*/
+				//ocv_soc_20 = <3732 3736 3739 3744 3747 3751 3755 3758 3761 3765>;	 /* capacity:from 21% to 30%*/
+				//ocv_soc_30 = <3768 3771 3775 3777 3782 3784 3788 3791 3793 3794 >;	 /* capacity:from 31% to 40%*/
+				//ocv_soc_40 = <3800 3801 3804 3807 3812 3815 3819 3823 3825 3830>;	 /* capacity:from 41% to 50%*/
+				//ocv_soc_50 = <3834 3838 3841 3845 3850 3854 3858 3864 3870 3874>;	 /* capacity:from 51% to 60%*/
+				//ocv_soc_60 = <3880 3889 3895 3902 3908 3916 3926 3933 3940 3947>;	 /* capacity:from 61% to 70%*/
+				//ocv_soc_70 = <3954 3961 3968 3972 3979 3985 3992 3997 4005 4012>;	 /* capacity:from 71% to 80%*/
+				//ocv_soc_80 = <4019 4028 4036 4046 4054 4061 4068 4075 4084 4090>;	 /* capacity:from 81% to 90%*/
+				//ocv_soc_90 = <4099 4107 4115 4126 4132 4141 4152 4160 4170 4180>;	 /* capacity:from 91% to 100%*/
+			/*
+				ocv_soc_00 = <3498 3558 3601 3630 3647 3653 3658 3662 3666 3668>;
+				ocv_soc_10 = <3670 3676 3682 3689 3698 3699 3703 3707 3711 3715 >;
+				ocv_soc_20 = <3720 3724 3728 3731 3734 3738 3741 3745 3748 3751>;
+				ocv_soc_30 = <3754 3757 3761 3765 3768 3771 3775 3778 3780 3784 >;
+				ocv_soc_40 = <3788 3793 3797 3802 3805 3810 3815 3819 3824 3830>;
+				ocv_soc_50 = <3835 3841 3847 3853 3859 3866 3874 3881 3888 3896>;
+				ocv_soc_60 = <3904 3911 3918 3923 3928 3935 3944 3954 3965 3980>;
+				ocv_soc_70 = <3995 4008 4018 4026 4035 4043 4052 4062 4072 4083>;
+				ocv_soc_80 = <4094 4105 4115 4126 4138 4148 4159 4170 4181 4191>;
+				ocv_soc_90 = <4202 4213 4224 4235 4247 4258 4271 4285 4306 4330>;
+			*/
 			};
 
 			vdd_gpu_dcdc: vdd-gpu-dcdc {
@@ -599,6 +617,7 @@
 //			avdd-src = "regulator";  /* only: "gpio", "regulator" */
 //		        avdd-regulator = "ldo1"; /* only when vbus-src is "regulator" */
 //		        avdd-regulator-scope = <2800000 2810000>;  /* uV */
+//			dvdd-src = "regulator";  /* only: "gpio", "regulator" */
 //		        dvdd-regulator = "ldo7";
 //		        dvdd-regulator-scope = <1800000 1810000>;  /* uV */
 
@@ -607,8 +626,8 @@
 //			pwdn-rear-gpios = <&gpioc 17 1>; /* GPIOA27 */
 //			pwdn-front-gpios = <&gpioc 15 1>; /* GPIOA26 */
 //			reset-gpios = <&gpioc 16 1>; /*GPIOB15*/
-//			pinctrl-names = "default";
-//			pinctrl-0 = <&isp0_state_csi_dvp>;
+//			pinctrl-names = "csi_mipi";
+//			pinctrl-0 = <&isp0_state_csi_mipi>;
 
 //			status = "okay"; /* create platform-device */
 //		};

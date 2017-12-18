@@ -782,6 +782,38 @@ static void atc2609a_clmt_set_ocv_batch(struct atc2609a_clmt *clmt,
 
 	atc2609a_clmt_dump_ocv(clmt);
 }
+
+/**
+ * atc2609a_compare_ocv - Compare the ocv value of the dts 
+ configuration to the same as the ocv in the register.
+ */
+static bool atc2609a_compare_ocv(struct atc2609a_clmt *clmt,
+		struct battery_data *bat_info)
+{
+	int i;
+	int ocv, reg_ocv;
+
+	for (i = 0; i < 16; i++) {
+		ocv = (bat_info[i].ocv * CONST_FACTOR + CONST_ROUNDING)
+			/ ADC_LSB_FOR_BATV / 2;
+			
+		atc260x_reg_write(clmt->atc260x, ATC2609A_CLMT_OCV_TABLE,
+			i <<  PMU_CLMT_OCV_TABLE_SOC_SEL_SHIFT);
+		reg_ocv = atc260x_reg_read(clmt->atc260x, ATC2609A_CLMT_OCV_TABLE)
+			& PMU_CLMT_OCV_TABLE_OCV_SET_MASK;
+		
+		pr_info("[%s], ocv:%dmv, reg_ocv:%dmv\n",
+			__func__, ocv, reg_ocv);
+		if(reg_ocv != ocv)
+		{
+			pr_info("[%s]:clmt not initialized\n", __func__);
+			return false;
+		}
+	}	
+	pr_info("[%s]:clmt initialized\n", __func__);
+	return true;
+}
+
 /**
 * atc2609a_clmt_calc_ch_r - calc the charging resistor.
 *
@@ -1112,7 +1144,7 @@ static void atc2609a_clmt_check_fcc(struct atc2609a_clmt *clmt)
 
 	fcc = atc2609a_clmt_get_fcc(clmt);
 	diff_val = abs(items->design_capacity - fcc);
-	if (diff_val >= items->design_capacity / 2) {
+	if (diff_val > items->design_capacity / 5) {
 		pr_info("[%s] fcc abnormal, fcc(%d)\n", __func__, fcc);
 		atc2609a_clmt_set_fcc(clmt, items->design_capacity);
 	}
@@ -2951,7 +2983,7 @@ static void atc2609a_clmt_init(struct atc2609a_clmt *clmt)
 
 	atc2609a_clmt_enable(clmt, true);
 
-	if (!atc2609a_clmt_get_inited(clmt->atc260x)) {
+	if (!atc2609a_compare_ocv(clmt, bat_info)) {
 		pr_info("[%s], atc260x clmt not initialization\n", __func__);
 
 		/*if CLMT_OCV_TABLE is not inited during boot, then init*/

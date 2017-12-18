@@ -92,7 +92,7 @@ static int rtl8201f_config_init(struct phy_device *phydev)
 
 	/* for s700 */
 	temp &= ~0x0FF2;	/* CRS/CRS_DV pin set as CRS_DV signal */
-	phy_write(phydev, 16, (temp | (0x4 << 4) | (0x4 << 8)));		/* rmii tx/rx interface timing */
+	phy_write(phydev, 16, (temp | (0x4 << 4) | (0x5 << 8)));		/* rmii tx/rx interface timing */
 #else
 	phy_write(phydev, 16, temp & ~0x1000);//page7 register16 bit12, Rg_rmii_clkdir set 0 for output clock to s900 etherne
 #endif

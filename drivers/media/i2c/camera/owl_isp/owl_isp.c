@@ -657,12 +657,16 @@ static inline int module_isr(struct soc_camera_device *icd,
 	nw = (temp_data >> 3) & 0x1fff;
 	nh = (temp_data >> 16) & 0xffff;
 	if ((module_int_stat & 0xff000000)) {
+        pr_err("in isp isr: state = 0x%x; nw = %d; nh = %d; iw = %d; ih = %d ========\n", \
+                module_int_stat, nw, nh, icd->user_width, icd->user_height);
 		reg_write(module_int_stat, GMODULEMAPADDR, MODULE_STAT,
 				MODULE_BASE);
 		return -1;
 	}
 
 	if (nw != icd->user_width || nh != icd->user_height) {
+        pr_err("in isp isr: nw = %d; nh = %d; iw = %d; ih = %d ========\n", \
+                nw, nh, icd->user_width, icd->user_height);
 		reg_write(module_int_stat, GMODULEMAPADDR, MODULE_STAT,
 				MODULE_BASE);
 		return -1;

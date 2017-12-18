@@ -12,8 +12,8 @@ struct dsi_data;
 void test_fs_dsi(struct device *dev);
 void test_fs_longcmd(struct device *dev);
 
-void dsihw_send_long_packet(struct dsi_data *dsi, int data_type, int word_cnt,
-				int *send_data, int trans_mode);
+static void dsihw_send_long_packet(struct dsi_data *dsi, int data_type, int data_len,
+				uint8_t *send_data, int trans_mode);
 void dsihw_send_short_packet(struct dsi_data *dsi,int data_type,
 				int sp_data, int trans_mode);
 /*

@@ -12,6 +12,7 @@
 #define    MODULE_BASE                          0xE0268000
 #define    MODULE_ENABLE                        (MODULE_BASE+0x00)
 #define    SI_BUS_PRIORITY_CTL	                (MODULE_BASE+0x04)
+#define    TVIN_CR                              (MODULE_BASE+0x08)
 #define    SI_SCALE_SET			        (MODULE_BASE+0x10)
 #define    CH_PRELINE_SET			(MODULE_BASE+0x14)
 #define    CH1_ROW_RANGE			(MODULE_BASE+0x18)

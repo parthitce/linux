@@ -1473,6 +1473,7 @@ void aotg_check_trb_timer(unsigned long data)
 		return;
 	}
 
+	acthcd->check_trb_mutex = 1;
 	for (i = 1; i < MAX_EP_NUM; i++) {
 		ep = acthcd->inep[i];
 		if (ep && (ep->ring) && (ep->ring->type == PIPE_BULK))
@@ -1487,6 +1488,7 @@ void aotg_check_trb_timer(unsigned long data)
 
 	mod_timer(&acthcd->check_trb_timer, jiffies + msecs_to_jiffies(3));
 
+	acthcd->check_trb_mutex = 0;
 	spin_unlock_irqrestore(&acthcd->lock, flags);
 	return;
 }

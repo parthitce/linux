@@ -34,6 +34,7 @@ struct cvbs_data {
 	bool			is_connected;
 	bool                    hpd_en;
 	bool			tvout_enabled;
+	bool			cable_status;
 
 	struct workqueue_struct *wq;
 	struct mutex		lock;
@@ -41,6 +42,8 @@ struct cvbs_data {
 	struct work_struct	cvbs_in_work;
 	struct work_struct	cvbs_out_work;
 	struct delayed_work	cvbs_check_work;
+
+	struct delayed_work	cable_check_dwork;
 
 	struct reset_control	*rst;
 	struct clk		*cvbs_pll;

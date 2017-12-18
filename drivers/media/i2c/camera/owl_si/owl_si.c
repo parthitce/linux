@@ -109,12 +109,13 @@ module_mipi_csi_init(struct camera_param *cam_param,
 	    | (mipi_cfg->hclk_om_ent_en << 8)
 	    | (mipi_cfg->lp11_not_chek << 9) | (mipi_cfg->hsclk_edge << 10);
 
-	reg_write(MIPI_PHY_4LANE, GMODULEMAPADDR, CSI_ANALOG_PHY, CSI_BASE);
-	reg_write(reg_data, GMODULEMAPADDR, CSI_CTRL, CSI_BASE);
-	reg_data = reg_read(GMODULEMAPADDR, CSI_CTRL, CSI_BASE);
+	reg_write(MIPI_PHY_4LANE | (mipi_cfg->clk_lane_direction << 5), 
+            GCSI1MAPADDR, CSI_ANALOG_PHY, CSI_BASE);
+	reg_write(reg_data, GCSI1MAPADDR, CSI_CTRL, CSI_BASE);
+	reg_data = reg_read(GCSI1MAPADDR, CSI_CTRL, CSI_BASE);
 
 	while ((reg_data & CSI_CTRL_PHY_INIT) && (--time > 0)) {
-		reg_data = reg_read(GMODULEMAPADDR, CSI_CTRL, CSI_BASE);
+		reg_data = reg_read(GCSI1MAPADDR, CSI_CTRL, CSI_BASE);
 		udelay(1);
 	}
 	if (time <= 0)
@@ -122,27 +123,33 @@ module_mipi_csi_init(struct camera_param *cam_param,
 
 	reg_write((mipi_cfg->contex0_virtual_num << 7) |
 		  (mipi_cfg->contex0_data_type << 1) | (mipi_cfg->contex0_en),
-		  GMODULEMAPADDR, CSI_CONTEXT0_CFG, CSI_BASE);
-	reg_write(0xF4, GMODULEMAPADDR, CSI_PHY_T0, CSI_BASE);
+		  GCSI1MAPADDR, CSI_CONTEXT0_CFG, CSI_BASE);
+	reg_write(0xF4, GCSI1MAPADDR, CSI_PHY_T0, CSI_BASE);
 	reg_write(mipi_cfg->clk_term_time + (mipi_cfg->clk_settle_time << 4),
-		  GMODULEMAPADDR, CSI_PHY_T1, CSI_BASE);
+		  GCSI1MAPADDR, CSI_PHY_T1, CSI_BASE);
 	reg_write(mipi_cfg->data_term_time + (mipi_cfg->data_settle_time << 4),
-		  GMODULEMAPADDR, CSI_PHY_T2, CSI_BASE);
-	reg_write(0xffffffff, GMODULEMAPADDR, CSI_ERROR_PENDING, CSI_BASE);
-	reg_write(0xffff0000, GMODULEMAPADDR, CSI_STATUS_PENDING, CSI_BASE);
-	reg_write(reg_read(GMODULEMAPADDR, CSI_CTRL, CSI_BASE) | CSI_CTRL_EN,
-		  GMODULEMAPADDR, CSI_CTRL, CSI_BASE);
+		  GCSI1MAPADDR, CSI_PHY_T2, CSI_BASE);
+	reg_write(0xffffffff, GCSI1MAPADDR, CSI_ERROR_PENDING, CSI_BASE);
+	reg_write(0xffff0000, GCSI1MAPADDR, CSI_STATUS_PENDING, CSI_BASE);
+	reg_write(reg_read(GCSI1MAPADDR, CSI_CTRL, CSI_BASE) | CSI_CTRL_EN,
+		  GCSI1MAPADDR, CSI_CTRL, CSI_BASE);
+	reg_write(reg_read(GCSI1MAPADDR, CSI_CTRL, CSI_BASE) | (1<<9),
+		  GCSI1MAPADDR, CSI_CTRL, CSI_BASE);
+    reg_write((mipi_cfg->lane3_map << 9)
+            | (mipi_cfg->lane2_map << 6)
+            | (mipi_cfg->lane1_map << 3)
+            | (mipi_cfg->lane0_map), GCSI1MAPADDR, CSI_PIN_MAP, CSI_BASE);
 }
 
 static inline void
 module_mipi_csi_disable(struct camera_dev *cdev, struct soc_camera_device *icd)
 {
-	reg_write(0x0, GMODULEMAPADDR, CSI_CONTEXT0_CFG, CSI_BASE);
-	reg_write(0x0, GMODULEMAPADDR, CSI_CTRL, CSI_BASE);
-	reg_write(0x0, GMODULEMAPADDR, CSI_ANALOG_PHY, CSI_BASE);
-	reg_write(0x0, GMODULEMAPADDR, CSI_PHY_T0, CSI_BASE);
-	reg_write(0x0, GMODULEMAPADDR, CSI_PHY_T1, CSI_BASE);
-	reg_write(0x0, GMODULEMAPADDR, CSI_PHY_T2, CSI_BASE);
+	reg_write(0x0, GCSI1MAPADDR, CSI_CONTEXT0_CFG, CSI_BASE);
+	reg_write(0x0, GCSI1MAPADDR, CSI_CTRL, CSI_BASE);
+	reg_write(0x0, GCSI1MAPADDR, CSI_ANALOG_PHY, CSI_BASE);
+	reg_write(0x0, GCSI1MAPADDR, CSI_PHY_T0, CSI_BASE);
+	reg_write(0x0, GCSI1MAPADDR, CSI_PHY_T1, CSI_BASE);
+	reg_write(0x0, GCSI1MAPADDR, CSI_PHY_T2, CSI_BASE);
 
 	module_info("disable csi\n");
 }
@@ -194,6 +201,23 @@ module_set_frame_yuv420(phys_addr_t module_addr, struct soc_camera_device *icd)
 		reg_write(module_addr_v, GMODULEMAPADDR,
 			  SI_CH1_DS0_OUT_ADDRV, MODULE_BASE);
 	} else {
+
+		if (cam_param->flags & SENSOR_FLAG_SI_TVIN) {
+			unsigned int reg_val;
+			reg_val = reg_read(GMODULEMAPADDR, TVIN_CR,
+					MODULE_BASE);
+			if (reg_val >> 16 == 1) {
+				/* even */
+				pr_debug("even\n");
+				module_addr_y += icd->user_width;
+				module_addr_u += icd->user_width / 2;
+				module_addr_v += icd->user_width / 2;
+			} else {
+				/* odd */
+				pr_debug("odd\n");
+			}
+		}
+
 		reg_write(module_addr_y, GMODULEMAPADDR,
 			  SI_CH2_DS_OUT_ADDRY, MODULE_BASE);
 		reg_write(module_addr_u, GMODULEMAPADDR,
@@ -206,7 +230,6 @@ module_set_frame_yuv420(phys_addr_t module_addr, struct soc_camera_device *icd)
 static inline void
 module_set_frame_yvu420(phys_addr_t module_addr, struct soc_camera_device *icd)
 {
-
 }
 
 static inline void
@@ -249,11 +272,66 @@ module_set_frame_nv12_nv21(phys_addr_t module_addr,
 		reg_write(module_addr_uv, GMODULEMAPADDR,
 			  SI_CH1_DS0_OUT_ADDRU, MODULE_BASE);
 	} else {
+
+		if (cam_param->flags & SENSOR_FLAG_SI_TVIN) {
+			unsigned int reg_val;
+			reg_val = reg_read(GMODULEMAPADDR, TVIN_CR,
+					MODULE_BASE);
+			if (reg_val >> 16 == 1) {
+				/* even */
+				pr_debug("even\n");
+				module_addr_y += icd->user_width;
+				module_addr_uv += icd->user_width;
+			} else {
+				/* odd */
+				pr_debug("odd\n");
+			}
+		}
 		reg_write(module_addr_y, GMODULEMAPADDR,
 			  SI_CH2_DS_OUT_ADDRY, MODULE_BASE);
 		reg_write(module_addr_uv, GMODULEMAPADDR,
 			  SI_CH2_DS_OUT_ADDRU, MODULE_BASE);
 	}
+}
+void si_tvin_irq_work(struct soc_camera_device *icd, struct camera_param *cam_param)
+{
+	struct videobuf_buffer *vb;
+
+	static int recount = 0;
+	
+	pr_debug("%s, start %d\n", __func__, recount);
+
+	if (recount == 0) {
+		if (!list_empty(&cam_param->capture)) {
+			cam_param->prev_frm = cam_param->cur_frm;
+			cam_param->cur_frm = list_entry(cam_param->capture.next, struct videobuf_buffer, queue);
+			list_del_init(&cam_param->cur_frm->queue);
+		} else {
+			cam_param->prev_frm = NULL;
+			printk("%s, capture cur frm is NULL\n", __func__);
+			return;
+		}
+	}
+	
+	set_frame(icd, cam_param->cur_frm);
+	cam_param->cur_frm->state = VIDEOBUF_ACTIVE;
+	BUG_ON(cam_param->prev_frm == cam_param->cur_frm);
+	if (recount == 0) {
+		recount = 1;
+		return;
+	}
+
+	/*send out a packet already recevied all data */
+	if (cam_param->prev_frm != NULL) {
+		vb = cam_param->prev_frm;
+		vb->state = VIDEOBUF_DONE;
+		do_gettimeofday(&vb->ts);
+		vb->field_count++;
+		wake_up(&vb->done);
+	}
+	
+	recount = 0;
+	return;
 }
 
 static inline void
@@ -279,6 +357,29 @@ static inline int module_isr(struct soc_camera_device *icd,
 {
 	unsigned int preline_int_pd;
 	struct videobuf_buffer *vb;
+	unsigned int temp_data = 0;
+	unsigned int nw = 0;
+	unsigned int nh = 0;
+
+	if ((module_int_stat & 0x3ff0000)) {
+	    temp_data = reg_read(GMODULEMAPADDR, MODULE_STAT, MODULE_BASE);
+        pr_err("SI_STAT is 0x%x, overflow or mismatch error, drop this frame.\n", temp_data);
+		reg_write(module_int_stat, GMODULEMAPADDR, MODULE_STAT,
+			MODULE_BASE);
+		return -1;
+	}
+
+    if (HOST_MODULE_CHANNEL_0 == cam_param->channel) {
+	    temp_data = reg_read(GMODULEMAPADDR, SI_CH1_VTD_CTL, MODULE_BASE);
+	    nw = (temp_data >> 3) & 0x1fff;
+	    nh = (temp_data >> 16) & 0xffff;
+        if (nw != icd->user_width || nh != icd->user_height) {
+            pr_err("receive error, drop this frame!nw = %d ; nh = %d ; u_w = %d ; u_h = %d =====\n", nw, nh, icd->user_width, icd->user_height);
+        	reg_write(module_int_stat, GMODULEMAPADDR, MODULE_STAT,
+        			MODULE_BASE);
+        	return -1;
+        }
+    }
 
 	if (cam_param->started == DEV_STOP) {
 		if (HOST_MODULE_CHANNEL_0 == cam_param->channel) {
@@ -300,11 +401,6 @@ static inline int module_isr(struct soc_camera_device *icd,
 				return -1;
 	}
 
-	if ((module_int_stat & 0x3ff0000)) {
-		reg_write(module_int_stat, GMODULEMAPADDR, MODULE_STAT,
-			MODULE_BASE);
-		return -1;
-	}
 	/*capture_stop function set it, clear it here anyway. */
 	reg_write(module_int_stat, GMODULEMAPADDR, MODULE_STAT, MODULE_BASE);
 	if (HOST_MODULE_CHANNEL_0 == cam_param->channel)
@@ -313,28 +409,33 @@ static inline int module_isr(struct soc_camera_device *icd,
 		preline_int_pd = MODULE_INT_STAT_CH2_PL_PD;
 
 	if (module_int_stat & preline_int_pd) {
-		/*send out a packet already recevied all data */
-		if (cam_param->prev_frm != NULL) {
-			vb = cam_param->prev_frm;
-			vb->state = VIDEOBUF_DONE;
-			do_gettimeofday(&vb->ts);
-			vb->field_count++;
-			wake_up(&vb->done);
-		}
 
-		if (!list_empty(&cam_param->capture)) {
-			cam_param->prev_frm = cam_param->cur_frm;
-			cam_param->cur_frm = list_entry(cam_param->capture.next,
+		if (cam_param->flags & SENSOR_FLAG_SI_TVIN)
+			si_tvin_irq_work(icd, cam_param);
+		else {
+			/*send out a packet already recevied all data */
+			if (cam_param->prev_frm != NULL) {
+				vb = cam_param->prev_frm;
+				vb->state = VIDEOBUF_DONE;
+				do_gettimeofday(&vb->ts);
+				vb->field_count++;
+				wake_up(&vb->done);
+			}
+
+			if (!list_empty(&cam_param->capture)) {
+				cam_param->prev_frm = cam_param->cur_frm;
+				cam_param->cur_frm = list_entry(cam_param->capture.next,
 						struct videobuf_buffer, queue);
-			list_del_init(&cam_param->cur_frm->queue);
-			/*set_rect(icd); */
-			set_frame(icd, cam_param->cur_frm);
-			cam_param->cur_frm->state = VIDEOBUF_ACTIVE;
-			BUG_ON(cam_param->prev_frm == cam_param->cur_frm);
-		} else {
-			cam_param->prev_frm = NULL;
-			/*set_rect(icd); */
-			set_frame(icd, cam_param->cur_frm);
+				list_del_init(&cam_param->cur_frm->queue);
+				/*set_rect(icd); */
+				set_frame(icd, cam_param->cur_frm);
+				cam_param->cur_frm->state = VIDEOBUF_ACTIVE;
+				BUG_ON(cam_param->prev_frm == cam_param->cur_frm);
+			} else {
+				cam_param->prev_frm = NULL;
+				/*set_rect(icd); */
+				set_frame(icd, cam_param->cur_frm);
+			}
 		}
 	}
 
@@ -396,6 +497,11 @@ module_set_output_fmt(struct soc_camera_device *icd, u32 fourcc)
 		module_out_fmt = reg_read(GMODULEMAPADDR, SI_CH2_DS_OUT_FMT,
 					  MODULE_BASE);
 		module_out_fmt &= ~MODULE_OUT_FMT_MASK;
+		
+		/* si tv in stride */
+		if (cam_param->flags & SENSOR_FLAG_SI_TVIN)
+			module_out_fmt |= icd->user_width << 16;
+
 		get_fmt(fourcc, &module_out_fmt);
 		reg_write(module_out_fmt, GMODULEMAPADDR, SI_CH2_DS_OUT_FMT,
 			  MODULE_BASE);
@@ -420,7 +526,6 @@ static int raw_store_set(struct soc_camera_device *icd)
 
 static void module_regs_init(void)
 {
-
 }
 
 static int ext_cmd(struct v4l2_subdev *sd, int cmd, void *args)
@@ -437,5 +542,4 @@ static int host_module_init(void)
 
 static void host_module_exit(void)
 {
-
 }

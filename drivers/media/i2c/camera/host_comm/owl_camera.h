@@ -34,6 +34,12 @@
 #define CAMERA_DATAWIDTH_10	    0x40
 #define CAMERA_DATAWIDTH_16	    0x80
 
+/* MIPI Parameters calcurate*/
+#define CSI_T_CLK_TERM_EN       30  /*ns*/
+#define CSI_T_CLK_SETTLE        120 /*ns*/
+#define CSI_T_DATA_TERM_EN      30  /*ns*/
+#define CSI_T_DATA_SETTLE       120 /*ns*/
+
 #define CAMERA_DATAWIDTH_MASK (CAMERA_DATAWIDTH_4 | \
 							CAMERA_DATAWIDTH_8 | \
 							CAMERA_DATAWIDTH_10 | \
@@ -60,6 +66,11 @@ struct camera_dev {
 	spinlock_t lock;	/* Protects video buffer lists */
 	int irq;
 	struct pinctrl *mfp;
+	
+	struct pinctrl *csi_dvp_mfp;
+	struct pinctrl *csi_mipi_mfp;
+	struct pinctrl *si_tvin_mfp;
+	
 	struct sensor_pwd_info spinfo;
 	struct module_regulators ir;
 	struct clk *module_clk_parent;
@@ -215,9 +226,9 @@ struct camera_param {
 #define MODULE_CTL_CHANNEL1_HSYNC_ACTIVE_HIGH   (0x1 << 11)
 #define MODULE_CTL_CHANNEL1_VSYNC_ACTIVE_HIGH   (0x1 << 10)
 #define MODULE_CTL_CHANNEL1_COLOR_SEQ_MASK      (0x3<<24)
-#define MODULE_CTL_CHANNEL1_COLOR_SEQ_UYVY      (0x0<<24)
+//#define MODULE_CTL_CHANNEL1_COLOR_SEQ_UYVY      (0x0<<24)
 #define MODULE_CTL_CHANNEL1_COLOR_SEQ_VYUY      (0x1<<24)
-#define MODULE_CTL_CHANNEL1_COLOR_SEQ_YUYV      (0x2<<24)
+//#define MODULE_CTL_CHANNEL1_COLOR_SEQ_YUYV      (0x2<<24)
 #define MODULE_CTL_CHANNEL1_COLOR_SEQ_YVYU      (0x3<<24)
 #define MODULE_CTL_CHANNEL1_COLOR_SEQ_SBGGR     (0x0<<24)
 #define MODULE_CTL_CHANNEL1_COLOR_SEQ_SGRBG     (0x1<<24)

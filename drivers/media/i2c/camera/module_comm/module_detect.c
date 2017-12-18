@@ -90,6 +90,10 @@ static int init_common(void)
 	g__spinfo.gpio_front.num = -1;
 	g__spinfo.gpio_front_reset.num = -1;
 	g__spinfo.gpio_rear_reset.num = -1;
+#if HDMI_INPUT
+	g__spinfo.gpio_hdmiin_reset.num = -1;
+	g__spinfo.gpio_hdmiin_pwdn.num = -1;
+#endif
 	g__spinfo.ch_clk[HOST_MODULE_CHANNEL_0] = NULL;
 	g__spinfo.ch_clk[HOST_MODULE_CHANNEL_1] = NULL;
 
@@ -138,10 +142,12 @@ static int gpio_init(struct device_node *fdt_node,
 
 static void gpio_exit(struct dts_gpio *gpio, bool value)
 {
-	if (gpio->num >= 0) {
-		set_gpio_level(gpio, value);
-		gpio_free(gpio->num);
-	}
+    if (gpio != NULL) {
+	    if (gpio->num >= 0) {
+	    	//set_gpio_level(gpio, value);
+	    	gpio_free(gpio->num);
+	    }
+    }
 }
 
 static int regulator_init(struct device_node *fdt_node,
@@ -227,14 +233,14 @@ static int isp_regulator_init(struct device_node *fdt_node,
 		if (regulator_init(fdt_node, "avdd-regulator",
 				   "avdd-regulator-scope", &ir->avdd.regul) && \
             regulator_init(fdt_node, "rear-avdd-regulator",
-				   "rear_avdd-regulator-scope", &ir->avdd.regul))
+				   "rear-avdd-regulator-scope", &ir->avdd.regul))
 			goto free_dvdd;
 #endif
 #if USE_AS_FRONT
 		if (regulator_init(fdt_node, "avdd-regulator",
 				   "avdd-regulator-scope", &ir->avdd.regul) && \
             regulator_init(fdt_node, "front-avdd-regulator",
-				   "rear_avdd-regulator-scope", &ir->avdd.regul))
+				   "front-avdd-regulator-scope", &ir->avdd.regul))
 			goto free_dvdd;
 #endif
 	} else if (!strcmp(avdd_src, "gpio")) {
@@ -392,17 +398,17 @@ static int isp_gpio_init(struct device_node *fdt_node,
 	if (!strcmp(board_type, "ces")) {
 		if (gpio_init(fdt_node, "front-reset-gpios",
 			      &spinfo->gpio_front_reset, GPIO_LOW)) {
-			goto fail;
+			goto no_normal_reset_gpio;
 		}
 		if (gpio_init(fdt_node, "rear-reset-gpios",
 			      &spinfo->gpio_rear_reset, GPIO_LOW)) {
-			goto fail;
+			goto no_normal_reset_gpio;
 		}
 		board_type_num = 1;
 	} else if (!strcmp(board_type, "evb")) {
 		if (gpio_init(fdt_node, "reset-gpios",
 			      &spinfo->gpio_front_reset, GPIO_LOW)) {
-			goto fail;
+			goto no_normal_reset_gpio;
 		}
 		spinfo->gpio_rear_reset.num = spinfo->gpio_front_reset.num;
 		spinfo->gpio_rear_reset.active_level =
@@ -410,44 +416,61 @@ static int isp_gpio_init(struct device_node *fdt_node,
 		board_type_num = 0;
 	} else {
 		DBG_ERR("get board type faild");
-		return -1;
+        goto no_normal_reset_gpio;
 	}
 
 	if (of_property_read_string(fdt_node, "sensors", &sensors)) {
 		DBG_ERR("get sensors faild");
-		goto free_reset;
+        goto no_normal_reset_gpio;
 	}
 
 	if (!strcmp(sensors, "front")) {
 		/* default is power-down */
 		if (gpio_init(fdt_node, "pwdn-front-gpios",
 			      &spinfo->gpio_front, GPIO_LOW)) {
-			goto free_reset;
+            goto no_normal_pwdn_gpio;
 		}
 		spinfo->flag = SENSOR_FRONT;
 	} else if (!strcmp(sensors, "rear")) {
 		if (gpio_init(fdt_node, "pwdn-rear-gpios",
 			      &spinfo->gpio_rear, GPIO_LOW)) {
-			goto free_reset;
+            goto no_normal_pwdn_gpio;
 		}
 		spinfo->flag = SENSOR_REAR;
 	} else if (!strcmp(sensors, "dual")) {
 		if (gpio_init(fdt_node, "pwdn-front-gpios",
 			      &spinfo->gpio_front, GPIO_LOW)) {
-			goto free_reset;
+            goto no_normal_pwdn_gpio;
 		}
 		if (gpio_init(fdt_node, "pwdn-rear-gpios",
 			      &spinfo->gpio_rear, GPIO_LOW)) {
-			goto free_reset;
+            goto no_normal_pwdn_gpio;
 		}
 		spinfo->flag = SENSOR_DUAL;
 	} else {
 		DBG_ERR("sensors of dts is wrong");
-		goto free_reset;
+        goto no_normal_pwdn_gpio;
 	}
 
 	return 0;
 
+ no_normal_reset_gpio:
+    pr_info("try get tc reset config \n");
+    if (gpio_init(fdt_node, "hdmiin-reset-gpios",
+    	      &spinfo->gpio_hdmiin_reset, GPIO_LOW)) {
+        goto free_reset;
+    }
+ no_normal_pwdn_gpio:
+    pr_info("try get tc pwdn config \n");
+    if (gpio_init(fdt_node, "hdmiin-pwdn-gpios",
+    	      &spinfo->gpio_hdmiin_pwdn, GPIO_LOW)) {
+        goto free_pwdn;
+    }
+    return 0;
+ free_pwdn:
+	DBG_ERR("isp_gpio_init error!!!");
+	gpio_exit(&spinfo->gpio_front, GPIO_LOW);
+	gpio_exit(&spinfo->gpio_rear, GPIO_LOW);
  free_reset:
 	DBG_ERR("isp_gpio_init error!!!");
 	gpio_exit(&spinfo->gpio_front_reset, GPIO_LOW);
@@ -567,15 +590,16 @@ int detect_init(void)
 		mf = 3;
 	}
 
-	ret = isp_gpio_init(fdt_node, &g__spinfo);
-	if (ret) {
-		DBG_ERR("pwdn init error!");
-		goto exit;
-	}
-
 	ret = isp_regulator_init(fdt_node, &g_isp_ir);
 	if (ret) {
 		DBG_ERR("avdd init error!");
+		goto exit;
+	}
+	isp_regulator_enable(&g_isp_ir);
+
+	ret = isp_gpio_init(fdt_node, &g__spinfo);
+	if (ret) {
+		DBG_ERR("pwdn init error!");
 		goto exit;
 	}
 
@@ -584,8 +608,6 @@ int detect_init(void)
 		DBG_ERR("enable isp clock error");
 		goto exit;
 	}
-
-	isp_regulator_enable(&g_isp_ir);
 
 	return ret;
  exit:

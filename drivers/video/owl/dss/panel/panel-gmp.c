@@ -39,11 +39,14 @@
 #include <linux/bootafinfo.h>
 #include <video/owl_dss.h>
 
-static uint32_t gmc_init[] = {0x00110500, 0x00290500};
-#define GMC_INIT_LENS	(ARRAY_SIZE(gmc_init))
-
-static uint32_t gmc_disable[] = {0x00280500, 0x00100500};
-#define GMC_DIS_LENS	(ARRAY_SIZE(gmc_disable))
+#define MIPI_MAX_PARS   100
+struct dsi_cmd {
+	uint8_t		data_type;
+	uint8_t		address;
+	uint8_t		parameters[MIPI_MAX_PARS];
+	uint8_t		n_parameters;
+	uint8_t		delay;
+};
 
 struct dsi_init_cmd {
 	uint32_t cmd_nums;
@@ -58,7 +61,11 @@ struct panel_gmp_data {
 	struct platform_device *pdev;
 
 	/* Specific data can be added here */
-	struct dsi_init_cmd	*cmd;
+	struct dsi_cmd			*init_cmd_list;
+	uint32_t			n_init_cmd_list;
+
+	struct dsi_cmd			*disable_cmd_list;
+	uint32_t			n_disable_cmd_list;
 };
 
 static void __panel_gmp_power_on(struct panel_gmp_data *gmp)
@@ -131,40 +138,92 @@ static int panel_gmp_enable(struct owl_panel *panel)
 	struct device *dev = &gmp->pdev->dev;
 	struct owl_display_ctrl *ctrl = panel->ctrl;
 	bool ctrl_is_enabled = false;
+
+	uint8_t *buffer, buffer_size;
+	struct dsi_cmd *tmp_cmd = NULL;
 	int i;
 
 	dev_info(dev, "%s\n", __func__);
 
 	/* get controller status */
 	ctrl_is_enabled = ctrl->ops->ctrl_is_enabled(ctrl);
-	if (!ctrl_is_enabled) {
-		/* send mipi initail command */
-		if (ctrl->ops && ctrl->ops->aux_write) {
-			/* send mipi initail command */
-			ctrl->ops->aux_write(ctrl, (char *)gmp->cmd->mipi_cmd,
-					gmp->cmd->cmd_nums);
-			/* general mipi command TODO*/
-			ctrl->ops->aux_write(ctrl, (char *)&gmc_init[0], 1);
-			/* the delay time is necessary, at least 150ms */
-			mdelay(200);
-			ctrl->ops->aux_write(ctrl, (char *)&gmc_init[1], 1);
+	if (ctrl_is_enabled)
+		return 0;
+
+	tmp_cmd = gmp->init_cmd_list;
+
+	for (i = 0; i < gmp->n_init_cmd_list; i++) {
+
+		buffer_size = 4 + tmp_cmd[i].n_parameters;
+		buffer = kmalloc(buffer_size, GFP_KERNEL);
+		if(!buffer) {
+			dev_err(dev, "malloc buffer failed!\n");
+			return -1;
 		}
+
+		buffer[0] = tmp_cmd[i].delay;
+		buffer[1] = tmp_cmd[i].data_type;
+		buffer[2] = tmp_cmd[i].n_parameters;
+		buffer[3] = tmp_cmd[i].address;
+
+		dev_dbg(dev, "cmd buffer size %d\n", buffer_size);
+		dev_dbg(dev, "data type 0x%x, n_parameters %d, address 0x%x\n",
+			buffer[1], buffer[2], buffer[3]);
+
+		memcpy(&buffer[4], &tmp_cmd[i].parameters,
+					tmp_cmd[i].n_parameters);
+
+		/* send mipi initail command */
+		if (ctrl->ops && ctrl->ops->aux_write)
+			ctrl->ops->aux_write(ctrl, (char *)buffer, buffer_size);
+
+		kfree(buffer);
 	}
+
+	return 0;
 }
 static int panel_gmp_disable(struct owl_panel *panel)
 {
 	struct panel_gmp_data *gmp = panel->pdata;
+	struct device *dev = &gmp->pdev->dev;
 	struct owl_display_ctrl *ctrl = panel->ctrl;
+	uint8_t *buffer, buffer_size;
+	struct dsi_cmd *tmp_cmd = NULL;
 	int i;
 
-	dev_info(&gmp->pdev->dev, "%s\n", __func__);
+	dev_info(dev, "%s\n", __func__);
 
-	/* send disable general mipi command, gmc */
-	if (ctrl->ops && ctrl->ops->aux_write)
-		for (i = 0; i < GMC_DIS_LENS; i++) {
-			ctrl->ops->aux_write(ctrl, (char *)&gmc_disable[i], 1);
-			mdelay(1);
+	tmp_cmd = gmp->disable_cmd_list;
+
+	for (i = 0; i < gmp->n_disable_cmd_list; i++) {
+
+		buffer_size = 4 + tmp_cmd[i].n_parameters;
+		buffer = kmalloc(buffer_size, GFP_KERNEL);
+		if(!buffer) {
+			dev_err(dev, "malloc buffer failed!\n");
+			return -1;
 		}
+
+		buffer[0] = tmp_cmd[i].delay;
+		buffer[1] = tmp_cmd[i].data_type;
+		buffer[2] = tmp_cmd[i].n_parameters;
+		buffer[3] = tmp_cmd[i].address;
+
+		dev_dbg(dev, "cmd buffer size %d\n", buffer_size);
+		dev_dbg(dev, "data type 0x%x, n_parameters %d, address 0x%x\n",
+			buffer[1], buffer[2], buffer[3]);
+
+		memcpy(&buffer[4], &tmp_cmd[i].parameters,
+					tmp_cmd[i].n_parameters);
+
+		/* send mipi initail command */
+		if (ctrl->ops && ctrl->ops->aux_write)
+			ctrl->ops->aux_write(ctrl, (char *)buffer, buffer_size);
+
+		kfree(buffer);
+	}
+
+	return 0;
 }
 
 static struct owl_panel_ops panel_gmp_panel_ops = {
@@ -187,47 +246,126 @@ static struct of_device_id panel_gmp_of_match[] = {
 static int panel_parse_info(struct device_node *of_node, struct device *dev,
 		struct owl_panel *panel, struct panel_gmp_data *gmp)
 {
-	int cmd_numbers = 0, ret;
-	uint32_t *cmd, len;
 	struct property *prop;
-	pr_info("%s\n", __func__);
-	/*
-	 * parse mipi initial command
-	 * */
-	prop = of_find_property(of_node, "mipi_cmd", &len);
-	if (!prop) {
-		dev_dbg(dev, "Can not read property: cmds\n");
-		return -EINVAL;
-	}
-	dev_dbg(dev, "%s, len  %d\n", __func__, len);
 
-	gmp->cmd = devm_kzalloc(dev, sizeof(struct dsi_init_cmd),
-				GFP_KERNEL);
-	if (!gmp->cmd) {
-		dev_err(dev, "alloc cmd failed\n");
-		return -ENOMEM;
-	}
-	if (len > 4) {
-		gmp->cmd->mipi_cmd = devm_kzalloc(dev, len, GFP_KERNEL);
-		if (!gmp->cmd->mipi_cmd) {
-			dev_err(dev, "alloc mipi_cmd failed\n");
-			return -ENOMEM;
+	struct dsi_cmd *cmd = NULL, *temp = NULL;
+	char entryname[64];
+	int index, ret, len, i;
+	uint32_t byte_lens;
+	struct device_node *entry;
+	pr_info("%s\n", __func__);
+
+	/* parse mipi initial cmd ... */
+	dev_dbg(dev, "parse mipi initial cmd\n");
+	index = 0;
+	do {
+		snprintf(entryname, sizeof(entryname), "mipi_init_cmd-%u", index);
+		entry = of_parse_phandle(of_node, entryname, 0);
+		if (!entry) {
+			pr_info("no entry for %s\n", entryname);
+			break;
 		} else {
-			ret = of_property_read_u32_array(of_node,
-					"mipi_cmd", gmp->cmd->mipi_cmd,
-					len / sizeof(uint32_t));
-			if (ret < 0) {
-				dev_err(dev, "%s:parse mipi initail command failed!\n",
-					__func__);
-				return ret;
+			temp = krealloc(cmd, (index + 1) * sizeof(*cmd), GFP_KERNEL);
+                        if (!temp) {
+				dev_err(dev, "krealloc(cmd) failed\n");
+				return -ENOMEM;
 			}
-			gmp->cmd->cmd_nums = len / sizeof(uint32_t);
+
+			of_property_read_u32(entry, "data_type", &temp[index].data_type);
+			of_property_read_u32(entry, "address", &temp[index].address);
+
+			dev_dbg(dev, "data_type 0x%x\n", temp[index].data_type);
+			dev_dbg(dev, "address 0x%x\n", temp[index].address);
+
+			prop = of_find_property(entry, "parameters", &len);
+			if (!prop) {
+				dev_dbg(dev, "Can not read property: parameters\n");
+				return -EINVAL;
+			}
+			/*
+			ret = of_property_read_u8_array(of_node,
+					"parameters", &temp[index].parameters[0],
+					len);
+			*/
+			uint8_t *ret;
+			ret = of_get_property(entry, "parameters", &len);
+			for (i = 0; i < len; i++)
+				dev_dbg(dev, "parameters 0x%x\n", ret[i]);
+			memcpy(&temp[index].parameters[0], ret, len);
+
+			temp[index].n_parameters = len;
+			dev_dbg(dev, "parameters lens %d\n", len);
+
+			of_property_read_u32(entry, "delay", &temp[index].delay);
+			dev_dbg(dev, "delay %d\n", temp[index].delay);
+
+			cmd = temp;
+			index++;
 		}
-	} else {
-		gmp->cmd->mipi_cmd == NULL;
-		gmp->cmd->cmd_nums == 0;
-		dev_dbg(dev, "%s: No mipi initail command!\n", __func__);
-	}
+	} while (1);
+
+	gmp->init_cmd_list = cmd;
+	gmp->n_init_cmd_list = index;
+	dev_dbg(dev, "p init_cmd_list 0x%x\n", gmp->init_cmd_list);
+	dev_dbg(dev, "n_init_cmd_list %d\n", gmp->n_init_cmd_list);
+
+	/* parse mipi disable cmd ... */
+	index = 0;
+	cmd = NULL;
+	temp = NULL;
+
+	dev_dbg(dev, "parse mipi disable cmd\n");
+	do {
+		snprintf(entryname, sizeof(entryname), "mipi_dis_cmd-%u", index);
+		entry = of_parse_phandle(of_node, entryname, 0);
+		if (!entry) {
+			pr_info("no entry for %s\n", entryname);
+			break;
+		} else {
+			temp = krealloc(cmd, (index + 1) * sizeof(*cmd), GFP_KERNEL);
+	 		if (!temp) {
+				dev_err(dev, "krealloc(cmd) failed\n");
+				return -ENOMEM;
+			}
+
+			of_property_read_u32(entry, "data_type", &temp[index].data_type);
+			of_property_read_u32(entry, "address", &temp[index].address);
+
+			dev_dbg(dev, "data_type 0x%x\n", temp[index].data_type);
+			dev_dbg(dev, "address 0x%x\n", temp[index].address);
+
+			prop = of_find_property(entry, "parameters", &len);
+			if (!prop) {
+				dev_dbg(dev, "Can not read property: parameters\n");
+				return -EINVAL;
+			}
+
+			/*
+			ret = of_property_read_u32_array(of_node,
+					"parameters", &temp[index].parameters,
+					len);
+			*/
+
+			uint8_t *ret;
+			ret = of_get_property(entry, "parameters", &len);
+			for (i = 0; i < len; i++)
+				dev_dbg(dev, "parameters 0x%x\n", ret[i]);
+			memcpy(&temp[index].parameters[0], ret, len);
+			temp[index].n_parameters = len;
+			dev_dbg(dev, "parameters lens %d\n", len);
+
+			of_property_read_u32(entry, "delay", &temp[index].delay);
+			dev_dbg(dev, "delay %d\n", temp[index].delay);
+
+			cmd = temp;
+			index++;
+		}
+	} while (1);
+
+	gmp->disable_cmd_list = cmd;
+	gmp->n_disable_cmd_list = index;
+	dev_dbg(dev, "p disable_cmd_list 0x%x\n", gmp->disable_cmd_list);
+	dev_dbg(dev, "n_disable_cmd_list %d\n", gmp->n_disable_cmd_list);
 
 	/*
 	 * parse mipi panel power on gpio,  It is not necessary!!!
@@ -274,8 +412,6 @@ static int panel_parse_info(struct device_node *of_node, struct device *dev,
 
 static int panel_gmp_probe(struct platform_device *pdev)
 {
-	int ret = 0;
-
 	const struct of_device_id *match;
 	struct device *dev = &pdev->dev;
 	struct device_node *of_node = dev->of_node;

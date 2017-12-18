@@ -105,6 +105,9 @@ static int camera_module_init_process(struct i2c_client *client)
 	download_fw = true;
 #endif
 
+#if HDMI_INPUT
+    tc358749_init(client);
+#endif
 	return ret;
 }
 
@@ -202,9 +205,12 @@ static int camera_module_set_params(struct i2c_client *client, u32 *width,
 	 */
 	priv->win = camera_module_select_win(*width, *height);
 	DBG_INFO("the window name is %s", priv->win->name);
+
+#if !HDMI_INPUT
 	ret = camera_write_array(client->adapter, priv->win->win_regs);
 	if (ret < 0)
 		return ret;
+#endif
 
 	if (priv->info->flags & SENSOR_FLAG_CHANNEL0)
 		module_set_mirror_flip(client, mf % 10);
@@ -745,8 +751,9 @@ static int camera_module_s_power(struct v4l2_subdev *sd, int on)
 	ret = soc_camera_power_on(&client->dev, desc);
 	if (ret < 0)
 		return ret;
-
+#if !HDMI_INPUT
 	ret = camera_write_array(client->adapter, module_init_regs);
+#endif
 #endif
 
 	return ret;
@@ -1102,6 +1109,7 @@ static int __init camera_module_init(void)
 	ret =
 	    sensor_mod_init(&camera_module_link, &asoc_camera_device,
 			    &camera_i2c_driver);
+
 	return ret;
 }
 

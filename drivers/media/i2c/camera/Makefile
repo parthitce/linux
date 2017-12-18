@@ -10,9 +10,11 @@ obj-$(CONFIG_GC2155) += gc2155/
 obj-$(CONFIG_GC0312) += gc0312/
 obj-$(CONFIG_GC2035) += gc2035/
 obj-$(CONFIG_GS5604) += gs5604/
+obj-$(CONFIG_S5K4EC) += s5k4ec/
 obj-$(CONFIG_IMX0219) += imx0219/
 obj-$(CONFIG_OV2685) += ov2685/
 obj-$(CONFIG_OV5645) += ov5645/
 obj-$(CONFIG_TC358749) += tc358749/
 obj-$(CONFIG_FLASHLIGHT) += flashlight/
+obj-$(CONFIG_OWL_CAMERA_SI) += ark7116/
 

@@ -45,6 +45,13 @@ struct lcdc_config {
 	uint32_t			dclk_inversion;
 	uint32_t			lde_inversion;
 
+	/* properties for lvds port */
+	uint32_t			lvds_format; 		/* 0: 18-bit; 1: 24-bit */
+	uint32_t			lvds_channel; 		/* 0: single channel; 1: dual channel */
+	uint32_t			lvds_bit_mapping; 	/* 0: NS Mode; 1: JEIDA Mode */
+	uint32_t			lvds_ch_swap;  		/* 0: No Swap; 1: Odd/Even Swap */
+	uint32_t			lvds_mirror;  		/* 0: normal; 1: mirror */
+
 	uint32_t			pclk_parent;
 	uint32_t			pclk_rate;
 };
@@ -246,9 +253,20 @@ static void lcdc_lvds_port_enable(struct lcdc_data *lcdc, bool enable)
 		val = REG_SET_VAL(val, 0, 4, 5);
 		lcdc_writel(lcdc, LCDC_LVDS_ALG_CTL0, 0xc141a030);
 
+		/* FIXME */
+		lcdc_writel(lcdc, LCDC_LVDS_CTL, 0x000a9500);
+
+		val = lcdc_readl(lcdc, LCDC_LVDS_CTL);
+		val = REG_SET_VAL(val, lcdc->configs.lvds_mirror, 6, 6);
+		val = REG_SET_VAL(val, lcdc->configs.lvds_ch_swap, 5, 5);
+		val = REG_SET_VAL(val, lcdc->configs.lvds_bit_mapping, 4, 3);
+		val = REG_SET_VAL(val, lcdc->configs.lvds_channel, 2, 2);
+		val = REG_SET_VAL(val, lcdc->configs.lvds_format, 1, 1);
+		lcdc_writel(lcdc, LCDC_LVDS_CTL, val);
+
 		val = lcdc_readl(lcdc, LCDC_LVDS_CTL);
 		val = REG_SET_VAL(val, enable, 0, 0);
-		lcdc_writel(lcdc, LCDC_LVDS_CTL, 0x000a9521);
+		lcdc_writel(lcdc, LCDC_LVDS_CTL, val);
 	} else {
 		val = lcdc_readl(lcdc, LCDC_LVDS_ALG_CTL0);
 		val = REG_SET_VAL(val, 0, 30, 31);
@@ -383,6 +401,18 @@ static int lcdc_parse_configs(struct lcdc_data *lcdc)
 		return -EINVAL;
 	if (OF_READ_U32("lde_inversion", &configs->lde_inversion))
 		return -EINVAL;
+
+	/* parse lvds port propertis */
+	if (OF_READ_U32("lvds_format", &configs->lvds_format))
+		configs->lvds_format = 0;
+	if (OF_READ_U32("lvds_channel", &configs->lvds_channel))
+		configs->lvds_channel = 0;
+	if (OF_READ_U32("lvds_bit_mapping", &configs->lvds_bit_mapping))
+		configs->lvds_bit_mapping = 0;
+	if (OF_READ_U32("lvds_ch_swap", &configs->lvds_ch_swap))
+		configs->lvds_ch_swap = 0;
+	if (OF_READ_U32("lvds_mirror", &configs->lvds_mirror))
+		configs->lvds_mirror = 0;
 
 	if (OF_READ_U32("pclk_parent", &configs->pclk_parent))
 		return -EINVAL;

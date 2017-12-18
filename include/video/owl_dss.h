@@ -42,6 +42,8 @@ struct owl_de_device;
 #define DSS_VMODE_NONINTERLACED		0	/* non interlaced */
 #define DSS_VMODE_INTERLACED		1	/* interlaced */
 
+#define DSS_PATH_PANEL_MAX_MUM		3	/* max panel numbers of path */
+
 struct owl_videomode {
 	int xres;		/* visible resolution */
 	int yres;
@@ -362,7 +364,11 @@ struct owl_panel {
 	int				draw_width;
 	int				draw_height;
 
+	/* panel attached to panel list */
 	struct list_head		list;
+
+	/* panel attached to path */
+	struct list_head		head;
 
 	struct device			*dev;
 	void				*pdata;
@@ -577,7 +583,10 @@ struct owl_de_path {
 	const char			*name;
 	const uint32_t			supported_displays;
 
-	struct owl_panel		*panel;
+	/* all panel attached to this path */
+	struct list_head		panels;
+
+	struct owl_panel		*current_panel;
 
 	struct owl_de_path_info		info;
 	const struct owl_de_path_ops	*ops;
@@ -833,6 +842,7 @@ void owl_de_path_apply(struct owl_de_path *path);
 void owl_de_path_wait_for_go(struct owl_de_path *path);
 
 int owl_de_path_add_panel(struct owl_panel *panel);
+int owl_de_path_update_panel(struct owl_panel *panel);
 int owl_de_path_remove_panel(struct owl_panel *panel);
 
 /*

@@ -67,6 +67,7 @@ static const struct cvbs_config cvbs_timings[] = {
 #define CEA_TIMINGS_LEN		(ARRAY_SIZE(cvbs_timings))
 
 #define OWL_DUAL_DISPLAY_FOR_S700
+#define CVBS_CABLE_CHECK_PERIOD	(msecs_to_jiffies(2000))
 
 inline void cvbs_write_reg(struct cvbs_data *cvbs, const u32 index, u32 val)
 {
@@ -146,7 +147,9 @@ static bool cvbs_pending(struct cvbs_data *cvbs, int flag)
 	u32 val;
 	struct platform_device  *pdev = cvbs->pdev;
 	struct device	*dev = &pdev->dev;
+
 	dev_dbg(dev, "%s\n", __func__);
+
 	if (flag == CVBS_IN) {
 		val = cvbs_read_reg(cvbs, TVOUT_STA);
 		return (REG_GET_VAL(val, 3, 3) == 1);
@@ -200,7 +203,7 @@ static irqreturn_t cvbs_irq_handler(int irq, void *data)
 	dev_dbg(dev, "[%s start]\n", __func__);
 	if (cvbs_pending(cvbs, CVBS_IN)) {
 		cvbs->is_connected = true;
-		dev_dbg(dev, "CVBS is in\n");
+		dev_info(dev, "CVBS is in\n");
 		cvbs_irq_enable(cvbs, CVBS_IN, false);
 		cvbs_irq_enable(cvbs, CVBS_OUT, true);
 
@@ -211,7 +214,7 @@ static irqreturn_t cvbs_irq_handler(int irq, void *data)
 	}
 	if (cvbs_pending(cvbs, CVBS_OUT)) {
 		cvbs->is_connected = false;
-		dev_dbg(dev, "CVBS is out\n");
+		dev_info(dev, "CVBS is out\n");
 		cvbs_irq_enable(cvbs, CVBS_OUT, false);
 		cvbs_irq_enable(cvbs, CVBS_IN, true);
 
@@ -221,7 +224,7 @@ static irqreturn_t cvbs_irq_handler(int irq, void *data)
 		schedule_work(&cvbs->cvbs_out_work);
 	}
 
-	dev_dbg(dev, "[%s end]\n", __func__);
+	dev_info(dev, "[%s end]\n", __func__);
 	return IRQ_HANDLED;
 }
 static struct of_device_id owl_cvbs_of_match[] = {
@@ -538,7 +541,7 @@ static void cvbs_plugin_auto_detect(struct cvbs_data *cvbs, bool enable)
 	dev_dbg(dev, "%s\n", __func__);
 
 	auto_detect_bit(cvbs, CVBS_IN);
-	cvbs_irq_enable(cvbs, CVBS_IN, enable);
+	//cvbs_irq_enable(cvbs, CVBS_IN, enable);
 }
 static int owl_cvbs_display_enable(struct owl_display_ctrl *ctrl)
 {
@@ -590,19 +593,11 @@ static void owl_cvbs_hpd_enable(struct owl_display_ctrl *ctrl, bool enable)
 		 * */
 		cvbs_plugin_auto_detect(cvbs, true);
 
-		/*
-		 * Switching cvbs resolution, use this interface,
-		 * ensure tvaout is connected when switching the resolution
-		 * */
-		if (cvbs->is_connected)
-			set_cvbs_status(cvbs, &cdev, 1);
+		schedule_delayed_work(&cvbs->cable_check_dwork, 0);
 	} else if (!enable && cvbs->hpd_en) {
+
 		cvbs->hpd_en = false;
 
-		/*
-		 * Switching cvbs resolution, use this interface
-		 * */
-		set_cvbs_status(cvbs, &cdev, 0);
 	}
 
 }
@@ -660,8 +655,8 @@ static bool owl_cvbs_hpd_is_panel_connected(struct owl_display_ctrl *ctrl)
 	struct device	*dev = &pdev->dev;
 	int status;
 
-	dev_dbg(dev, "%s: connected is:%d\n", __func__, cvbs->is_connected);
-	return cvbs->is_connected;
+	dev_dbg(dev, "%s, %d\n", __func__, cvbs->cable_status);
+	return cvbs->cable_status;
 }
 static struct owl_display_ctrl_ops owl_cvbs_ctrl_ops = {
 	.add_panel = owl_cvbs_add_panel,
@@ -712,6 +707,76 @@ static int cvbs_get_resources(struct platform_device *pdev)
 	return 1;
 }
 
+/*
+ * At the Time Point, the key state values are:
+ * @hotplug event
+ * 	---------------time line---------------->
+ * 	hpd_en:		1——>1——>1——>1——>1——>1——>1
+ *
+ * 	is_connected:	1——>0——>0——>0——>1——>1——>1
+ * 	updated_status:	1——>0——>0——>0——>1——>1——>1
+ * 	cable_status:	1——>1——>0——>0——>0——>1——>1
+ *
+ * @resolution switching event
+ * 	---------------time line---------------->
+ *	hpd_en:		1——>0-->0-->0-->0——>1——>1
+ *
+ * 	is_connected:	1——>1-->1-->1-->1——>1——>1
+ * 	updated_status:	1——>0-->0-->0-->0——>1——>1
+ * 	cable_status:	1——>1-->0-->0-->0——>0——>1
+ */
+static void cvbsc_cable_check_cb(struct work_struct *work)
+{
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct cvbs_data *cvbs = container_of(dwork, struct cvbs_data,
+						cable_check_dwork);
+	struct platform_device  *pdev = cvbs->pdev;
+	struct device	*dev = &pdev->dev;
+
+	bool updated_status = cvbs->cable_status;
+
+	dev_dbg(dev, "%s: hpd_en %d, cable_status %d, cable is connected %d\n",
+		__func__, cvbs->hpd_en, cvbs->cable_status, cvbs->is_connected);
+
+	if (cvbs_pending(cvbs, CVBS_IN)) {
+		cvbs->is_connected = true;
+		dev_info(dev, "CVBS is in\n");
+
+		cvbs_clear_pending(cvbs, CVBS_IN);
+		auto_detect_bit(cvbs, CVBS_OUT);
+
+		enable_cvbs_output_configs(cvbs);
+		updated_status = true;
+	}
+
+	if (cvbs_pending(cvbs, CVBS_OUT)) {
+		cvbs->is_connected = false;
+		dev_info(dev, "CVBS is out\n");
+
+		cvbs_clear_pending(cvbs, CVBS_OUT);
+		auto_detect_bit(cvbs, CVBS_IN);
+
+		disable_cvbs_output_configs(cvbs);
+		updated_status = false;
+	}
+
+	if (cvbs->hpd_en && cvbs->is_connected)
+		updated_status = true;
+	else
+		updated_status = false;
+
+	/* Time Point */
+	if (updated_status != cvbs->cable_status) {
+		cvbs->cable_status = updated_status;
+		set_cvbs_status(cvbs, &cdev, updated_status);
+	}
+
+	/* re-schedule check_cb, in case TV do not send hotplug IRQ */
+	if (cvbs->hpd_en)
+		schedule_delayed_work(&cvbs->cable_check_dwork,
+				      CVBS_CABLE_CHECK_PERIOD);
+}
+
 static int owl_cvbs_probe(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -743,9 +808,11 @@ static int owl_cvbs_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	#if 0
 	/*TO DO*/
 	/*clear interrup*/
 	cvbs_irq_enable(cvbs, CVBS_IN, false);
+
 	cvbs->irq = platform_get_irq(pdev, 0);
 	if (cvbs->irq < 0) {
 		dev_err(dev, "%s: can't get irq\n", __func__);
@@ -757,6 +824,7 @@ static int owl_cvbs_probe(struct platform_device *pdev)
 				__func__, cvbs->irq);
 		return -EBUSY;
 	}
+	#endif
 
 	/*parse params*/
 	ret = cvbs_parse_params(pdev, cvbs);
@@ -767,7 +835,9 @@ static int owl_cvbs_probe(struct platform_device *pdev)
 
 	cvbs->hpd_en = false;
 	cvbs->is_connected = false;
+	cvbs->cable_status = false;
 
+	#if 0
 	cvbs->wq = create_workqueue("s700-cvbs");
 	INIT_WORK(&cvbs->cvbs_in_work, do_cvbs_in);
 	INIT_WORK(&cvbs->cvbs_out_work, do_cvbs_out);
@@ -775,6 +845,10 @@ static int owl_cvbs_probe(struct platform_device *pdev)
 
 	queue_delayed_work(cvbs->wq, &cvbs->cvbs_check_work,
 				msecs_to_jiffies(3000));
+	#endif
+
+	INIT_DELAYED_WORK(&cvbs->cable_check_dwork, cvbsc_cable_check_cb);
+
 	ret = switch_dev_register(&cdev);
 	ret |= switch_dev_register(&sdev_cvbs_audio);
 	if (ret < 0) {
@@ -804,6 +878,7 @@ static int owl_cvbs_probe(struct platform_device *pdev)
 	 */
 	if (cvbs->tvout_enabled) {
 		cvbs->is_connected = true;
+		cvbs->cable_status = true;
 
 		/* power on TO DO */
 		cvbs_power_on(cvbs);

@@ -660,7 +660,7 @@ static void atc260x_charger_turn_on(struct atc260x_charger *charger)
 static int atc260x_charger_match_cc(struct atc260x_charger *charger, int mode)
 {
 	int cc;
-
+	struct atc260x_dev *atc260x = charger->atc260x;
 	switch (mode) {
 	case WALL_PLUGGED:
 		if (owl_panel_status_get())
@@ -671,11 +671,18 @@ static int atc260x_charger_match_cc(struct atc260x_charger *charger, int mode)
 
 	case USB_PLUGGED:
 		if (charger->usb_plugged_type == USB_PLUGGED_PC) {
+			charger->ops->set_vbus_current_lmt(atc260x, VBUS_CURR_LIMT_500MA);
 			if (owl_panel_status_get())
 				cc = charger->items->bl_on_current_usb_pc;
 			else
 				cc = charger->items->bl_off_current_usb_pc;
 		} else if (charger->usb_plugged_type == USB_PLUGGED_ADP) {
+			if(charger->items->support_adaptor_type == 3)
+			{
+				charger->ops->set_vbus_ctl_en(atc260x, true);
+		                charger->ops->set_vbus_ctlmode(atc260x, CURRENT_LIMITED);
+				charger->ops->set_vbus_current_lmt(atc260x, VBUS_CURR_LIMT_100MA);
+			}
 			if (owl_panel_status_get()) {
 				if ((charger->bat_info.bat_vol > 3800000) && \
 					(charger->items->bl_on_current_usb_adp_high > \

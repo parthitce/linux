@@ -754,9 +754,9 @@ static unsigned int  owl_mfp1_31_29_ks_in2_funcs[] = {
 	OWL_MUX_JTAG,
 	OWL_MUX_NOR,
 	OWL_MUX_BT,
-	OWL_MUX_PWM4,
+	OWL_MUX_PWM0,
 	OWL_MUX_SENS1,
-	OWL_MUX_PWM4,
+	OWL_MUX_PWM0,
 	OWL_MUX_P0,
 };
 
@@ -790,9 +790,9 @@ static unsigned int  owl_mfp1_31_29_ks_in0_funcs[] = {
 	OWL_MUX_JTAG,
 	OWL_MUX_NOR,
 	OWL_MUX_BT,
-	OWL_MUX_PWM0,
+	OWL_MUX_PWM4,
 	OWL_MUX_SENS1,
-	OWL_MUX_PWM0,
+	OWL_MUX_PWM4,
 	OWL_MUX_P0,
 };
 
@@ -2202,7 +2202,7 @@ static const char * const jtag_groups[] = {
 static const char * const pwm0_groups[] = {
 	"mfp0_27_26_rxd2",
 	"mfp0_15_13_rmii_txen",
-	"mfp1_31_29_ks_in0",
+	"mfp1_31_29_ks_in2",
 
 	"mfp3_13_12",
 };
@@ -2216,6 +2216,7 @@ static const char * const pwm1_groups[] = {
 
 static const char * const pwm2_groups[] = {
 	"mfp0_25_23",
+	"mfp0_27_26_rxd3",
 	"mfp0_10_8_rmii_rxd1",
 	"mfp1_28_26_ks_out0",
 	"mfp1_25_23",

@@ -35,6 +35,7 @@ config SND_SOC_GENERIC_DMAENGINE_PCM
 
 # All the supported SoCs
 source "sound/soc/atc260x/Kconfig"
+source "sound/soc/atc260x-new/Kconfig"
 source "sound/soc/atmel/Kconfig"
 source "sound/soc/au1x/Kconfig"
 source "sound/soc/blackfin/Kconfig"

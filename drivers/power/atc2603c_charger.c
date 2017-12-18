@@ -169,13 +169,6 @@ enum CC_TIMER {
 	CC_TIMER_12H,
 };
 
-enum VBUS_CURRENT_LMT {
-	VBUS_CURR_LIMT_100MA,
-	VBUS_CURR_LIMT_300MA,
-	VBUS_CURR_LIMT_500MA,
-	VBUS_CURR_LIMT_800MA
-};
-
 enum VBUS_VOLTAGE_LMT {
 	VBUS_VOL_LIMT_4200MV,
 	VBUS_VOL_LIMT_4300MV,
@@ -883,7 +876,7 @@ static void atc2603c_charger_init_base(struct atc260x_dev *atc260x)
 	/* wall init*/
 	atc2603c_charger_set_wall_pd(atc260x, true);
 	/*vbus init*/
-	atc2603c_charger_set_vbus_current_lmt(atc260x, VBUS_CURR_LIMT_500MA);
+	//atc2603c_charger_set_vbus_current_lmt(atc260x, VBUS_CURR_LIMT_500MA);
 	atc2603c_charger_set_vbus_vol_lmt(atc260x, VBUS_VOL_LIMT_4300MV);
 }
 
@@ -954,4 +947,5 @@ struct atc260x_charger_ops atc2603c_charger_ops = {
 	.set_syspwr_steady = atc2603c_charger_syspwr_steady,
 	.set_otint_en = atc2603c_charger_set_otint_en,
 	.clear_otint_pending = atc2603c_charger_clear_otint_pending,
+	.set_vbus_current_lmt = atc2603c_charger_set_vbus_current_lmt,
 };

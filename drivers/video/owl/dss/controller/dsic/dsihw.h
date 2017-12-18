@@ -169,10 +169,19 @@ struct dsi_data {
 	bool				enabled;
 	uint32_t			hsclk_pll;/* dsi pll clk */
 
+	/* dma for dsi long command */
+	struct dma_chan			*tx_dma_chan;
+	dma_addr_t			tx_addr;
+	unsigned int			dma_dir;
+	enum dma_transfer_direction	slave_dirn;
+	struct dma_async_tx_descriptor	*desc;
+	struct completion		dma_complete;
+
 	struct mutex			lock;
 	/*
 	 *resources used by DSI controller
 	 */
+	resource_size_t			mapbase; /* dsi ctrl phyaddr for ioremap */
 	void __iomem			*base;
 	void __iomem			*cmu_base;
 	void __iomem			*sps_ctl_reg;
@@ -181,6 +190,56 @@ struct dsi_data {
 	struct clk			*clk;
 	struct clk			*clk_24m;
 };
+
+
+/* MIPI DSI Processor-to-Peripheral transaction types */
+enum {
+	MIPI_DSI_V_SYNC_START				= 0x01,
+	MIPI_DSI_V_SYNC_END				= 0x11,
+	MIPI_DSI_H_SYNC_START				= 0x21,
+	MIPI_DSI_H_SYNC_END				= 0x31,
+
+	MIPI_DSI_COLOR_MODE_OFF				= 0x02,
+	MIPI_DSI_COLOR_MODE_ON				= 0x12,
+	MIPI_DSI_SHUTDOWN_PERIPHERAL			= 0x22,
+	MIPI_DSI_TURN_ON_PERIPHERAL			= 0x32,
+
+	MIPI_DSI_GENERIC_SHORT_WRITE_0_PARAM		= 0x03,
+	MIPI_DSI_GENERIC_SHORT_WRITE_1_PARAM		= 0x13,
+	MIPI_DSI_GENERIC_SHORT_WRITE_2_PARAM		= 0x23,
+
+	MIPI_DSI_GENERIC_READ_REQUEST_0_PARAM		= 0x04,
+	MIPI_DSI_GENERIC_READ_REQUEST_1_PARAM		= 0x14,
+	MIPI_DSI_GENERIC_READ_REQUEST_2_PARAM		= 0x24,
+
+	MIPI_DSI_DCS_SHORT_WRITE			= 0x05,
+	MIPI_DSI_DCS_SHORT_WRITE_PARAM			= 0x15,
+
+	MIPI_DSI_DCS_READ				= 0x06,
+
+	MIPI_DSI_SET_MAXIMUM_RETURN_PACKET_SIZE		= 0x37,
+
+	MIPI_DSI_END_OF_TRANSMISSION			= 0x08,
+
+	MIPI_DSI_NULL_PACKET				= 0x09,
+	MIPI_DSI_BLANKING_PACKET			= 0x19,
+	MIPI_DSI_GENERIC_LONG_WRITE			= 0x29,
+	MIPI_DSI_DCS_LONG_WRITE				= 0x39,
+
+	MIPI_DSI_LOOSELY_PACKED_PIXEL_STREAM_YCBCR20	= 0x0c,
+	MIPI_DSI_PACKED_PIXEL_STREAM_YCBCR24		= 0x1c,
+	MIPI_DSI_PACKED_PIXEL_STREAM_YCBCR16		= 0x2c,
+
+	MIPI_DSI_PACKED_PIXEL_STREAM_30			= 0x0d,
+	MIPI_DSI_PACKED_PIXEL_STREAM_36			= 0x1d,
+	MIPI_DSI_PACKED_PIXEL_STREAM_YCBCR12		= 0x3d,
+
+	MIPI_DSI_PACKED_PIXEL_STREAM_16			= 0x0e,
+	MIPI_DSI_PACKED_PIXEL_STREAM_18			= 0x1e,
+	MIPI_DSI_PIXEL_STREAM_3BYTE_18			= 0x2e,
+	MIPI_DSI_PACKED_PIXEL_STREAM_24			= 0x3e,
+};
+
 
 /*
  * dsi phy tx calculate

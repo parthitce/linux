@@ -356,22 +356,22 @@ static struct owl_composite_clock s700_composite_clks[] __initdata = {
 			C_GATE(CMU_DEVCLKEN1, 16,  0),
 			C_DIVIDER(CMU_PWM0CLK, 0, 10, NULL,  0)),
 
-	COMP_DIV_CLK(CLK_PWM0, "pwm1", 0,
+	COMP_DIV_CLK(CLK_PWM1, "pwm1", 0,
 			C_MUX(pwm_clk_mux_p, CMU_PWM1CLK, 12, 1,  0),
 			C_GATE(CMU_DEVCLKEN1, 17,  0),
 			C_DIVIDER(CMU_PWM1CLK, 0, 10, NULL,  0)),
 
-	COMP_DIV_CLK(CLK_PWM0, "pwm2", 0,
+	COMP_DIV_CLK(CLK_PWM2, "pwm2", 0,
 			C_MUX(pwm_clk_mux_p, CMU_PWM2CLK, 12, 1, 0),
 			C_GATE(CMU_DEVCLKEN1, 18, 0),
 			C_DIVIDER(CMU_PWM2CLK, 0, 10, NULL, 0)),
 
-	COMP_DIV_CLK(CLK_PWM0, "pwm3", 0,
+	COMP_DIV_CLK(CLK_PWM3, "pwm3", 0,
 			C_MUX(pwm_clk_mux_p, CMU_PWM3CLK, 12, 1, 0),
 			C_GATE(CMU_DEVCLKEN1, 19,  0),
 			C_DIVIDER(CMU_PWM3CLK, 0, 10, NULL, 0)),
 
-	COMP_DIV_CLK(CLK_PWM0, "pwm4", 0,
+	COMP_DIV_CLK(CLK_PWM4, "pwm4", 0,
 			C_MUX(pwm_clk_mux_p, CMU_PWM4CLK, 12, 1, 0),
 			C_GATE(CMU_DEVCLKEN1, 20, 0),
 			C_DIVIDER(CMU_PWM4CLK, 0, 10, NULL, 0)),
@@ -389,7 +389,7 @@ static struct owl_composite_clock s700_composite_clks[] __initdata = {
 	COMP_FACTOR_CLK(CLK_LCD, "lcd", 0,
 			C_MUX(lcd_clk_mux_p, CMU_LCDCLK, 12, 2, 0),
 			C_GATE(CMU_DEVCLKEN0, 1, 0),
-			C_FACTOR(CMU_LCDCLK, 0, 8, lcd_factor_table, 0)),
+			C_FACTOR(CMU_LCDCLK, 0, 9, lcd_factor_table, 0)),
 
 	COMP_DIV_CLK(CLK_HDMI_AUDIO, "hdmia", 0,
 			C_MUX(i2s_clk_mux_p, CMU_AUDIOPLL, 24, 1, 0),/*CMU_AUDIOPLL 24,1 unused*/

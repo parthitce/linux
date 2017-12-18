@@ -91,7 +91,7 @@ void free_fb_logo_reserved_memory(long base, long size)
 	unsigned long flags;
 
 	free_reserved_area((unsigned long)__va(base),
-			   (unsigned long)(__va(base) + size), 0, "fb_logo");
+			(unsigned long)(__va(base) + size), 0, "fb_logo");
 	zone = page_zone(pfn_to_page(base >> PAGE_SHIFT));
 	spin_lock_irqsave(&zone->lock, flags);
 	zone->managed_pages += size >> PAGE_SHIFT;
@@ -100,11 +100,11 @@ void free_fb_logo_reserved_memory(long base, long size)
 }
 
 /*==============================================================================
-			the operations of adf device
+  the operations of adf device
  *============================================================================*/
 static int owl_adf_device_attach(struct adf_device *adfdev,
-				struct adf_overlay_engine *eng,
-				struct adf_interface *intf)
+		struct adf_overlay_engine *eng,
+		struct adf_interface *intf)
 {
 	struct owl_adf_overlay_engine *owleng = eng_to_owl_eng(eng);
 
@@ -113,8 +113,8 @@ static int owl_adf_device_attach(struct adf_device *adfdev,
 }
 
 static int owl_adf_device_detach(struct adf_device *adfdev,
-				struct adf_overlay_engine *eng,
-				struct adf_interface *intf)
+		struct adf_overlay_engine *eng,
+		struct adf_interface *intf)
 {
 	struct owl_adf_overlay_engine *owleng = eng_to_owl_eng(eng);
 
@@ -123,7 +123,7 @@ static int owl_adf_device_detach(struct adf_device *adfdev,
 }
 
 static int owl_adf_device_validate(struct adf_device *adfdev,
-				struct adf_post *cfg, void **driver_state)
+		struct adf_post *cfg, void **driver_state)
 {
 	struct owl_adf_device *owladf = adf_to_owl_adf(adfdev);
 
@@ -142,14 +142,14 @@ static int owl_adf_device_validate(struct adf_device *adfdev,
 		return -EINVAL;
 	}
 	if ((sizeof(struct owl_adf_buffer_config_ext) * cfg->n_bufs
-		+ sizeof(struct owl_adf_post_ext)) != buf_ext_size) {
+				+ sizeof(struct owl_adf_post_ext)) != buf_ext_size) {
 		ADFERR("buf_ext_size %ld is invalid\n", buf_ext_size);
 		return -EINVAL;
 	}
 
 	buf_ext = (struct owl_adf_post_ext *)cfg->custom_data;
 	ADFDBG("before buffer_and_ext_validate, post_id %d, flag %d\n",
-		buf_ext->post_id, buf_ext->flag);
+			buf_ext->post_id, buf_ext->flag);
 
 	/* abandoned post, let it go */
 	if ((buf_ext->flag & OWL_ADF_POST_FLAG_ABANDON) != 0)
@@ -161,11 +161,11 @@ static int owl_adf_device_validate(struct adf_device *adfdev,
 	}
 
 	ADFDBG("before buffer_and_ext_validate, post_id %d\n",
-		buf_ext->post_id);
+			buf_ext->post_id);
 	for (i = 0; i < cfg->n_bufs; i++) {
 		ADFDBG("buffer_and_ext_validate buf %d\n", i);
 		ret = buffer_and_ext_validate(owladf, &cfg->bufs[i],
-					&buf_ext->bufs_ext[i]);
+				&buf_ext->bufs_ext[i]);
 		if (ret < 0)
 			return ret;
 	}
@@ -174,7 +174,7 @@ static int owl_adf_device_validate(struct adf_device *adfdev,
 }
 
 static int __owl_adf_device_validate_ext(struct adf_device *adfdev,
-			struct owl_adf_validate_config_ext __user *arg)
+		struct owl_adf_validate_config_ext __user *arg)
 {
 	size_t i, j;
 	int err = 0;
@@ -188,14 +188,14 @@ static int __owl_adf_device_validate_ext(struct adf_device *adfdev,
 
 #if 0
 	if (!access_ok(VERIFY_READ, arg,
-			sizeof(struct owl_adf_validate_config_ext))) {
+				sizeof(struct owl_adf_validate_config_ext))) {
 		err = -EFAULT;
 		goto err_out;
 	}
 #endif
 
 	if (arg->n_interfaces > ADF_MAX_INTERFACES
-		|| arg->n_bufs > ADF_MAX_BUFFERS) {
+			|| arg->n_bufs > ADF_MAX_BUFFERS) {
 		err = -EINVAL;
 		goto err_out;
 	}
@@ -204,7 +204,7 @@ static int __owl_adf_device_validate_ext(struct adf_device *adfdev,
 		+ arg->n_bufs * sizeof(struct owl_adf_buffer_config_ext);
 
 	if (!access_ok(VERIFY_READ, arg->bufs,
-		sizeof(struct adf_buffer_config) * arg->n_bufs)) {
+				sizeof(struct adf_buffer_config) * arg->n_bufs)) {
 		err = -EFAULT;
 		goto err_out;
 	}
@@ -250,7 +250,7 @@ static int __owl_adf_device_validate_ext(struct adf_device *adfdev,
 		}
 
 		bufs[i].overlay_engine = idr_find(&adfdev->overlay_engines,
-						config->overlay_engine);
+				config->overlay_engine);
 		if (!bufs[i].overlay_engine) {
 			err = -ENOENT;
 			goto err_import;
@@ -312,7 +312,7 @@ err_out:
 }
 
 static long owl_adf_device_ioctl(struct adf_obj *obj, unsigned int cmd,
-				unsigned long arg)
+		unsigned long arg)
 {
 	struct adf_device *adfdev = adf_obj_to_device(obj);
 
@@ -320,33 +320,33 @@ static long owl_adf_device_ioctl(struct adf_obj *obj, unsigned int cmd,
 	struct owl_adf_validate_config_ext ext;
 
 	switch (cmd) {
-	case OWL_ADF_VALIDATE_CONFIG_EXT:
-		ADFDBG("%s: cmd(0x%x)\n", __func__, cmd);
-		return __owl_adf_device_validate_ext(adfdev,
-			(struct owl_adf_validate_config_ext __user *)arg);
+		case OWL_ADF_VALIDATE_CONFIG_EXT:
+			ADFDBG("%s: cmd(0x%x)\n", __func__, cmd);
+			return __owl_adf_device_validate_ext(adfdev,
+					(struct owl_adf_validate_config_ext __user *)arg);
 
-	case OWL_ADF_VALIDATE_CONFIG_EXT32:
-		ADFDBG("%s: cmd32(0x%x)\n", __func__, cmd);
+		case OWL_ADF_VALIDATE_CONFIG_EXT32:
+			ADFDBG("%s: cmd32(0x%x)\n", __func__, cmd);
 
-		ext32 = (struct owl_adf_validate_config_ext32 __user *)arg;
+			ext32 = (struct owl_adf_validate_config_ext32 __user *)arg;
 
-		ext.n_interfaces = ext32->n_interfaces;
-		ext.interfaces = (__u32 __user *)ext32->interfaces;
-		ext.n_bufs = ext32->n_bufs;
-		ext.bufs = (struct adf_buffer_config __user *)ext32->bufs;
-		ext.post_ext
-			= (struct owl_adf_post_ext __user *)ext32->post_ext;
+			ext.n_interfaces = ext32->n_interfaces;
+			ext.interfaces = (__u32 __user *)ext32->interfaces;
+			ext.n_bufs = ext32->n_bufs;
+			ext.bufs = (struct adf_buffer_config __user *)ext32->bufs;
+			ext.post_ext
+				= (struct owl_adf_post_ext __user *)ext32->post_ext;
 
-		return __owl_adf_device_validate_ext(adfdev, &ext);
+			return __owl_adf_device_validate_ext(adfdev, &ext);
 
-	default:
-		ADFDBG("%s: cmd(0x%x) invalid\n", __func__, cmd);
-		return -EINVAL;
+		default:
+			ADFDBG("%s: cmd(0x%x) invalid\n", __func__, cmd);
+			return -EINVAL;
 	}
 }
 
 static void owl_adf_device_post(struct adf_device *adfdev, struct adf_post *cfg,
-				void *driver_state)
+		void *driver_state)
 {
 	int i, j;
 
@@ -370,7 +370,7 @@ static void owl_adf_device_post(struct adf_device *adfdev, struct adf_post *cfg,
 
 	buf_ext = (struct owl_adf_post_ext *)cfg->custom_data;
 	ADFDBG("%s: post_id %d, flag %d\n", __func__,
-	       buf_ext->post_id, buf_ext->flag);
+			buf_ext->post_id, buf_ext->flag);
 
 	/* abandoned post, let it go */
 	if (((buf_ext->flag & OWL_ADF_POST_FLAG_ABANDON) != 0) && (cfg->n_bufs > 0)) {
@@ -416,8 +416,8 @@ static void owl_adf_device_post(struct adf_device *adfdev, struct adf_post *cfg,
 
 			ADFDBG("%s: buf %d\n", __func__, j);
 			adf_buffer_to_video_info(owladf, &cfg->bufs[j],
-						 &cfg->mappings[j], config_ext,
-						 &v_info);
+					&cfg->mappings[j], config_ext,
+					&v_info);
 
 			owl_de_video_set_info(video, &v_info);
 
@@ -429,17 +429,16 @@ static void owl_adf_device_post(struct adf_device *adfdev, struct adf_post *cfg,
 
 		owlintf->owleng_out_bitmap
 			= (owlintf->owleng_bitmap ^ owlintf->owleng_bitmap_pre)
-				& owlintf->owleng_bitmap_pre;
+			& owlintf->owleng_bitmap_pre;
 		owlintf->owleng_in_bitmap
 			= (owlintf->owleng_bitmap ^ owlintf->owleng_bitmap_pre)
-				& owlintf->owleng_bitmap;
+			& owlintf->owleng_bitmap;
 
 		ADFDBG("###owlintf%d, pre 0x%x, curr 0x%x, out 0x%x, in 0x%x\n",
-		       owlintf->id,
-		       owlintf->owleng_bitmap_pre, owlintf->owleng_bitmap,
-		       owlintf->owleng_out_bitmap, owlintf->owleng_in_bitmap);
+				owlintf->id,
+				owlintf->owleng_bitmap_pre, owlintf->owleng_bitmap,
+				owlintf->owleng_out_bitmap, owlintf->owleng_in_bitmap);
 	}
-
 	/*
 	 * apply first for path that its layer is re-assined to others,
 	 * for example, if owleng_bitmap is changed from 0100 to 1000,
@@ -460,8 +459,8 @@ static void owl_adf_device_post(struct adf_device *adfdev, struct adf_post *cfg,
 				continue;
 
 			if (((~(owlintf->owleng_out_bitmap
-			       ^ owlintf2->owleng_in_bitmap))
-			    & owlintf->owleng_out_bitmap) != 0) {
+								^ owlintf2->owleng_in_bitmap))
+						& owlintf->owleng_out_bitmap) != 0) {
 				/*
 				 * owlintf's layers are re-assigned to owlintf2
 				 */
@@ -469,7 +468,7 @@ static void owl_adf_device_post(struct adf_device *adfdev, struct adf_post *cfg,
 				owl_de_path_wait_for_go(owlintf->path);
 				owlintf->dirty = false;
 				ADFDBG("###owlintf%d apply first\n",
-				       owlintf->id);
+						owlintf->id);
 				break;
 			}
 		}
@@ -498,27 +497,32 @@ static void owl_adf_device_post(struct adf_device *adfdev, struct adf_post *cfg,
 		}
 	} else {
 		/* apply */
+#if 0
 		for (i = 0; i < owladf->n_intfs; i++) {
 			owlintf = &owladf->intfs[i];
 
 			if (owlintf->dirty)
 				owl_de_path_apply(owlintf->path);
 		}
-
+#endif
 		/* wait for primary interface */
 		for (i = 0; i < owladf->n_intfs; i++) {
 			owlintf = &owladf->intfs[i];
 
-			if (owlintf->dirty && PANEL_IS_PRIMARY(owlintf->panel))
+			if (owlintf->dirty && PANEL_IS_PRIMARY(owlintf->panel)) {
+				owl_de_path_apply(owlintf->path);
 				owl_de_path_wait_for_go(owlintf->path);
+			}
 		}
 
 		/* wait for others */
 		for (i = 0; i < owladf->n_intfs; i++) {
 			owlintf = &owladf->intfs[i];
 
-			if (owlintf->dirty && !PANEL_IS_PRIMARY(owlintf->panel))
+			if (owlintf->dirty && !PANEL_IS_PRIMARY(owlintf->panel)) {
+				owl_de_path_apply(owlintf->path);
 				owl_de_path_wait_for_go(owlintf->path);
+			}
 		}
 	}
 
@@ -551,7 +555,7 @@ static struct adf_device_ops owl_adf_device_ops = {
 };
 
 /*==============================================================================
-			the operations of adf overlay engine
+  the operations of adf overlay engine
  *============================================================================*/
 
 int owl_adf_eng_custom_data(struct adf_obj *obj, void *data, size_t *size)
@@ -597,17 +601,17 @@ static struct adf_overlay_engine_ops owl_adf_eng_ops = {
 
 
 /*==============================================================================
-			the operations of adf interface
+  the operations of adf interface
  *============================================================================*/
 
 #ifdef OWL_ADF_USE_HALF_VSYNC
-static enum hrtimer_restart
+	static enum hrtimer_restart
 owl_adf_half_vsync_hrtimer_func(struct hrtimer *timer)
 {
 	struct owl_adf_interface *owlintf;
 
 	owlintf = container_of(timer, struct owl_adf_interface,
-			       half_vsync_hrtimer);
+			half_vsync_hrtimer);
 
 	wake_up(&owlintf->half_vsync_wait);
 
@@ -615,7 +619,7 @@ owl_adf_half_vsync_hrtimer_func(struct hrtimer *timer)
 }
 #endif
 static void owl_adf_intf_vsync_cb(struct owl_panel *panel, void *data,
-				  u32 value)
+		u32 value)
 {
 	struct owl_adf_interface *owlintf = data;
 	ktime_t stamp = ktime_get();
@@ -633,22 +637,22 @@ static void owl_adf_intf_vsync_cb(struct owl_panel *panel, void *data,
 		half_vsync_duration_ns /= owlintf->intf.current_mode.vrefresh;
 
 	hrtimer_start(&owlintf->half_vsync_hrtimer,
-		      ktime_set(0, half_vsync_duration_ns),
-		      HRTIMER_MODE_REL);
+			ktime_set(0, half_vsync_duration_ns),
+			HRTIMER_MODE_REL);
 
 #endif
 
 	if (owlintf->is_vsync_on)
 		adf_vsync_notify(&owlintf->intf, stamp);
 
- /* wakeup half vsync wait thread at VSYNC */
+	/* wakeup half vsync wait thread at VSYNC */
 	wake_up(&owlintf->half_vsync_wait);
 	duration = ktime_to_us(ktime_sub(stamp, owlintf->pre_vsync_stamp));
 	deviation = duration - owlintf->pre_vsync_duration_us;
 
 	if (deviation != 0)
-	    ADFVISABLE("%s: intf%d, duration %dus, deviation %dus\n",
-			__func__, owlintf->intf.base.id, duration, deviation);
+		ADFVISABLE("%s: intf%d, duration %dus, deviation %dus\n",
+				__func__, owlintf->intf.base.id, duration, deviation);
 
 	owlintf->pre_vsync_stamp = stamp;
 	owlintf->pre_vsync_duration_us = duration;
@@ -656,32 +660,79 @@ static void owl_adf_intf_vsync_cb(struct owl_panel *panel, void *data,
 	trace_owl_adf_vsync(owlintf, duration, deviation);
 }
 
+/*
+ *
+ * */
+static int owl_adf_update_owlintf_info(struct owl_adf_interface *owlintf,
+		struct owl_panel *panel)
+{
+	ADFINFO("%s: %s\n", owlintf->panel->desc.name, __func__);
+
+	/* update interface current panel */
+	owlintf->panel = panel;
+	owlintf->intf.type = dss_type_to_interface_type(PANEL_TYPE(panel));
+
+	owl_panel_set_mode(panel, &panel->mode);
+
+	/* re-set adf interface's current mode */
+	get_drm_mode_from_panel(panel, &owlintf->intf.current_mode);
+
+	return 0;
+}
+
 static int owl_adf_intf_blank(struct adf_interface *intf, u8 state);
 
 static void owl_adf_intf_hotplug_cb(struct owl_panel *panel,
-				    void *data, u32 value)
+		void *data, u32 value)
 {
-	struct owl_adf_interface *owlintf = data;
-
-	struct owl_panel *hdmi_panel, *cvbs_panel;	/* for S700 OTT*/
-
-	ADFINFO("%s: intf%d state %d hotplug %d\n", __func__,
-		owlintf->intf.base.id, owlintf->state, value);
+	struct owl_adf_interface 	*owlintf = data;
+	struct owl_panel 		*tmp_panel;
+	struct owl_de_path		*path = panel->path;
 
 	if (panel == NULL) {
 		ADFERR("dss device is NULL\n");
 		return;
 	}
 
+	if ((PANEL_TYPE(panel) != OWL_DISPLAY_TYPE_HDMI) &&
+			(PANEL_TYPE(panel) != OWL_DISPLAY_TYPE_CVBS)) {
+		ADFERR("%s: %s is not hotplug device!", __func__, panel->desc.name);
+		return;
+	}
+
+	ADFINFO("%s: intf%d (%s) state %d hotplug %d\n", __func__,
+			owlintf->intf.base.id, panel->desc.name, owlintf->state, value);
+
 	/* re-set adf interface's current mode */
 	get_drm_mode_from_panel(panel, &owlintf->intf.current_mode);
 
-	if (value == 1 && !owlintf->intf.hotplug_detect) {
-		/* only report plug event to ADF for HDMI & CVBS */
-		if ((PANEL_TYPE(panel) == OWL_DISPLAY_TYPE_HDMI) ||
-				(PANEL_TYPE(panel) == OWL_DISPLAY_TYPE_CVBS))
+	if (value == 1) {
+		if (owlintf->panel != panel) {
+			if (owl_panel_hpd_is_connected(owlintf->panel)) {
+				if (PANEL_TYPE(owlintf->panel) != OWL_DISPLAY_TYPE_HDMI) {
+					ADFINFO("intf%d (%s) has connected, disable it\n",
+							owlintf->intf.base.id, owlintf->panel->desc.name);
+
+					owl_adf_intf_blank(&owlintf->intf, DRM_MODE_DPMS_OFF);
+
+					/* update owlintf panel info */
+					owl_adf_update_owlintf_info(owlintf, panel);
+
+					/* unblank owlintf TODO */
+					owl_adf_intf_blank(&owlintf->intf, DRM_MODE_DPMS_ON);
+				}
+			} else
+				/* update owlintf panel info */
+				owl_adf_update_owlintf_info(owlintf, panel);
+		}
+
+		/* notifying adf core */
+		if (!owlintf->intf.hotplug_detect) {
+			ADFINFO("intf%d has first one panel connected\n",
+						owlintf->intf.base.id);
 			adf_hotplug_notify_connected(&owlintf->intf, NULL, 0);
-	} else if (value == 0 && owlintf->intf.hotplug_detect) {
+		}
+	} else if (value == 0) {
 		if (OWL_DSS_STATE_BOOT_ON == owlintf->state) {
 			/*
 			 * we are in BOOT ON STATE, and received a hotplug out
@@ -691,27 +742,50 @@ static void owl_adf_intf_hotplug_cb(struct owl_panel *panel,
 			owl_adf_intf_blank(&owlintf->intf, DRM_MODE_DPMS_OFF);
 		}
 
-		/* only report plug event to ADF for HDMI & CVBS */
-		if ((PANEL_TYPE(panel) == OWL_DISPLAY_TYPE_HDMI) ||
-				(PANEL_TYPE(panel) == OWL_DISPLAY_TYPE_CVBS))
-			adf_hotplug_notify_disconnected(&owlintf->intf);
-	}
+		/*
+		 * checking if panel which was hotpluged out is owlintf current panel,
+		 * and any others panel is connecting, unblank it.
+		 * */
+		bool no_panel_is_connected = true;
+		if (owlintf->panel == panel) {
+			/*
+			 * Notes: owlintf's panel has disconnect, at this time.
+			 * so if there is any panel is connected it must be others panel
+			 * we need do something on this panel.
+			 */
+			list_for_each_entry(tmp_panel, &path->panels, head)
+				if (owl_panel_hpd_is_connected(tmp_panel)) {
+					owl_adf_intf_blank(&owlintf->intf, DRM_MODE_DPMS_OFF);
 
-	if (owl_de_is_s700() && owl_de_is_ott()) {
-		hdmi_panel = owl_panel_get_by_type(OWL_DISPLAY_TYPE_HDMI);
-		cvbs_panel = owl_panel_get_by_type(OWL_DISPLAY_TYPE_CVBS);
+					/* update owlintf current panel info */
+					owl_adf_update_owlintf_info(owlintf, tmp_panel);
 
-		/* make sure anther panel is off (only for CVBS now), TODO*/
-		if ((hdmi_panel != NULL) && (cvbs_panel != NULL) && owl_panel_hpd_is_connected(hdmi_panel))
-			owl_ctrl_disable(cvbs_panel->ctrl);
-			/* owl_panel_disable(cvbs_panel); */
+					ADFINFO("intf%d (%s) is connected, enable it\n",
+							owlintf->intf.base.id, owlintf->panel->desc.name);
+
+					owl_adf_intf_blank(&owlintf->intf, DRM_MODE_DPMS_ON);
+					no_panel_is_connected = false;
+					break;
+				}
+
+			/*
+			 * if owlintf(path) has no connected panels,
+			 * notifying hotplug disconnect event
+			 */
+			if (owlintf->intf.hotplug_detect && no_panel_is_connected) {
+				ADFINFO("intf%d has not any panel connected\n",
+						owlintf->intf.base.id);
+				adf_hotplug_notify_disconnected(&owlintf->intf);
+			}
+		}
+
 	}
 }
 
 static int __owl_adf_intf_open(struct owl_adf_interface *owlintf)
 {
 	ADFINFO("%s: intf%d, ref_cnt %d\n", __func__, owlintf->intf.base.id,
-		atomic_read(&owlintf->ref_cnt));
+			atomic_read(&owlintf->ref_cnt));
 
 	if (atomic_inc_return(&owlintf->ref_cnt) > 1)
 		return 0;
@@ -720,7 +794,7 @@ static int __owl_adf_intf_open(struct owl_adf_interface *owlintf)
 }
 
 static int owl_adf_intf_open(struct adf_obj *obj, struct inode *inode,
-			     struct file *file)
+		struct file *file)
 {
 	struct owl_adf_interface *owlintf;
 
@@ -734,14 +808,14 @@ static int owl_adf_intf_open(struct adf_obj *obj, struct inode *inode,
 static void __owl_adf_intf_close(struct owl_adf_interface *owlintf)
 {
 	ADFINFO("%s: intf%d, ref_cnt %d\n", __func__, owlintf->intf.base.id,
-		atomic_read(&owlintf->ref_cnt));
+			atomic_read(&owlintf->ref_cnt));
 
 	if (atomic_dec_return(&owlintf->ref_cnt) > 0)
 		return;
 }
 
 static void owl_adf_intf_close(struct adf_obj *obj, struct inode *inode,
-			       struct file *file)
+		struct file *file)
 {
 	struct owl_adf_interface *owlintf;
 
@@ -753,65 +827,65 @@ static void owl_adf_intf_close(struct adf_obj *obj, struct inode *inode,
 }
 
 static bool owl_adf_intf_supports_event(struct adf_obj *obj,
-					enum adf_event_type type)
+		enum adf_event_type type)
 {
 	struct owl_adf_interface *owlintf;
 
 	owlintf = intf_to_owl_intf(adf_obj_to_interface(obj));
 
 	switch (type) {
-	case ADF_EVENT_VSYNC:
-		if (PANEL_IS_PRIMARY(owlintf->panel))
-			return true;
-		else
-			return false;
+		case ADF_EVENT_VSYNC:
+			if (PANEL_IS_PRIMARY(owlintf->panel))
+				return true;
+			else
+				return false;
 
-	case ADF_EVENT_HOTPLUG:
-		/* only hdmi & cvbs devices support hotplug event */
-		if ((PANEL_TYPE(owlintf->panel) == OWL_DISPLAY_TYPE_HDMI) ||
-		        (PANEL_TYPE(owlintf->panel) == OWL_DISPLAY_TYPE_CVBS))
-			return true;
-		else
-			return false;
+		case ADF_EVENT_HOTPLUG:
+			/* only hdmi & cvbs devices support hotplug event */
+			if ((PANEL_TYPE(owlintf->panel) == OWL_DISPLAY_TYPE_HDMI) ||
+					(PANEL_TYPE(owlintf->panel) == OWL_DISPLAY_TYPE_CVBS))
+				return true;
+			else
+				return false;
 
-	default:
-		return false;
+		default:
+			return false;
 	}
 }
 
 static void owl_adf_intf_set_event(struct adf_obj *obj,
-				   enum adf_event_type type, bool enabled)
+		enum adf_event_type type, bool enabled)
 {
 	struct owl_adf_interface *owlintf;
 
 	ADFDBG("%s: event %d is enabled?(%d)\n",
-		__func__, type, enabled);
+			__func__, type, enabled);
 
 	owlintf = intf_to_owl_intf(adf_obj_to_interface(obj));
 
 	switch (type) {
-	case ADF_EVENT_VSYNC:
-		if (enabled) {
-			owl_de_path_enable_vsync(owlintf->path);
-			trace_owl_adf_vsync_enable(owlintf);
-		} else {
-			owl_de_path_disable_vsync(owlintf->path);
-			trace_owl_adf_vsync_disable(owlintf);
-		}
-		owlintf->is_vsync_on = enabled;
+		case ADF_EVENT_VSYNC:
+			if (enabled) {
+				owl_de_path_enable_vsync(owlintf->path);
+				trace_owl_adf_vsync_enable(owlintf);
+			} else {
+				owl_de_path_disable_vsync(owlintf->path);
+				trace_owl_adf_vsync_disable(owlintf);
+			}
+			owlintf->is_vsync_on = enabled;
 
-		break;
+			break;
 
-	case ADF_EVENT_HOTPLUG:
-		break;
+		case ADF_EVENT_HOTPLUG:
+			break;
 
-	default:
-		BUG();
+		default:
+			BUG();
 	}
 }
 
 static int owl_adf_intf_custom_data(struct adf_obj *obj, void *data,
-				    size_t *size)
+		size_t *size)
 {
 	struct owl_adf_interface *owlintf;
 
@@ -827,78 +901,78 @@ static int owl_adf_intf_custom_data(struct adf_obj *obj, void *data,
 	*size = sizeof(struct owl_adf_interface_data_ext);
 
 	owl_panel_get_resolution(owlintf->panel, &ext_data->real_width,
-				 &ext_data->real_height);
+			&ext_data->real_height);
 
 	return 0;
 }
 
 static long owl_adf_intf_ioctl(struct adf_obj *obj, unsigned int cmd,
-			       unsigned long arg)
+		unsigned long arg)
 {
 	struct adf_interface *intf = adf_obj_to_interface(obj);
 	struct owl_adf_interface *owlintf = intf_to_owl_intf(intf);
 	struct owl_panel *panel = owlintf->panel;
 	struct owl_dss_panel_desc *desc = &panel->desc;
 	switch (cmd) {
-	case OWL_ADF_WAIT_HALF_VSYNC:
-	{
+		case OWL_ADF_WAIT_HALF_VSYNC:
+			{
 
-		static ktime_t pre_stamp;
-		long long timstamp = 0;
-		ktime_t cur_stamp;
-		DEFINE_WAIT(__wait);
+				static ktime_t pre_stamp;
+				long long timstamp = 0;
+				ktime_t cur_stamp;
+				DEFINE_WAIT(__wait);
 
-		ADFDBG("%s: OWL_ADF_WAIT_HALF_VSYNC\n", __func__);
-        if(owlintf->state == OWL_DSS_STATE_ON && atomic_read(&owlintf->half_vsync_need_wait) == 1){
-		    prepare_to_wait(&owlintf->half_vsync_wait, &__wait,
-				TASK_UNINTERRUPTIBLE);
-		    schedule();
-		    finish_wait(&owlintf->half_vsync_wait, &__wait);
-        }else{
-			if(atomic_read(&owlintf->half_vsync_need_wait) == 0){
-				ADFERR("%s: OWL_ADF_WAIT_HALF_VSYNC not init \n", __func__);
+				ADFDBG("%s: OWL_ADF_WAIT_HALF_VSYNC\n", __func__);
+				if(owlintf->state == OWL_DSS_STATE_ON && atomic_read(&owlintf->half_vsync_need_wait) == 1){
+					prepare_to_wait(&owlintf->half_vsync_wait, &__wait,
+							TASK_UNINTERRUPTIBLE);
+					schedule();
+					finish_wait(&owlintf->half_vsync_wait, &__wait);
+				}else{
+					if(atomic_read(&owlintf->half_vsync_need_wait) == 0){
+						ADFERR("%s: OWL_ADF_WAIT_HALF_VSYNC not init \n", __func__);
+					}
+				}
+
+				/*vsync off ,used for atw ,config in dts pannel vsync_off_us attr*/
+				usleep_range(desc->vsync_off_us,desc->vsync_off_us + 333);
+
+				cur_stamp = ktime_get();
+
+				ADFDBG("%s: half vsync period is %lldms\n", __func__,
+						ktime_to_ms(ktime_sub(cur_stamp, pre_stamp)));
+
+				if(ktime_to_ms(ktime_sub(cur_stamp, pre_stamp)) > 1){
+					pre_stamp = cur_stamp;
+					timstamp = ktime_to_ns(cur_stamp);
+
+					if(copy_to_user((void *)arg,&timstamp,sizeof(long long))){
+						return -EFAULT;
+					}
+				}
+				pre_stamp = cur_stamp;
+
+				return 0;
 			}
-        }
-
-        /*vsync off ,used for atw ,config in dts pannel vsync_off_us attr*/
-        usleep_range(desc->vsync_off_us,desc->vsync_off_us + 333);
-
-		cur_stamp = ktime_get();
-
-		ADFDBG("%s: half vsync period is %lldms\n", __func__,
-		       ktime_to_ms(ktime_sub(cur_stamp, pre_stamp)));
-
-		if(ktime_to_ms(ktime_sub(cur_stamp, pre_stamp)) > 1){
-			pre_stamp = cur_stamp;
-			timstamp = ktime_to_ns(cur_stamp);
-
-			if(copy_to_user((void *)arg,&timstamp,sizeof(long long))){
-				return -EFAULT;
+		case OWL_ADF_INIT_HALF_VSYNC:
+			{
+				wake_up(&owlintf->half_vsync_wait);
+				atomic_set(&owlintf->half_vsync_need_wait,1);
+				return 0;
 			}
-		}
-		pre_stamp = cur_stamp;
-
-		return 0;
-	}
-	case OWL_ADF_INIT_HALF_VSYNC:
-	{
-		wake_up(&owlintf->half_vsync_wait);
-		atomic_set(&owlintf->half_vsync_need_wait,1);
-		return 0;
-	}
-	case OWL_ADF_UNINIT_HALF_VSYNC:
-	{
-		wake_up(&owlintf->half_vsync_wait);
-		atomic_set(&owlintf->half_vsync_need_wait,0);
-		return 0;
-	}
-	default:
-		ADFDBG("%s: cmd(0x%x) invalid\n", __func__, cmd);
-		return -EINVAL;
+		case OWL_ADF_UNINIT_HALF_VSYNC:
+			{
+				wake_up(&owlintf->half_vsync_wait);
+				atomic_set(&owlintf->half_vsync_need_wait,0);
+				return 0;
+			}
+		default:
+			ADFDBG("%s: cmd(0x%x) invalid\n", __func__, cmd);
+			return -EINVAL;
 	}
 }
 static int owl_adf_intf_modeset(struct adf_interface *intf,
-				struct drm_mode_modeinfo *mode)
+		struct drm_mode_modeinfo *mode)
 {
 	return 0;
 }
@@ -914,7 +988,7 @@ static int owl_adf_intf_blank(struct adf_interface *intf, u8 state)
 	int fb_state;
 
 	ADFINFO("%s: intf%d owlintf->state %d state %d\n", __func__,
-		owlintf->intf.base.id, owlintf->state, state);
+			owlintf->intf.base.id, owlintf->state, state);
 
 	if (DRM_MODE_DPMS_OFF == state && OWL_DSS_STATE_OFF != owlintf->state) {
 		owlintf->state = OWL_DSS_STATE_OFF;
@@ -931,7 +1005,7 @@ static int owl_adf_intf_blank(struct adf_interface *intf, u8 state)
 		owl_panel_disable(panel);
 		wake_up(&owlintf->half_vsync_wait);
 	} else if (DRM_MODE_DPMS_ON == state &&
-		   OWL_DSS_STATE_ON != owlintf->state) {
+			OWL_DSS_STATE_ON != owlintf->state) {
 		owl_panel_enable(panel);
 		owl_de_path_enable(path);
 
@@ -951,9 +1025,9 @@ static int owl_adf_intf_blank(struct adf_interface *intf, u8 state)
 
 #ifdef CONFIG_VIDEO_OWL_ADF_FBDEV_SUPPORT
 static int owl_adf_intf_alloc_simple_buffer(struct adf_interface *intf,
-					    u16 w, u16 h, u32 format,
-					    struct dma_buf **dma_buf,
-					    u32 *offset, u32 *pitch)
+		u16 w, u16 h, u32 format,
+		struct dma_buf **dma_buf,
+		u32 *offset, u32 *pitch)
 {
 	bool is_hdmi_connected = false;
 	bool is_cvbs_connected = false;
@@ -1024,7 +1098,7 @@ skip_s700_handle:
 	ADFDBG("%s, size %d\n", __func__, size);
 
 	hdl = ion_alloc(owladf->ion_client, size, 0,
-						(1 << ION_HEAP_ID_PMEM), 0);
+			(1 << ION_HEAP_ID_PMEM), 0);
 	if (IS_ERR(hdl)) {
 		err = PTR_ERR(hdl);
 		ADFERR("ion_alloc failed (%d)\n", err);
@@ -1042,15 +1116,15 @@ skip_s700_handle:
 
 	/* GPU need FB's physical address, export it */
 	err =
-	ion_phys(owladf->ion_client, hdl,
-		 &owladf->fbdevs[owlintf->id].info->fix.smem_start,
-		 (size_t *)&owladf->fbdevs[owlintf->id].info->fix.smem_len);
+		ion_phys(owladf->ion_client, hdl,
+				&owladf->fbdevs[owlintf->id].info->fix.smem_start,
+				(size_t *)&owladf->fbdevs[owlintf->id].info->fix.smem_len);
 	if (err < 0) {
 		ADFERR("ion_phys error\n");
 	} else {
 		ADFDBG("smem_start = 0x%lx, smem_len=%d\n",
-			owladf->fbdevs[owlintf->id].info->fix.smem_start,
-			owladf->fbdevs[owlintf->id].info->fix.smem_len);
+				owladf->fbdevs[owlintf->id].info->fix.smem_start,
+				owladf->fbdevs[owlintf->id].info->fix.smem_len);
 	}
 
 err_free_buffer:
@@ -1071,7 +1145,7 @@ static int owl_adf_intf_describe_simple_post(struct adf_interface *intf,
 	struct owl_adf_post_ext *buf_ext;
 	struct owl_adf_buffer_config_ext *config_ext;
 	size_t buf_ext_size = sizeof(struct owl_adf_buffer_config_ext)
-			+ sizeof(struct owl_adf_post_ext);
+		+ sizeof(struct owl_adf_post_ext);
 
 	ADFDBG("%s\n", __func__);
 
@@ -1095,16 +1169,16 @@ static int owl_adf_intf_describe_simple_post(struct adf_interface *intf,
 	config_ext->crop.y2 = fb->h;
 
 	ADFDBG("%s: crop (%d,%d)~(%d,%d)\n", __func__,
-		config_ext->crop.x1, config_ext->crop.y1,
-		config_ext->crop.x2, config_ext->crop.y2);
+			config_ext->crop.x1, config_ext->crop.y1,
+			config_ext->crop.x2, config_ext->crop.y2);
 
 	config_ext->display.x1 = 0;
 	config_ext->display.y1 = 0;
 	config_ext->display.x2 = fb->w;
 	config_ext->display.y2 = fb->h;
 	ADFDBG("%s: display (%d,%d)~(%d,%d)\n", __func__,
-		config_ext->display.x1, config_ext->display.y1,
-		config_ext->display.x2, config_ext->display.y2);
+			config_ext->display.x1, config_ext->display.y1,
+			config_ext->display.x2, config_ext->display.y2);
 
 	config_ext->transform = OWL_ADF_TRANSFORM_NONE_EXT;
 	config_ext->blend_type = OWL_ADF_BLENDING_NONE_EXT;
@@ -1115,7 +1189,7 @@ static int owl_adf_intf_describe_simple_post(struct adf_interface *intf,
 #endif
 
 static int owl_adf_intf_screen_size(struct adf_interface *intf,
-				u16 *width_mm, u16 *height_mm)
+		u16 *width_mm, u16 *height_mm)
 {
 	struct owl_adf_interface *owlintf = intf_to_owl_intf(intf);
 
@@ -1156,7 +1230,7 @@ static struct adf_interface_ops owl_adf_intf_ops = {
 
 
 /*==============================================================================
-			adf framebuffer device
+  adf framebuffer device
  *============================================================================*/
 
 
@@ -1207,7 +1281,7 @@ static int owl_adf_fbdev_release(struct fb_info *info, int user)
 }
 
 static void owl_adf_fbdev_imageblit(struct fb_info *info,
-				const struct fb_image *image)
+		const struct fb_image *image)
 {
 	cfb_imageblit(info, image);
 }
@@ -1226,7 +1300,8 @@ static struct fb_ops owl_adf_fb_ops = {
 
 static int owl_adf_fbdev_init(struct owl_adf_device *owladf)
 {
-	u16 width, height;
+	int i_width, i_height;
+	u16 u16_width, u16_height;
 	int i, err = 0;
 
 	struct device *dev = &owladf->pdev->dev;
@@ -1240,7 +1315,7 @@ static int owl_adf_fbdev_init(struct owl_adf_device *owladf)
 
 	/* create fbdev for every intf */
 	owladf->fbdevs = devm_kzalloc(dev, sizeof(struct adf_fbdev)
-					* owladf->n_intfs, GFP_KERNEL);
+			* owladf->n_intfs, GFP_KERNEL);
 	if (!owladf->fbdevs) {
 		ADFERR("devm_kzalloc failed\n");
 		return -ENOMEM;
@@ -1256,11 +1331,17 @@ static int owl_adf_fbdev_init(struct owl_adf_device *owladf)
 		if (PANEL_TYPE(panel) == OWL_DISPLAY_TYPE_DUMMY)
 			continue;
 
-		owl_panel_get_draw_size(panel, (int *)&width, (int *)&height);
+		owl_panel_get_draw_size(panel, &i_width, &i_height);
+		/*
+		 * Forced type conversion, remove high-end data
+		 * FIXME
+		 */
+		u16_width = i_width;
+		u16_height = i_height;
 
 		/* regitser FB device */
 		err = adf_fbdev_init(&owladf->fbdevs[i], &owlintf->intf,
-				     &owleng->eng, width, height,
+				     &owleng->eng, u16_width, u16_height,
 				     OWL_FBDEV_FORMAT, &owl_adf_fb_ops,
 				     "owladf_fb%d", i);
 		if (err < 0) {
@@ -1293,7 +1374,7 @@ static int owl_adf_fbdev_deinit(struct owl_adf_device *owladf) {}
 
 
 /*============================================================================
-			local help functions
+  local help functions
  *==========================================================================*/
 
 static int owl_adf_intfs_init(struct owl_adf_device *owladf)
@@ -1312,10 +1393,10 @@ static int owl_adf_intfs_init(struct owl_adf_device *owladf)
 	n_intfs = 0;
 	for (i = 0; i < owl_de_get_path_num(); i++) {
 		path = owl_de_path_get_by_index(i);
-		if (path == NULL || path->panel == NULL)
+		if (path == NULL || path->current_panel == NULL)
 			continue;
 
-		if (PANEL_IS_PRIMARY(path->panel))
+		if (PANEL_IS_PRIMARY(path->current_panel))
 			primary_path_id = path->id;
 
 		n_intfs++;
@@ -1329,7 +1410,7 @@ static int owl_adf_intfs_init(struct owl_adf_device *owladf)
 
 	owladf->n_intfs = n_intfs;
 	owladf->intfs = devm_kzalloc(dev, sizeof(struct owl_adf_interface)
-				     * n_intfs, GFP_KERNEL);
+			* n_intfs, GFP_KERNEL);
 	if (!owladf->intfs) {
 		err = -ENOMEM;
 		goto err_mem;
@@ -1351,25 +1432,25 @@ static int owl_adf_intfs_init(struct owl_adf_device *owladf)
 			index = 0;
 
 		path = owl_de_path_get_by_index(index);
-		if (path == NULL || path->panel == NULL)
+		if (path == NULL || path->current_panel == NULL)
 			continue;
 
-		panel = path->panel;
+		panel = path->current_panel;
 
 		owlintf = &owladf->intfs[cnt];
 		owlintf->id = cnt;
 
 		atomic_set(&owlintf->ref_cnt, 0);
 		init_waitqueue_head(&owlintf->half_vsync_wait);
-	#ifdef OWL_ADF_USE_HALF_VSYNC
+#ifdef OWL_ADF_USE_HALF_VSYNC
 		hrtimer_init(&owlintf->half_vsync_hrtimer, CLOCK_MONOTONIC,
-			      HRTIMER_MODE_REL);
+				HRTIMER_MODE_REL);
 		owlintf->half_vsync_hrtimer.function
 			= owl_adf_half_vsync_hrtimer_func;
-	#endif
+#endif
 
 		owlintf->path = path;
-		owlintf->panel = path->panel;
+		owlintf->panel = path->current_panel;
 
 		owlintf->type = dss_type_to_interface_type(PANEL_TYPE(panel));
 
@@ -1391,18 +1472,21 @@ static int owl_adf_intfs_init(struct owl_adf_device *owladf)
 
 		/* adf interfaces init */
 		err = adf_interface_init(&owlintf->intf, &owladf->adfdev,
-					owlintf->type, 0, flags,
-					&owl_adf_intf_ops,
-					"%s", owlintf->path->name);
+				owlintf->type, 0, flags,
+				&owl_adf_intf_ops,
+				"%s", owlintf->path->name);
+
 		if (err < 0) {
 			ADFERR("Failed to init ADF interface %d(%d)\n", cnt, err);
 			goto err_init;
 		}
 
 		/* set callbacks */
-		owl_panel_vsync_cb_set(panel, owl_adf_intf_vsync_cb, owlintf);
-		owl_panel_hotplug_cb_set(panel, owl_adf_intf_hotplug_cb,
-					 owlintf);
+		list_for_each_entry(panel, &path->panels, head) {
+			ADFINFO("%s panel attach to path %d \n", panel->desc.name, path->id);
+			owl_panel_vsync_cb_set(panel, owl_adf_intf_vsync_cb, owlintf);
+			owl_panel_hotplug_cb_set(panel, owl_adf_intf_hotplug_cb, owlintf);
+		}
 
 		cnt++;
 	}
@@ -1449,7 +1533,7 @@ static int owl_adf_engs_init(struct owl_adf_device *owladf)
 
 	owladf->n_engs = n_engs;
 	owladf->engs = devm_kzalloc(dev, sizeof(struct owl_adf_overlay_engine)
-				    * n_engs, GFP_KERNEL);
+			* n_engs, GFP_KERNEL);
 	if (!owladf->engs) {
 		err = -ENOMEM;
 		goto err_mem;
@@ -1464,9 +1548,9 @@ static int owl_adf_engs_init(struct owl_adf_device *owladf)
 
 		/* adf overlay engine init */
 		err = adf_overlay_engine_init(&owladf->engs[i].eng,
-					      &owladf->adfdev,
-					      &owl_adf_eng_ops, "%s",
-					      owladf->engs[i].video->name);
+				&owladf->adfdev,
+				&owl_adf_eng_ops, "%s",
+				owladf->engs[i].video->name);
 		if (err < 0) {
 			ADFERR("Failed to init ADF engine %d(%d)\n", i, err);
 			goto err_init;
@@ -1516,8 +1600,8 @@ static int owl_adf_attachment_allow(struct owl_adf_device *owladf)
 
 		for (j = 0; j < owladf->n_engs; j++) {
 			err = adf_attachment_allow(&owladf->adfdev,
-						   &owladf->engs[j].eng,
-						   &owlintf->intf);
+					&owladf->engs[j].eng,
+					&owlintf->intf);
 			if (err < 0)
 				return err;
 		}
@@ -1527,7 +1611,7 @@ static int owl_adf_attachment_allow(struct owl_adf_device *owladf)
 }
 
 /*============================================================================
-			platform driver/device functions
+  platform driver/device functions
  *==========================================================================*/
 
 static int owl_adf_probe(struct platform_device *pdev)
@@ -1546,7 +1630,7 @@ static int owl_adf_probe(struct platform_device *pdev)
 	owladf->pdev = pdev;
 
 	err = adf_device_init(&owladf->adfdev, dev,
-			      &owl_adf_device_ops, dev_name(dev));
+			&owl_adf_device_ops, dev_name(dev));
 	if (err < 0) {
 		ADFERR("Failed to init ADF device (%d)\n", err);
 		goto err_dev_init;
@@ -1587,13 +1671,13 @@ static int owl_adf_probe(struct platform_device *pdev)
 		owlintf = &owladf->intfs[i];
 
 		if (PANEL_IS_PRIMARY(owlintf->panel) ||
-		    owl_panel_hpd_is_connected(owlintf->panel)) {
+				owl_panel_hpd_is_connected(owlintf->panel)) {
 			ADFINFO("%s: intf%d connected\n",
-				__func__, owlintf->intf.base.id);
+					__func__, owlintf->intf.base.id);
 
 			/* re-set adf interface's current mode */
 			get_drm_mode_from_panel(owlintf->panel,
-						&owlintf->intf.current_mode);
+					&owlintf->intf.current_mode);
 
 			adf_hotplug_notify_connected(&owlintf->intf, NULL, 0);
 		}

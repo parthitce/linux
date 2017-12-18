@@ -10,6 +10,13 @@
 	do {} while (0)
 #endif
 
+enum VBUS_CURRENT_LMT {
+        VBUS_CURR_LIMT_100MA,
+        VBUS_CURR_LIMT_300MA,
+        VBUS_CURR_LIMT_500MA,
+        VBUS_CURR_LIMT_800MA
+};
+
 enum ADP_PLUGGED_TYPE {
 	NO_PLUGGED = 0,
 	WALL_PLUGGED = 1 << 0,
@@ -99,6 +106,7 @@ struct atc260x_charger_ops {
 	void (*set_syspwr_steady) (struct atc260x_dev *atc260x, bool enable);
 	void (*set_otint_en) (struct atc260x_dev *atc260x, bool enable);
 	void (*clear_otint_pending) (struct atc260x_dev *atc260x);
+	void (*set_vbus_current_lmt) (struct atc260x_dev *atc260x, enum VBUS_CURRENT_LMT value);
 };
 
 extern struct charger_dts_items items;

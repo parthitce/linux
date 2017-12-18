@@ -39,6 +39,8 @@
 #define SENSOR_FLAG_DTS_MASK  \
 	(SENSOR_FLAG_CH_MASK | SENSOR_FLAG_INTF_MASK | SENSOR_FLAG_DATA_MASK)
 
+#define SENSOR_FLAG_SI_TVIN   (1 << 3)
+
 /* determined by sensor driver, not dts */
 #define SENSOR_FLAG_8BIT      (1 << 8)
 #define SENSOR_FLAG_10BIT     (1 << 9)
@@ -227,6 +229,8 @@ struct sensor_pwd_info {
 	struct dts_gpio gpio_power;
 	struct dts_gpio gpio_rear_power;
 	struct dts_gpio gpio_front_power;
+	struct dts_gpio gpio_hdmiin_reset;
+	struct dts_gpio gpio_hdmiin_pwdn;
 	struct clk *ch_clk[2];
 };
 
@@ -266,8 +270,8 @@ enum {
 
 #define V4L2_CID_CAM_CV_MODE _IOW('v', BASE_VIDIOC_PRIVATE + 0, int)
 
-bool fornt_sensor_detected;
-bool rear_sensor_detected;
+static bool fornt_sensor_detected;
+static bool rear_sensor_detected;
 
 #endif  /*__OWL_DEVICE_H__*/
 

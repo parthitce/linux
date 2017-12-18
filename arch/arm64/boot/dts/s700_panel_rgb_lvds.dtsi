@@ -1,0 +1,86 @@
+/*
+	rgb panel config
+*/
+
+/ {
+	lcd: lcd@e02a0000 {
+
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&lcd0_state_default>;
+
+		panel_configs = <&config0>;
+		/*
+		 * lcd_configs, used to configure lcd controller,
+		 * its values should set according to lcd panel's spec.
+		 * Currently, the configration is for fpga panel.
+		 */
+		config0: lcd_configs {
+			port_type = <0>;	/* 0, RGB; 1, CPU; 2, LVDS; 3, EDP */
+
+			vsync_inversion = <0>;
+			hsync_inversion = <0>;
+			dclk_inversion = <0>;
+			lde_inversion = <0>;
+
+			/* lvds config */
+			lvds_format = <1>; 	/* 0: 18-bit; 1: 24-bit */
+			lvds_channel = <1>; 	/* 0: single channel; 1: dual channel */
+			lvds_bit_mapping = <0>; /* 0: NS Mode; 1: JEIDA Mode */
+			lvds_ch_swap = <0>;  	/* 0: No Swap; 1: Odd/Even Swap */
+			lvds_mirror = <0>;  	/* 0: normal; 1: mirror */
+
+			pclk_parent = <0>;	/* 0, DISPLAY PLL; 1, NAND PLL */
+			pclk_rate = <60000000>;/* 72MHz, DISPLAY PLL, divider 10 */
+		};
+
+		/* lcd panel */
+		panel@glp {
+			compatible = "actions,panel-glp";
+
+			/* panel's fixed info */
+			width_mm = <197>;
+			height_mm = <147>;
+			bpp = <24>;
+
+			is_primary = <1>;
+			
+			draw_width = <1024>;
+			draw_height = <600>;
+
+			/* operation delay in ms */
+			power_on_delay = <0>;
+			power_off_delay = <0>;
+			enable_delay = <0>;
+			disable_delay = <0>;
+
+			power-gpio = <&gpiob 4 0>; /*GPIOA23, high power on */
+
+			videomode-0 = <&mode0>;
+
+			/* 800x1280p60 */
+			mode0: videomode {
+				refresh_rate = <60>;
+
+				xres = <1024>;
+				yres = <600>;
+				/*
+				 * pclk_rate = 66M
+				 * pixel_clock = picoseconds / pclk_rate
+				 */
+				pixel_clock = <20000>;
+
+				hsw = <20>;
+				hbp = <138>;
+				hfp = <162>;
+
+				vsw = <3>;
+				vbp = <22>;
+				vfp = <10>;
+
+				/* 0: FB_VMODE_NONINTERLACED, 1:FB_VMODE_INTERLACED */
+				vmode = <0>;
+			};
+		};
+	};
+};

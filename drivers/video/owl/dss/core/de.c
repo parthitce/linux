@@ -50,6 +50,9 @@
  */
 #define OWL_DE_WAIT_VB_THRESHOLD	(300)	/* us */
 
+#define OWL_DE_NUM_ENABLE_MMU           (2)
+#define OWL_DE_NUM_ENABLE_VIDEO         (3)
+
 #define OWL_DE_KEEP_PRLINE_IRQ_ON
 
 static struct owl_de_device		*g_cur_de;
@@ -66,7 +69,7 @@ static int				vsync_always_on;
 #endif
 
 /*=============================================================================
-			external functions for others
+  external functions for others
  *===========================================================================*/
 
 static int owl_de_debugfs_create(struct owl_de_device *de);
@@ -88,6 +91,7 @@ static void de_device_init(struct owl_de_device *de)
 
 		path->dirty = false;
 		INIT_LIST_HEAD(&path->videos);
+		INIT_LIST_HEAD(&path->panels);
 		INIT_WORK(&path->vsync_work, de_path_vsync_work_func);
 		atomic_set(&path->vsync_enable_cnt, 0);
 		init_waitqueue_head(&path->vsync_wq);
@@ -168,7 +172,7 @@ int owl_de_register(struct owl_de_device *de)
 	}
 
 	if (devm_request_irq(&pdev->dev, de->irq, de_irq_handler,
-			     0, dev_name(&pdev->dev), de)) {
+				0, dev_name(&pdev->dev), de)) {
 		pr_err("request irq(%d) failed\n", de->irq);
 		return -EFAULT;
 	}
@@ -184,12 +188,12 @@ int owl_de_register(struct owl_de_device *de)
 
 	/* parse 'gamma_adjust_needed' property from DTS */
 	ret = of_property_read_u32(pdev->dev.of_node,
-					"gamma_adjust_needed", &tmp);
+			"gamma_adjust_needed", &tmp);
 	if (ret < 0)
 		tmp = 0;
 	/* initial gamma state, de gamma is or not open config from dts */
 	for (i = 0; i < de->num_paths; i++)
-			de->paths[i].info.gamma_adjust_needed = tmp;
+		de->paths[i].info.gamma_adjust_needed = tmp;
 	is_gamma_opening = tmp;
 	de_gamma_test = tmp;
 
@@ -350,9 +354,9 @@ int owl_de_generic_resume(struct device *dev)
 
 	/* resume all path's preline IRQ */
 	for (i = 0; i < de->num_paths; i++) {
-	#ifndef OWL_DE_KEEP_PRLINE_IRQ_ON
+#ifndef OWL_DE_KEEP_PRLINE_IRQ_ON
 		if (atomic_read(&de->paths[i].vsync_enable_cnt) > 0)
-	#endif
+#endif
 			de->paths[i].ops->preline_enable(&de->paths[i], true);
 	}
 
@@ -432,9 +436,9 @@ int owl_de_path_enable(struct owl_de_path *path)
 		path->ops->enable(path, true);
 		path->ops->set_fcr(path);
 
-	#ifdef OWL_DE_KEEP_PRLINE_IRQ_ON
+#ifdef OWL_DE_KEEP_PRLINE_IRQ_ON
 		path->ops->preline_enable(path, true);
-	#endif
+#endif
 
 		/*
 		 * Attention, for s700, gamma table must set after path enable
@@ -501,9 +505,9 @@ int owl_de_path_disable(struct owl_de_path *path)
 		path->ops->set_fcr(path);
 		msleep(50);
 
-	#ifdef OWL_DE_KEEP_PRLINE_IRQ_ON
+#ifdef OWL_DE_KEEP_PRLINE_IRQ_ON
 		path->ops->preline_enable(path, false);
-	#endif
+#endif
 
 		ret = path->ops->enable(path, false);
 	}
@@ -520,7 +524,7 @@ static void __de_path_enable_vsync(struct owl_de_path *path, bool enable)
 	if (enable && atomic_inc_return(&path->vsync_enable_cnt) == 1)
 		path->ops->preline_enable(path, true);
 	else if (!enable && vsync_always_on == 0 &&
-		 atomic_dec_and_test(&path->vsync_enable_cnt))
+			atomic_dec_and_test(&path->vsync_enable_cnt))
 		path->ops->preline_enable(path, false);
 	/*TODO*/
 	if (atomic_read(&path->vsync_enable_cnt) < 0)
@@ -532,7 +536,7 @@ int owl_de_path_enable_vsync(struct owl_de_path *path)
 {
 #ifndef OWL_DE_KEEP_PRLINE_IRQ_ON
 	pr_debug("path %d, vsync_enable_cnt %d\n",
-		 path->id, atomic_read(&path->vsync_enable_cnt));
+			path->id, atomic_read(&path->vsync_enable_cnt));
 
 	if (path->info.type == OWL_DISPLAY_TYPE_DUMMY)
 		return 0;
@@ -552,7 +556,7 @@ int owl_de_path_disable_vsync(struct owl_de_path *path)
 {
 #ifndef OWL_DE_KEEP_PRLINE_IRQ_ON
 	pr_debug("path %d, vsync_enable_cnt %d\n",
-		 path->id, atomic_read(&path->vsync_enable_cnt));
+			path->id, atomic_read(&path->vsync_enable_cnt));
 
 	if (path->info.type == OWL_DISPLAY_TYPE_DUMMY)
 		return 0;
@@ -578,7 +582,7 @@ int owl_de_path_attach(struct owl_de_path *path, struct owl_de_video *video)
 
 	if (video->path != NULL && video->path != path) {
 		pr_err("already attached to another path(id = %d)\n",
-		       video->path->id);
+				video->path->id);
 		return -EBUSY;
 	}
 
@@ -642,7 +646,7 @@ int owl_de_path_detach_all(struct owl_de_path *path)
 EXPORT_SYMBOL(owl_de_path_detach_all);
 
 void owl_de_path_get_info(struct owl_de_path *path,
-			  struct owl_de_path_info *info)
+		struct owl_de_path_info *info)
 {
 	pr_debug("path %d\n", path->id);
 	memcpy(info, &path->info, sizeof(struct owl_de_path_info));
@@ -650,7 +654,7 @@ void owl_de_path_get_info(struct owl_de_path *path,
 EXPORT_SYMBOL(owl_de_path_get_info);
 
 void owl_de_path_set_info(struct owl_de_path *path,
-			  struct owl_de_path_info *info)
+		struct owl_de_path_info *info)
 {
 	pr_debug("path %d\n", path->id);
 
@@ -665,10 +669,10 @@ void owl_de_path_apply(struct owl_de_path *path)
 
 	/*
 	 * For the case that MMU from disable to enable,
-	 * If skip_for_mmu_cnt is 0, disable video layers, using default color,
+	 * If skip_for_mmu_cnt is 0, 1, disable video layers, using default color,
 	 * and do not enable MMU.
-	 * if skip_for_mmu_cnt is 1, enable MMU.
-	 * if skip_for_mmu_cnt is 2, enable video layers.
+	 * if skip_for_mmu_cnt is 2, enable MMU.
+	 * if skip_for_mmu_cnt is 3, enable video layers.
 	 */
 	static int skip_for_mmu_cnt = 0;
 
@@ -694,10 +698,10 @@ void owl_de_path_apply(struct owl_de_path *path)
 			need_mmu = true;
 
 			/*
-			 * when skip_for_mmu_cnt == 0, disable video layer,
+			 * when skip_for_mmu_cnt < OWL_DE_NUM_ENABLE_MMU, disable video layer,
 			 * and do not enable MMU
 			 */
-			if (skip_for_mmu_cnt == 0)
+			if (skip_for_mmu_cnt < OWL_DE_NUM_ENABLE_MMU)
 				video->info.mmu_enable = false;
 			else
 				break;
@@ -722,7 +726,7 @@ void owl_de_path_apply(struct owl_de_path *path)
 		if (path->ops->is_enabled(path)) {
 			/* only attach the enabled path */
 
-			if (need_mmu && skip_for_mmu_cnt < 2) {
+			if (need_mmu && skip_for_mmu_cnt < OWL_DE_NUM_ENABLE_VIDEO) {
 				skip_for_mmu_cnt++;
 			} else {
 				list_for_each_entry(video, &path->videos, list)
@@ -759,7 +763,7 @@ void owl_de_path_wait_for_go(struct owl_de_path *path)
 	int frame_period_ns;
 
 	/* the real panel */
-	struct owl_panel *panel = path->panel;
+	struct owl_panel *panel = path->current_panel;
 
 	pr_debug("path%d\n", path->id);
 
@@ -799,10 +803,13 @@ void owl_de_path_wait_for_go(struct owl_de_path *path)
 
 	if (owl_de_is_s900() || PANEL_IS_PRIMARY(panel)) {
 		__de_path_enable_vsync(path, true);
+		/* do not wait vsync for linux X display TODO */
+		#if 0
 		ret = wait_event_hrtimeout(path->vsync_wq,
 				(path->ops->is_vb_valid(path) ||
 				 !path->ops->is_fcr_set(path)),
-				 ns_to_ktime(frame_period_ns));
+				ns_to_ktime(frame_period_ns));
+		#endif
 		__de_path_enable_vsync(path, false);
 
 		if (ret == 0) {
@@ -842,12 +849,12 @@ int owl_de_path_add_panel(struct owl_panel *panel)
 	for (i = 0; i < owl_de_get_path_num(); i++) {
 		path = &g_cur_de->paths[i];
 
-		if (path->panel != NULL && path->panel != panel)
-			continue;
-
 		if ((PANEL_TYPE(panel) & path->supported_displays) != 0) {
+			/* panel as de path current panel */
 			panel->path = path;
-			path->panel = panel;
+			path->current_panel = panel;
+
+			list_add_tail(&panel->head, &path->panels);
 
 			return 0;
 		}
@@ -857,6 +864,54 @@ int owl_de_path_add_panel(struct owl_panel *panel)
 }
 EXPORT_SYMBOL(owl_de_path_add_panel);
 
+
+/*
+ * owl_de_path_update_panel:
+ *
+ * hdmi panel has higher priority.
+ *
+ * panel is changed return 0 else return -1
+ * */
+int owl_de_path_update_panel(struct owl_panel *panel)
+{
+	struct owl_de_path *path = panel->path;
+	struct owl_panel *new_panel, *old_panel;
+
+	/* just for path 0 */
+	if (path->id != 0)
+		return 0;
+
+	/* save path current panel */
+	old_panel = path->current_panel;
+
+	/* updated path current panel, hdmi has higher priority */
+	list_for_each_entry(new_panel, &path->panels, head)
+		if (PANEL_TYPE(new_panel) == OWL_DISPLAY_TYPE_HDMI) {
+			pr_info("%s is path %d default current panel\n",
+					new_panel->desc.name, path->id);
+
+			path->current_panel = new_panel;
+
+			if (owl_panel_hpd_is_connected(new_panel))
+				goto get_current_panel;
+		}
+
+	/*
+	 * updated path current panel according to whether the panel is connected,
+	 */
+	list_for_each_entry(new_panel, &path->panels, head)
+		if (owl_panel_hpd_is_connected(new_panel)) {
+			pr_info("%s is path %d current panel\n",
+					new_panel->desc.name, path->id);
+			path->current_panel = new_panel;
+			goto get_current_panel;
+		}
+
+get_current_panel:
+	return old_panel != new_panel ? 0 : -1;
+}
+EXPORT_SYMBOL(owl_de_path_update_panel);
+
 int owl_de_path_remove_panel(struct owl_panel *panel)
 {
 	int i;
@@ -865,9 +920,9 @@ int owl_de_path_remove_panel(struct owl_panel *panel)
 	for (i = 0; i < owl_de_get_path_num(); i++) {
 		path = &g_cur_de->paths[i];
 
-		if (path->panel == panel) {
+		if (path->current_panel == panel) {
 			panel->path = NULL;
-			path->panel = NULL;
+			path->current_panel = NULL;
 			return 0;
 		}
 	}
@@ -910,7 +965,7 @@ struct owl_de_video *owl_de_video_get_by_index(int index)
 EXPORT_SYMBOL(owl_de_video_get_by_index);
 
 void owl_de_video_get_info(struct owl_de_video *video,
-			   struct owl_de_video_info *info)
+		struct owl_de_video_info *info)
 {
 	pr_debug("video %d\n", video->id);
 	memcpy(info, &video->info, sizeof(struct owl_de_video_info));
@@ -918,7 +973,7 @@ void owl_de_video_get_info(struct owl_de_video *video,
 EXPORT_SYMBOL(owl_de_video_get_info);
 
 void owl_de_video_set_info(struct owl_de_video *video,
-			   struct owl_de_video_info *info)
+		struct owl_de_video_info *info)
 {
 	pr_debug("video %d\n", video->id);
 
@@ -928,7 +983,7 @@ void owl_de_video_set_info(struct owl_de_video *video,
 EXPORT_SYMBOL(owl_de_video_set_info);
 
 int owl_de_video_info_validate(struct owl_de_video *video,
-			       struct owl_de_video_info *info)
+		struct owl_de_video_info *info)
 {
 	int plane;
 	int tmp;
@@ -936,11 +991,11 @@ int owl_de_video_info_validate(struct owl_de_video *video,
 	const struct owl_de_video_capacities *caps;
 	const struct owl_de_video_crop_limits *crop_limits;
 
-	#define ERR_OUT(errno) \
-		do { \
-			pr_debug("failed(%d)\n", (errno)); \
-			return errno; \
-		} while (0)
+#define ERR_OUT(errno) \
+	do { \
+		pr_debug("failed(%d)\n", (errno)); \
+		return errno; \
+	} while (0)
 
 	caps = &video->capacities;
 
@@ -954,7 +1009,7 @@ int owl_de_video_info_validate(struct owl_de_video *video,
 		ERR_OUT(-3);	/* TODO */
 
 	if (owl_de_is_s900() && info->blending == OWL_BLENDING_PREMULT &&
-	    info->alpha != 255)
+			info->alpha != 255)
 		ERR_OUT(-4);
 
 	if (owl_dss_color_is_rgb(info->color_mode))
@@ -963,37 +1018,37 @@ int owl_de_video_info_validate(struct owl_de_video *video,
 		crop_limits = &caps->yuv_limits;
 
 	if (info->is_original_scaled)
-	    pr_debug("%dx%d->%dx%d, crop_limits->scaling_width.min = %d\n", info->width, info->height,
-		 info->out_width, info->out_height, crop_limits->scaling_width.min);
+		pr_debug("%dx%d->%dx%d, crop_limits->scaling_width.min = %d\n", info->width, info->height,
+				info->out_width, info->out_height, crop_limits->scaling_width.min);
 
 	if (info->width < crop_limits->input_width.min ||
-	    info->width > crop_limits->input_width.max ||
-	    info->height < crop_limits->input_height.min ||
-	    info->height > crop_limits->input_height.max ||
-	    info->out_width < crop_limits->output_width.min ||
-	    info->out_width > crop_limits->output_width.max ||
-	    info->out_height < crop_limits->output_height.min ||
-	    info->out_height > crop_limits->output_height.max)
+			info->width > crop_limits->input_width.max ||
+			info->height < crop_limits->input_height.min ||
+			info->height > crop_limits->input_height.max ||
+			info->out_width < crop_limits->output_width.min ||
+			info->out_width > crop_limits->output_width.max ||
+			info->out_height < crop_limits->output_height.min ||
+			info->out_height > crop_limits->output_height.max)
 		ERR_OUT(-5);
 
 	/* NOTE: check this video layer scaling capacity, min scaling_width not equal 80 means have no scaler*/
 	if (owl_de_is_s700() && (crop_limits->scaling_width.min != 80) &&
-	        info->is_original_scaled)
+			info->is_original_scaled)
 		ERR_OUT(-12);
 
 	/* scaling */
 	if (info->width < info->out_width) {
 		if (info->out_width * 10 >
-		    info->width * crop_limits->scaling_width.max)
+				info->width * crop_limits->scaling_width.max)
 			ERR_OUT(-6);
 	} else {
 		if (info->width * 10 >
-		    info->out_width * crop_limits->scaling_width.min)
+				info->out_width * crop_limits->scaling_width.min)
 			ERR_OUT(-7);
 	}
 	if (info->height < info->out_height) {
 		if (info->out_height * 10 >
-		    info->height * crop_limits->scaling_height.max)
+				info->height * crop_limits->scaling_height.max)
 			ERR_OUT(-8);
 	} else {
 		if (de_hscaler_min > 0)		/* testing */
@@ -1020,12 +1075,12 @@ int owl_de_video_info_validate(struct owl_de_video *video,
 
 	return 0;
 
-	#undef ERR_OUT
+#undef ERR_OUT
 }
 EXPORT_SYMBOL(owl_de_video_info_validate);
 
 /*=============================================================================
-				DE irq handler
+  DE irq handler
  *===========================================================================*/
 
 /*
@@ -1046,7 +1101,7 @@ static bool __de_path_wait_vb_valid(struct owl_de_path *path)
 
 	pr_debug("wait VB valid\n");
 	ret = WAIT_WITH_TIMEOUT(path->ops->is_vb_valid(path),
-				owl_panel_get_preline_time(path->panel));
+			owl_panel_get_preline_time(path->current_panel));
 
 	/* wait timeout, not safe for gamma */
 	if (ret == 0) {
@@ -1059,7 +1114,7 @@ static bool __de_path_wait_vb_valid(struct owl_de_path *path)
 #ifdef OWL_DE_GAMMA_ENABLE
 	/* do not deal with gamma for dummy or hdmi device */
 	if (path->info.type != OWL_DISPLAY_TYPE_DUMMY &&
-	    path->info.type != OWL_DISPLAY_TYPE_HDMI)
+			path->info.type != OWL_DISPLAY_TYPE_HDMI)
 		is_safe_for_gamma = true;
 
 	if (path->info.gamma_adjust_needed) {
@@ -1073,7 +1128,7 @@ static bool __de_path_wait_vb_valid(struct owl_de_path *path)
 #endif
 
 send_vsync_and_out:
-	owl_panel_vsync_notify(path->panel);
+	owl_panel_vsync_notify(path->current_panel);
 
 	wake_up(&path->vsync_wq);
 
@@ -1087,7 +1142,7 @@ static void de_path_vsync_work_func(struct work_struct *work)
 	path = container_of(work, struct owl_de_path, vsync_work);
 
 	pr_debug("time from irq handler to vsync work is %lld us\n",
-		 ktime_to_us(ktime_sub(ktime_get(), path->vsync_stamp)));
+			ktime_to_us(ktime_sub(ktime_get(), path->vsync_stamp)));
 
 	mutex_lock(&g_cur_de->state_mutex);
 
@@ -1123,13 +1178,13 @@ static irqreturn_t de_irq_handler(int irq, void *data)
 	for (i = 0; i < de->num_paths; i++) {
 		path = &de->paths[i];
 
-		if (path->panel == NULL)
+		if (path->current_panel == NULL)
 			continue;
 
-		preline_time = owl_panel_get_preline_time(path->panel);
+		preline_time = owl_panel_get_preline_time(path->current_panel);
 
 		if (path->ops->is_preline_enabled(path) &&
-		    path->ops->is_preline_pending(path)) {
+				path->ops->is_preline_pending(path)) {
 			pr_debug("path%d preline IRQ pending\n", path->id);
 
 			/* Ack the interrupt */
@@ -1153,7 +1208,7 @@ static irqreturn_t de_irq_handler(int irq, void *data)
 }
 
 /*=============================================================================
-			      debugfs attributes
+  debugfs attributes
  *===========================================================================*/
 
 static int __debugfs_simple_open(struct inode *inode, struct file *filp)
@@ -1166,7 +1221,7 @@ static int __debugfs_simple_open(struct inode *inode, struct file *filp)
  * de device
  */
 static ssize_t __debugfs_de_regs_read(struct file *filp, char __user *user_buf,
-				      size_t count, loff_t *ppos)
+		size_t count, loff_t *ppos)
 {
 	struct owl_de_device *de = filp->private_data;
 
@@ -1195,8 +1250,8 @@ static void de_device_debugfs_create(struct owl_de_device *de)
  * de path
  */
 static ssize_t __debugfs_path_enable_read(struct file *filp,
-					  char __user *user_buf,
-					  size_t count, loff_t *ppos)
+		char __user *user_buf,
+		size_t count, loff_t *ppos)
 {
 	char buf[10];
 	int len;
@@ -1204,7 +1259,7 @@ static ssize_t __debugfs_path_enable_read(struct file *filp,
 	struct owl_de_path *path = filp->private_data;
 
 	if (path->ops && path->ops->is_enabled &&
-	    path->ops->is_enabled(path))
+			path->ops->is_enabled(path))
 		len = sprintf(buf, "1\n");
 	else
 		len = sprintf(buf, "0\n");
@@ -1213,8 +1268,8 @@ static ssize_t __debugfs_path_enable_read(struct file *filp,
 }
 
 static ssize_t __debugfs_path_enable_write(struct file *filp,
-					   const char __user *user_buf,
-					   size_t count, loff_t *ppos)
+		const char __user *user_buf,
+		size_t count, loff_t *ppos)
 {
 	int enable = 0;
 
@@ -1238,8 +1293,8 @@ static const struct file_operations path_enable_fops = {
 };
 
 static ssize_t __debugfs_path_info_apply_write(struct file *filp,
-					       const char __user *user_buf,
-					       size_t count, loff_t *ppos)
+		const char __user *user_buf,
+		size_t count, loff_t *ppos)
 {
 	struct owl_de_path *path = filp->private_data;
 
@@ -1261,28 +1316,28 @@ static void de_path_debugfs_create(struct owl_de_path *path)
 {
 	/* path info */
 	debugfs_create_u32("type", S_IRUGO | S_IWUSR, path->dir,
-			   &path->info.type);
+			&path->info.type);
 	debugfs_create_u32("width", S_IRUGO | S_IWUSR, path->dir,
-			   &path->info.width);
+			&path->info.width);
 	debugfs_create_u32("height", S_IRUGO | S_IWUSR, path->dir,
-			   &path->info.height);
+			&path->info.height);
 	debugfs_create_u32("dither_mode", S_IRUGO | S_IWUSR, path->dir,
-			   &path->info.dither_mode);
+			&path->info.dither_mode);
 
 	/* path enable */
 	debugfs_create_file("enable", S_IRUGO | S_IWUSR,
-			    path->dir, path, &path_enable_fops);
+			path->dir, path, &path_enable_fops);
 
 	/* path info apply */
 	debugfs_create_file("apply", S_IWUSR, path->dir, path,
-			    &path_info_apply_fops);
+			&path_info_apply_fops);
 }
 
 /* de video */
 
 static ssize_t __debugfs_video_info_apply_write(struct file *filp,
-						const char __user *user_buf,
-						size_t count, loff_t *ppos)
+		const char __user *user_buf,
+		size_t count, loff_t *ppos)
 {
 	struct owl_de_video *video = filp->private_data;
 
@@ -1310,40 +1365,40 @@ static void de_video_debugfs_create(struct owl_de_video *video)
 
 	/* video info */
 	debugfs_create_u64("addr0", S_IRUGO | S_IWUSR, video->dir,
-			   (u64 *)&info->addr[0]);
+			(u64 *)&info->addr[0]);
 	debugfs_create_u32("offset0", S_IRUGO | S_IWUSR, video->dir,
-			   &info->offset[0]);
+			&info->offset[0]);
 	debugfs_create_u32("pitch0", S_IRUGO | S_IWUSR, video->dir,
-			   &info->pitch[0]);
+			&info->pitch[0]);
 
 	debugfs_create_u32("color_mode", S_IRUGO | S_IWUSR, video->dir,
-			   &info->color_mode);
+			&info->color_mode);
 
 	debugfs_create_u16("xoff", S_IRUGO | S_IWUSR, video->dir, &info->xoff);
 	debugfs_create_u16("yoff", S_IRUGO | S_IWUSR, video->dir, &info->yoff);
 	debugfs_create_u16("width", S_IRUGO | S_IWUSR, video->dir,
-			   &info->width);
+			&info->width);
 	debugfs_create_u16("height", S_IRUGO | S_IWUSR, video->dir,
-			   &info->height);
+			&info->height);
 
 	debugfs_create_u16("pos_x", S_IRUGO | S_IWUSR, video->dir,
-			   &info->pos_x);
+			&info->pos_x);
 	debugfs_create_u16("pos_y", S_IRUGO | S_IWUSR, video->dir,
-			   &info->pos_y);
+			&info->pos_y);
 	debugfs_create_u16("out_width", S_IRUGO | S_IWUSR, video->dir,
-			   &info->out_width);
+			&info->out_width);
 	debugfs_create_u16("out_height", S_IRUGO | S_IWUSR, video->dir,
-			   &info->out_height);
+			&info->out_height);
 
 	debugfs_create_u32("rotation", S_IRUGO | S_IWUSR, video->dir,
-			   &info->rotation);
+			&info->rotation);
 
 	debugfs_create_u8("blending", S_IRUGO | S_IWUSR, video->dir, &info->blending);
 	debugfs_create_u8("alpha", S_IRUGO | S_IWUSR, video->dir, &info->alpha);
 
 	/* video info apply */
 	debugfs_create_file("apply", S_IWUSR, video->dir, video,
-			    &video_info_apply_fops);
+			&video_info_apply_fops);
 }
 
 static int owl_de_debugfs_create(struct owl_de_device *de)

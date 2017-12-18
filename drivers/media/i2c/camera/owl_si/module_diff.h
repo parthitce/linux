@@ -34,9 +34,15 @@
 #define FDT_COMPATIBLE              "actions,s700-isp"
 #define CAM_HOST_NAME               "camera-host"
 
+#define REG_MASK(start, end)	(((1 << ((start) - (end) + 1)) - 1) << (end))
+#define REG_VAL(val, start, end) (((val) << (end)) & REG_MASK(start, end))
+#define REG_GET_VAL(val, start, end) (((val) & REG_MASK(start, end)) >> (end))
+#define REG_SET_VAL(orig, val, start, end) (((orig) & ~REG_MASK(start, end))\
+						 | REG_VAL(val, start, end))
+
 #define MODULE_MAX_WIDTH		     4288
 #define MODULE_MAX_HEIGHT		     4096
-#define MODULE_WORK_CLOCK		     60000000	/*60MHz */
+#define MODULE_WORK_CLOCK		     240000000	/*240MHz */
 #define SENSOR_WORK_CLOCK		     24000000	/*24MHz */
 
 #define OFFSET_OF_ALIGN			     0
@@ -55,6 +61,9 @@
 #define V4L2_CID_AF_UPDATE		     0x10002
 #define V4L2_CID_MODULE_GETINFO      0x1003
 #define V4L2_CID_MODULE_UPDATERAW    0x1004
+
+#define MODULE_CTL_CHANNEL1_COLOR_SEQ_UYVY      (0x2<<24)
+#define MODULE_CTL_CHANNEL1_COLOR_SEQ_YUYV      (0x0<<24)
 
 #define MODULE_INT_STAT_CH2_FRAME_END_INT_EN (0x1 << 5)
 #define MODULE_INT_STAT_CH1_FRAME_END_INT_EN (0x1 << 3)

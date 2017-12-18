@@ -543,8 +543,8 @@
 		      <0 0xe02c0000 0 0x1f0>,
 		      <0 0xe0110000 0 0x8010>;
 		reg-names = "regs", "hdmi_base", "pcm_base";
-		clocks = <&clock CLK_I2SRX>, <&clock CLK_I2STX>, <&clock CLK_PCM1>;
-		clock-names = "i2srx", "i2stx", "pcm1";
+		clocks = <&clock CLK_I2SRX>, <&clock CLK_I2STX>, <&clock CLK_PCM1> ,<&clock CLK_AUDIO_PLL>;
+		clock-names = "i2srx", "i2stx", "pcm1" ,"audio_pll";
 		dmas = <&dma DMA_DRQ_I2S_TX>, <&dma DMA_DRQ_I2S_RX>, <&dma DMA_DRQ_HDMI_AUDIO>,
 		      <&dma DMA_DRQ_PCM1_TX>, <&dma DMA_DRQ_PCM1_RX>;
 		dma-names = "tx","rx","hdmia","pcm1tx","pcm1rx";

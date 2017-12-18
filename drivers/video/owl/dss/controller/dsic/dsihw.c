@@ -39,6 +39,8 @@
 #include <linux/reset.h>
 #include <video/owl_dss.h>
 #include <linux/bootafinfo.h>
+#include <linux/dma-mapping.h>
+#include <linux/dmaengine.h>
 
 #include "dsihw.h"
 #include "dsi.h"
@@ -51,6 +53,8 @@
 int owl_dsi_debug = 1;
 module_param_named(debug, owl_dsi_debug, int, 0644);
 #endif
+
+#define calc_align(n, align) ((n + align - 1) & (~(align - 1)))
 
 inline struct dsi_data *dsihw_get_dsidrv_data(struct platform_device *pdev)
 {
@@ -568,7 +572,11 @@ static void dsihw_phy_config(struct dsi_data *dsi)
 	}
 	DSIDBG("cal done\n");
 
-	/* continue clock EN */
+	/*
+	 * continue clock EN
+	 * Be careful, must have a delay before EN
+	 * */
+	mdelay(10);
 	tmp = dsihw_read_reg(dsi, DSI_CTRL);
 	tmp |= 0x40;
 	dsihw_write_reg(dsi, DSI_CTRL, tmp);
@@ -583,12 +591,111 @@ static void dsihw_phy_config(struct dsi_data *dsi)
 	DSIDBG("%s end.\n", __func__);
 }
 
+static void dsic_dma_tx_callback(void *data)
+{
+	struct dsi_data *dsi = data;
+
+	complete(&dsi->dma_complete);
+	DSIDBG("%s finished!\n", __func__);
+}
+
+static int dsic_dma_start_tx(struct dsi_data *dsi,
+			void *buffer_addr, size_t len)
+{
+	struct dma_async_tx_descriptor *desc = dsi->desc;
+	struct dma_chan	*chan = dsi->tx_dma_chan;
+	struct device *dev = chan->device->dev;
+
+	DSIDBG("%s\n", __func__);
+
+	/* TX buffer */
+	dsi->tx_addr = dma_map_single(dev,
+		buffer_addr, len, DMA_TO_DEVICE);
+
+	desc = dmaengine_prep_slave_single(chan,
+			dsi->tx_addr, len, DMA_MEM_TO_DEV,
+			DMA_PREP_INTERRUPT | DMA_CTRL_ACK);
+	if (!desc) {
+		DSIERR("We cannot prepare for the TX slave dma!\n");
+		return -1;
+	}
+
+	dma_sync_single_for_device(dev, dsi->tx_addr, len, DMA_TO_DEVICE);
+
+	desc->callback = dsic_dma_tx_callback;
+	desc->callback_param = dsi;
+
+	/* fire it */
+	dmaengine_submit(desc);
+	dma_async_issue_pending(chan);
+}
+
+static void dsihw_send_long_packet(struct dsi_data *dsi, int data_type,
+			int data_len, uint8_t *send_data, int trans_mode)
+{
+
+	uint32_t reg_val, len;
+	int wait_times, i;
+
+	printk("%s\n", __func__);
+	for (i = 0; i < data_len; i++)
+		printk(" 0x%x\n", send_data[i]);
+
+
+	reg_val = dsihw_read_reg(dsi, DSI_CTRL);
+	reg_val &= 0xffffefff;
+	dsihw_write_reg(dsi, DSI_CTRL, reg_val);
+
+	/* Four byte alignment is required */
+	len = calc_align(data_len, 4);
+	DSIDBG("alignment len %d\n", len);
+
+	/*
+	 * when When sending a long package command
+	 * 'DSI_PACK_HEADER' is data len.
+	 * */
+	dsihw_write_reg(dsi, DSI_PACK_HEADER, data_len);
+	reg_val = data_type << 8;
+	reg_val |= trans_mode << 14;
+	reg_val |= 1 << 18; /* long packet */
+	dsihw_write_reg(dsi, DSI_PACK_CFG, reg_val);
+	mdelay(1);
+
+	/* start dma transmission*/
+	dsic_dma_start_tx(dsi, send_data, len);
+
+	/* start dsi packet transmission */
+	reg_val = dsihw_read_reg(dsi, DSI_PACK_CFG);
+	reg_val |= 0x1;
+	dsihw_write_reg(dsi, DSI_PACK_CFG, reg_val);
+
+	/* waiting for transmitting Complete */
+	wait_times = 10;
+	do {
+		reg_val = dsihw_read_reg(dsi, DSI_TR_STA);
+		if (((reg_val >> 19) & 0x1) == 1)
+			break;
+		mdelay(1);
+	} while (--wait_times);
+	if (wait_times <= 0)
+		printk("%s, long cmd transmission timout!\n", __func__);
+
+	wait_times = wait_for_completion_timeout(&dsi->dma_complete, msecs_to_jiffies(500));
+	if (wait_times == 0)
+		printk("dma wait for completion timeout\n");
+
+	/* Clear TCIP */
+	dsihw_write_reg(dsi, DSI_TR_STA, 0x80000);
+	dsihw_write_reg(dsi, DSI_TR_STA, 0xfff);
+
+}
+
 void dsihw_send_short_packet(struct dsi_data *dsi, int data_type,
 				int sp_data, int trans_mode)
 {
 	int tmp;
 
-	DSIDBG("mipi initial cmd 0x%x\n", sp_data);
+	DSIDBG("mipi cmd 0x%x\n", sp_data);
 
 	tmp = dsihw_read_reg(dsi, DSI_CTRL);
 	tmp &= 0xffffefff;
@@ -822,39 +929,52 @@ static int dsihw_ctrl_aux_read(struct owl_display_ctrl *ctrl, char *buf,
 }
 
 /*
- * command buffer[i] format:
- * 	bit 31:24---> parameters
- * 	bit 23:16---> DCS
- * 	bit 15:8----> data type
- * 	bit 7:0-----> cmd delay
- * */
+ * command buffer format:
+ * 	buffer 4 ~ (MIPI_MAX_PARS - 1) ---> parameters
+ * 	buffer 3---> address
+ * 	buffer 2---> number of parameters
+ * 	buffer 1---> dcs data type
+ * 	buffer 0---> cmd delay
+ *
+ */
 static int dsihw_ctrl_aux_write(struct owl_display_ctrl *ctrl, char *buf,
 				int count)
 {
 	struct dsi_data *dsi = owl_ctrl_get_drvdata(ctrl);
-	int trans_mode = 1;
-	int i;
-	uint8_t data_type, cmd_delay;
-	uint16_t data_command;
-	uint32_t *buffer = buf;
 
 	DSIDBG("%s, cmd_nums %d\n", __func__, count);
-	if (buffer != NULL && count > 0) {
-		for (i = 0; i < count; i++) {
-			/* get data type and cmd delay */
-			data_command = (buffer[i] >> 16) & 0xffff;
-			data_type = (buffer[i] >> 8) & 0xff;
-			cmd_delay = buffer[i] & 0xff;
 
-			/* mipi initial command send by short packet TODO*/
-			dsihw_send_short_packet(dsi, data_type,
-						data_command, trans_mode);
-			if (cmd_delay > 0)
-				mdelay(cmd_delay);
-			DSIDBG("cmd delay: %x\n", cmd_delay);
-		}
+	int trans_mode = 1;
+	uint8_t data_type, cmd_delay;
+	uint8_t *buffer = buf;
+
+	uint8_t *data, n_data;
+
+	cmd_delay = buffer[0];
+	data_type = buffer[1];
+	n_data = buffer[2] + 1;
+	data = &buffer[3];
+
+	switch (data_type) {
+	case MIPI_DSI_GENERIC_LONG_WRITE:
+	case MIPI_DSI_DCS_LONG_WRITE:
+		dsihw_send_long_packet(dsi, data_type,
+					n_data, data, trans_mode);
+		break;
+
+	case MIPI_DSI_GENERIC_SHORT_WRITE_0_PARAM:
+	case MIPI_DSI_GENERIC_SHORT_WRITE_1_PARAM:
+	case MIPI_DSI_GENERIC_SHORT_WRITE_2_PARAM:
+	case MIPI_DSI_DCS_SHORT_WRITE:
+	case MIPI_DSI_DCS_SHORT_WRITE_PARAM:
+		dsihw_send_short_packet(dsi, data_type,
+					*((uint16_t *)data), trans_mode);
+		break;
+	default:
+		return -1;
 	}
 
+	mdelay(cmd_delay);
 	return 0;
 }
 static int dsihw_parse_params(struct platform_device *pdev,
@@ -1076,6 +1196,7 @@ static int dsihw_get_resources(struct platform_device *pdev)
 		DSIERR("can't get regs\n");
 		return PTR_ERR(res);
 	}
+	dsi->mapbase = res->start;
 	dsi->base = devm_ioremap_resource(dev, res);
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "cmu_base");
@@ -1124,6 +1245,26 @@ static int dsihw_get_resources(struct platform_device *pdev)
 	return 0;
 }
 
+static int dsic_dma_init(struct device *dev, struct dsi_data *dsi)
+{
+	struct dma_slave_config slave_config = {};
+
+	DSIDBG("%s\n", __func__);
+
+	dsi->tx_dma_chan = dma_request_slave_channel(dev, "tx");
+	if (!dsi->tx_dma_chan) {
+		DSIERR("cannot get the TX DMA channel!\n");
+		return -ENODEV;
+	}
+
+	slave_config.direction = DMA_MEM_TO_DEV;
+	slave_config.dst_addr = dsi->mapbase + DSI_FIFO_ODAT;
+	slave_config.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+	dmaengine_slave_config(dsi->tx_dma_chan, &slave_config);
+
+	init_completion(&dsi->dma_complete);
+}
+
 static int owl_dsihw_probe(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -1161,6 +1302,8 @@ static int owl_dsihw_probe(struct platform_device *pdev)
 		DSIERR("parse dsi params error: %d\n", ret);
 		return ret;
 	}
+
+	dsic_dma_init(dev, dsi);
 
 	dsi->ctrl.type = OWL_DISPLAY_TYPE_DSI;
 	dsi->ctrl.ops = &owl_dsi_ctrl_ops;

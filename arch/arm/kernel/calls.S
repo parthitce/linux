@@ -389,6 +389,12 @@
 		CALL(sys_process_vm_writev)
 		CALL(sys_kcmp)
 		CALL(sys_finit_module)
+/* 380 */	CALL(sys_ni_syscall)	/* was sched_setattr */
+		CALL(sys_ni_syscall)	/* was ched_getattr */
+		CALL(sys_ni_syscall)	/* was renameat2 */
+		CALL(sys_ni_syscall)	/* was seccomp */
+		CALL(sys_getrandom)
+/* 385 */	CALL(sys_ni_syscall)	/* was memfd_create */
 #ifndef syscalls_counted
 .equ syscalls_padding, ((NR_syscalls + 3) & ~3) - NR_syscalls
 #define syscalls_counted
