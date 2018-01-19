@@ -36,8 +36,7 @@
 #include <linux/usb/ch9.h>
 #include <linux/usb/f_mtp.h>
 
-#define MTP_COMPAT_IOCTL
-#ifdef MTP_COMPAT_IOCTL
+#ifdef CONFIG_COMPAT
 #include <linux/compat.h>
 #include <linux/uaccess.h>
 #endif
@@ -1324,7 +1323,7 @@ out:
 	return ret;
 }
 
-#ifdef MTP_COMPAT_IOCTL
+#ifdef CONFIG_COMPAT
 struct mtp_event_32 {
 	/* size of the event */
 	u32		length;
@@ -1419,7 +1418,7 @@ static const struct file_operations mtp_fops = {
 	.read = mtp_read,
 	.write = mtp_write,
 	.unlocked_ioctl = mtp_ioctl,
-#ifdef MTP_COMPAT_IOCTL
+#ifdef CONFIG_COMPAT
 	.compat_ioctl = mtp_compat_ioctl,
 #endif
 	.open = mtp_open,

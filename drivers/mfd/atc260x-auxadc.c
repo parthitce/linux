@@ -1097,7 +1097,7 @@ static int _atc2603c_auxadc_dev_init(struct atc260x_dev *atc260x)
 	icm_ohm = 20;
 	ret = of_property_read_u32(atc260x->dev->of_node, "icm_ohm", &icm_ohm);
 	if (ret) {
-		dev_err(atc260x->dev,
+		dev_info(atc260x->dev,
 			"icm_ohm not config, use default value\n");
 	}
 	dev_info(atc260x->dev, "auxadc icm_ohm = %u\n", icm_ohm);

@@ -74,6 +74,29 @@ static void panel_update_path_info(struct owl_panel *panel)
 	owl_de_path_set_info(path, &p_info);
 }
 
+static void panel_update_video_info(struct owl_panel *panel)
+{
+	struct owl_de_path 	 *path = panel->path;
+	struct owl_de_video 	 *video;
+	struct owl_de_video_info v_info;
+
+	/* update videos info */
+	list_for_each_entry(video, &path->videos, list) {
+		owl_de_video_get_info(video, &v_info);
+
+		/* get video properties which is changed */
+		v_info.brightness = owl_panel_brightness_get(panel);
+		v_info.contrast = owl_panel_contrast_get(panel);
+		v_info.saturation = owl_panel_saturation_get(panel);
+		/*
+		 * you can get others video properties which is changed
+		 * in here TODO
+		 */
+
+		owl_de_video_set_info(video, &v_info);
+	}
+}
+
 /*
  * Update panel's timing info, include preline number, preline time
  * VB time and so on.
@@ -427,6 +450,12 @@ void owl_panel_set_mode_list(struct owl_panel *panel,
 		       sizeof(struct owl_videomode));
 }
 EXPORT_SYMBOL(owl_panel_set_mode_list);
+
+bool owl_panel_is_enabled(struct owl_panel *panel)
+{
+    return (panel->state == OWL_DSS_STATE_ON);
+}
+EXPORT_SYMBOL(owl_panel_is_enabled);
 
 int owl_panel_enable(struct owl_panel *panel)
 {
@@ -1082,6 +1111,42 @@ static ssize_t panel_enable_store(struct device *dev,
 	return count;
 }
 
+static ssize_t panel_force_refresh_show(struct device *dev,
+				 struct device_attribute *attr, char *buf)
+{
+	struct owl_panel *panel = dev_get_drvdata(dev);
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", 0);
+
+}
+
+static ssize_t panel_force_refresh_store(struct device *dev,
+				  struct device_attribute *attr,
+				  const char *buf, size_t count)
+{
+	int val;
+	int ret = 0;
+	struct owl_panel 	*panel = dev_get_drvdata(dev);
+	struct owl_de_path	*path = panel->path;
+
+	ret = kstrtoint(buf, 0, &val);
+	if (ret < 0)
+		return ret;
+
+	pr_info("%s, %d\n", __func__, val);
+
+	if (!!val) {
+		panel_update_path_info(panel);
+		panel_update_video_info(panel);
+
+		owl_de_path_apply(path);
+		owl_de_path_wait_for_go(path);
+	}
+
+	return count;
+}
+
+
 static ssize_t panel_is_primary_show(struct device *dev,
 				     struct device_attribute *attr, char *buf)
 {
@@ -1392,6 +1457,8 @@ static struct device_attribute panel_dev_attrs[] = {
 	__ATTR(vb_time, S_IRUGO, panel_vb_time_show, NULL),
 	__ATTR(enable, S_IRUGO | S_IWUSR, panel_enable_show,
 	       panel_enable_store),
+	__ATTR(force_refresh, S_IRUGO | S_IWUSR, panel_force_refresh_show,
+	       panel_force_refresh_store),
 	__ATTR(is_primary, S_IRUGO, panel_is_primary_show, NULL),
 	__ATTR(need_edid, S_IRUGO | S_IWUSR, panel_need_edid_show,
 	       panel_need_edid_store),

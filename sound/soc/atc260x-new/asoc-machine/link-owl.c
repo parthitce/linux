@@ -27,14 +27,17 @@
 
 const char *earphone_ctrl_link_name = "earphone_detect_gpios";
 const char *speaker_ctrl_link_name = "speaker_en_gpios";
+const char *speaker_mode_link_name = "speaker_mode_gpios";
 const char *audio_atc2603a_link_node = "actions,atc2603a-audio";
 const char *audio_atc2603c_link_node = "actions,atc2603c-audio";
 const char *audio_atc2609a_link_node = "actions,atc2609a-audio";
 
 static int earphone_gpio_num = -1;
 static int earphone_gpio_level;
+static int speaker_mode_level;
 static int speaker_level;
 static int speaker_gpio_num = -1;
+static int speaker_mode_gpio_num = -1;
 static int flag;
 /* pmu type to use */
 static int pmu_type_used = PMU_NOT_USED;
@@ -302,17 +305,6 @@ static struct snd_soc_dai_link s900_atc2609a_link_dai[] = {
 		.codec_name = "atc260x-audio",
 		.ops = &s900_link_ops,
 	},
-
-	{
-		.name = "S900 HDMI AUDIO",
-		.stream_name = "HDMI PCM",
-		.cpu_dai_name = "owl-audio-hdmi",
-		.codec_dai_name = "snd-soc-dummy-dai",
-		.init = s900_link_snd_init,
-		.platform_name = "s900-pcm-audio",
-		.codec_name = "snd-soc-dummy",
-		.ops = &s900_link_ops,
-	},
 };
 
 static struct snd_soc_dai_link s900_atc2603c_link_dai[] = {
@@ -326,18 +318,6 @@ static struct snd_soc_dai_link s900_atc2603c_link_dai[] = {
 		.codec_name = "atc260x-audio",
 		.ops = &s900_link_ops,
 	},
-
-	{
-		.name = "S900 HDMI AUDIO",
-		.stream_name = "HDMI PCM",
-		.cpu_dai_name = "owl-audio-hdmi",
-		.codec_dai_name = "snd-soc-dummy-dai",
-		.init = s900_link_snd_init,
-		.platform_name = "s900-pcm-audio",
-		.codec_name = "snd-soc-dummy",
-		.ops = &s900_link_ops,
-	},
-
 };
 
 /* open atc2609a_link */
@@ -399,6 +379,15 @@ static int __init s900_link_init(void)
 	} else {
 		earphone_gpio_level = !(flags & OF_GPIO_ACTIVE_LOW);//to do 
 		gpio_direction_input(earphone_gpio_num);
+	}
+
+	speaker_mode_gpio_num = 
+		s900_audio_gpio_init(dn,speaker_mode_link_name, &flags);
+	if (speaker_mode_gpio_num < 0) {
+		/*goto request_speaker_gpio_num_failed;*/
+	} else {
+		speaker_mode_level =  !(flags & OF_GPIO_ACTIVE_LOW);
+		gpio_direction_output(speaker_mode_gpio_num, speaker_mode_level);
 	}
 
 	speaker_gpio_num =
@@ -487,6 +476,10 @@ set_earphone_detect_failed:
 	if (earphone_gpio_num > 0) {
 		gpio_free(earphone_gpio_num);
 	}
+	
+	if (speaker_mode_gpio_num > 0) {
+		gpio_free(speaker_mode_gpio_num);
+	}
 /*request_earphone_gpio_num_failed:*/
 no_device_node:
 	return ret;
@@ -517,6 +510,11 @@ static void __exit s900_link_exit(void)
 		gpio_free(speaker_gpio_num);
 	}
 	speaker_gpio_num = -1;
+
+	if (speaker_mode_gpio_num > 0) {
+		gpio_free(speaker_mode_gpio_num);
+	}
+	speaker_mode_gpio_num = -1;
 
 	platform_device_unregister(s900_link_snd_device);
 }

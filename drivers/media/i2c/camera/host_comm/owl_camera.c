@@ -52,6 +52,8 @@
 /* for bisp's tow soc camera host*/
 static struct sensor_pwd_info *g_spinfo[2] = { NULL, NULL };
 
+static int is_first_frm = 1;
+
 static inline struct sensor_pwd_info *to_spinfo(int host_id)
 {
 	return g_spinfo[!(!host_id)];
@@ -337,7 +339,11 @@ static inline int set_row_range(struct soc_camera_device *icd)
 #ifdef MODULE_SI
 	unsigned int end = cam_param->top + icd->user_height  - 1;
 	if (cam_param->flags & SENSOR_FLAG_SI_TVIN) {
+		#ifdef SI_RECEIVE_SINGLE_FIELD
+		end = cam_param->top + icd->user_height - 1;
+		#else
 		end = cam_param->top + icd->user_height / 2 - 1;
+		#endif
 		module_info("%s, si tvin\n", __func__);
 	}
 #elif defined MODULE_ISP
@@ -676,9 +682,18 @@ static void capture_start(struct camera_dev *cam_dev,
 	if (V4L2_MBUS_CSI2 == cam_param->bus_type)
 		mipi_csi_init(icd);
 #ifdef MODULE_SI
-	if (module_info->flags & SENSOR_FLAG_SI_TVIN)
-		reg_write(0x0, GMODULEMAPADDR, TVIN_CR, MODULE_BASE);
-	
+	if (module_info->flags & SENSOR_FLAG_SI_TVIN){
+		unsigned int reg_val;
+		#ifdef SI_RECEIVE_SINGLE_FIELD
+		reg_val = reg_read(GMODULEMAPADDR, TVIN_CR, MODULE_BASE);
+		reg_val = REG_SET_VAL(reg_val, 0x1, 12, 12);
+		reg_write(reg_val, GMODULEMAPADDR, TVIN_CR, MODULE_BASE);
+		#else
+		reg_val = reg_read(GMODULEMAPADDR, TVIN_CR, MODULE_BASE);
+		reg_val = REG_SET_VAL(reg_val, 0x0, 12, 12);
+		reg_write(reg_val, GMODULEMAPADDR, TVIN_CR, MODULE_BASE);
+		#endif
+	}
 	reg_write(reg_read(GMODULEMAPADDR, MODULE_ENABLE, MODULE_BASE) &
 		  ((~0x1 << 19)), GMODULEMAPADDR, MODULE_ENABLE, MODULE_BASE);
 #endif
@@ -1021,6 +1036,7 @@ static void capture_stop(struct camera_dev *cam_dev,
 	cam_param->cur_frm = NULL;
 	cam_param->prev_frm = NULL;
 
+	is_first_frm = 1;
 	return;
 }
 
@@ -2312,14 +2328,14 @@ static void camera_videobuf_queue(struct videobuf_queue *vq,
 	list_add_tail(&vb->queue, &cam_param->capture);
 
 	if (!cam_param->cur_frm) {
-        //Fix for TVIN problem: upload null frame when the first frame.
-		if (!(cam_param->flags & SENSOR_FLAG_SI_TVIN)) {
-		    cam_param->cur_frm = list_entry(cam_param->capture.next,
-		    				struct videobuf_buffer, queue);
-		    cam_param->cur_frm->state = VIDEOBUF_ACTIVE;
+		
 
-		    list_del_init(&cam_param->cur_frm->queue);
-        }
+
+		cam_param->cur_frm = list_entry(cam_param->capture.next,
+						struct videobuf_buffer, queue);
+		cam_param->cur_frm->state = VIDEOBUF_ACTIVE;
+
+		list_del_init(&cam_param->cur_frm->queue);
 		cam_param->prev_frm = NULL;
 
 		updata_module_info(sd, cam_param);
@@ -2328,7 +2344,7 @@ static void camera_videobuf_queue(struct videobuf_queue *vq,
 		set_frame(icd, cam_param->cur_frm);
 		capture_start(cam_dev, icd);
 	
-#ifdef MODULE_SI
+#if 0             //ifdef MODULE_SI
 		if (cam_param->flags & SENSOR_FLAG_SI_TVIN) {
 			unsigned int reg_val;
 			int i;

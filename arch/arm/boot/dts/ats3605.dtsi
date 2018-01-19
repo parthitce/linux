@@ -1,0 +1,394 @@
+/*
+ * Copyright (C) 2014 Actions Semi. Inc
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation version 2.
+ *
+ * This program is distributed "as is" WITHOUT ANY WARRANTY of any
+ * kind, whether express or implied; without even the implied warranty
+ * of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+#include <dt-bindings/clock/clk-ats3605.h>
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/reset/reset-ats3605.h>
+#include <dt-bindings/dma/dma-ats3605.h>
+#include <dt-bindings/pm-domains/pm-domains-ats3605.h>
+
+/include/ "skeleton.dtsi"
+
+#include  "ats3605_pinctrl.dtsi"
+
+/ {
+	compatible = "actions,armv7","actions,ats3605";
+	interrupt-parent = <&gic>;
+
+	aliases {
+		serial2 = &serial2;
+		serial3 = &serial3;
+		serial5 = &serial5;
+		i2c0 = &i2c0;
+		i2c1 = &i2c1;
+		i2c2 = &i2c2;
+		isp0 = &isp0;
+		spi0 = &spi0;
+		gpio0=&gpioa;
+		gpio1=&gpiob;
+		gpio2=&gpioc;
+		gpio3=&gpiod;
+		mmc0 = &mmc0;
+		mmc1 = &mmc1;
+		mmc2 = &mmc2;
+	
+	};
+	cpus {
+		#size-cells = <0>;
+		#address-cells = <1>;
+
+		CPU0: cpu@0 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a9";
+			transition-latency = <61036>; /* two CLK32 periods */
+			reg = <0x0>;
+		};
+	
+	};
+
+	clock: clock-controller@b0150000 {
+		compatible = "actions,ats3605-clock";
+		reg = <0xb0150000 0x100>;
+		#clock-cells = <1>;
+	};
+
+	
+	gic: interrupt-controller@b0021000 {
+		compatible = "arm,cortex-a5-gic", "arm,cortex-a9-gic";
+		interrupt-controller;
+		#interrupt-cells = <3>;
+		reg = < 0xb0021000 0x1000 >,
+		      < 0xb0020100 0x0100>;
+
+	};
+
+	sirq: interrupt-controller@b01c0000 {
+		compatible = "actions,ats3605-sirq";
+		reg = <0xb01c0000 0x240>;
+		interrupts = <GIC_SPI 14 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 17 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SPI 37 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+	};
+
+
+	powergate: power-domain@0xb01c0100 {
+		compatible = "actions,ats3605-pm-domains";
+		reg = <0xb01c0100 0x10>;
+		#power-domain-cells = <1>;
+	};
+
+	reset: reset-controller@b01500a8 {
+		#reset-cells = <1>;
+		compatible = "actions,ats3605-reset";
+		reg = <0xb01500a8 0x8>;
+	};
+
+	smp_twd@b0020600 {
+		compatible = "arm,cortex-a5-twd-timer";
+		reg = <0xb0020600 0x200>;
+		interrupts = <1 13 0xf04>;
+		clocks = <&clock CLK_TWD>;	
+		clock-names = "twd_clk";
+	};
+
+	timer@b0158000 {
+		compatible = "actions,ats3605-timer";
+		reg = <0xb0158000 0x100>;
+		interrupts = <GIC_SPI 12 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clock CLK_TIMER>;
+		clock-names = "timer";
+	};
+
+	dma: dma-controller@b0220000  {
+		compatible = "actions,ats3605-dma";
+		reg = <0xb0220000  0x200>;
+		interrupts = <GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>;
+		#dma-cells = <1>;
+		dma-channels = <4>;	/* physical dma channels */
+		dma-requests = <16>;	/* virtual dma channels */
+		clocks = <&clock CLK_DMAC>;
+		clock-names = "dmac";
+	};
+	
+	L2: cache-controller@b0022000 {
+		compatible = "arm,pl310-cache";
+		reg = < 0xb0022000 0x1000>;
+		cache-unified;
+		cache-level = <2>;
+		interrupts = < 0 53 0x4 >;
+		//arm,tag-latency = <3 3 2>;
+		//arm,data-latency = <5 3 3>;
+	};
+
+
+	gpioa: gpioa@b01c0000 {
+		compatible = "actions,ats3605-gpio";
+		reg = <0xb01c0000 0x240>;
+		interrupts = <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+	};
+
+	gpiob: gpiob@b01c0000 {
+		compatible = "actions,ats3605-gpio";
+		reg = <0xb01c0000 0x240>;
+		interrupts = <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+	};
+
+	gpioc: gpioc@b01c0000 {
+		compatible = "actions,ats3605-gpio";
+		reg = <0xb01c0000 0x240>;
+		interrupts = <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+	};
+
+	gpiod: gpiod@b01c0000 {
+		compatible = "actions,ats3605-gpio";
+		reg = <0xb01c0000 0x240>;
+		interrupts = <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
+		#gpio-cells = <2>;
+		gpio-controller;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+	};
+
+	spi0: spi@b0300000 {
+		compatible = "actions,ats3605-spi";
+		reg = <0xb0300000  0x40>;
+		interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clock CLK_SPI0>;
+		clock-names = "spi0";
+		status = "disabled";
+	};
+
+	serial2: uart@b0164000 {
+		compatible = "actions,ats3605-serial";
+		reg = <0xb0164000  0x100>;
+		interrupts = <GIC_SPI 30 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clock CLK_UART2>;
+		clock-names = "uart";
+		resets = <&reset RESET_UART2>;
+		//pinctrl-names = "default";
+		//pinctrl-0 = <&serial2_state_default>;
+		//dmas = <&dma DMA_DRQ_UART2>;
+		//dma-names = "rx";
+		status = "disabled";
+	};
+
+    serial3: uart@b0166000 {
+		compatible = "actions,ats3605-serial";
+		reg = <0xb0166000  0x100>;
+		interrupts = <GIC_SPI 31 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clock CLK_UART3>;
+		clock-names = "uart";
+		resets = <&reset RESET_UART3>;
+		//pinctrl-names = "default";
+		//pinctrl-0 = <&serial3_state_default>;
+		status = "disabled";
+
+	};
+
+	serial5: uart@b016a000 {
+		compatible = "actions,ats3605-serial";
+		reg = <0xb016a000 0x100>;
+		interrupts =<GIC_SPI 33 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clock CLK_UART5>;
+		clock-names = "uart";
+		resets = <&reset RESET_UART5>;
+
+		status = "disabled";
+	};
+
+	i2c0: i2c@b0180000 {
+		compatible = "actions,ats3605-i2c";
+		reg = <0xb0180000  0x100>;
+		interrupts = <GIC_SPI 25 IRQ_TYPE_LEVEL_HIGH>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		clocks = <&clock CLK_I2C0>;
+		clock-names = "i2c0";
+		#pinctrl-names = "default";
+		#pinctrl-0 = <&pinctrl_i2c0_default>;
+		status = "disabled";
+	};
+
+	i2c1: i2c@b0184000 {
+		compatible = "actions,ats3605-i2c";
+		reg = <0xb0184000  0x100>;
+		interrupts = <GIC_SPI 26 IRQ_TYPE_LEVEL_HIGH>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		clocks = <&clock CLK_I2C1>;
+		clock-names = "i2c1";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_i2c1_default>;
+		status = "disabled";
+	};
+
+	i2c2: i2c@b0188000 {
+		compatible = "actions,ats3605-i2c";
+		reg = <0xb0188000 0x100>;
+		interrupts = <GIC_SPI 27 IRQ_TYPE_LEVEL_HIGH>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		clocks = <&clock CLK_I2C2>;
+		clock-names = "i2c2";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_i2c2_default>;
+		status = "disabled";
+	};
+
+	isp0: isp@0xb0210000 {
+		compatible = "actions,ats3605-isp";
+		reg = <0xb0210000 0x18>;
+		interrupts = <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>;/*MPCore:45*/
+		//power-domains = <&powergate POWER_DOMAIN_VCE>;
+		clocks = <&clock CLK_SI>, <&clock CLK_SENSOR_OUT>;
+		clock-names = "si", "sensor_out";
+		resets = <&reset RESET_SI>;
+		reset-names = "si";
+	};
+
+	pwm: pwm@b01c0000 {
+		compatible = "actions,ats3605-pwm";
+		reg = <0xb01c0000  0x100>;
+		#pwm-cells = <3>;
+	};
+	vce@e0288000{
+		compatible = "actions,ats3605-vce";
+		reg = <0xB0278000 0x94>;
+		interrupts = <GIC_SPI 47 IRQ_TYPE_LEVEL_HIGH >;
+		power-domains = <&powergate POWER_DOMAIN_VCE>;
+		clocks = <&clock CLK_VCE>;
+		clock-names = "vce";
+		resets = <&reset RESET_VCE>;
+		reset-names = "vce";
+	};
+
+	mmc0: mmc@b0348000 {
+		compatible = "actions,ats3605-mmc";
+		reg = <0xb0348000  0x100>,
+			  <0xb01c0000  0x240>,
+			  <0xb0150000  0x100>;
+		interrupts = <GIC_SPI 42 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clock CLK_SD2>;
+		clock-names = "mmc";
+		resets = <&reset RESET_SD2>;
+		reset-names = "mmc";
+		//dmas = <&dma DMA_DRQ_SD2>;
+		//dma-names = "mmc";
+		pinctrl-names = "pinctrl_mmc2";
+		pinctrl-0 = <&mm2_pinctrl_state>;
+		status = "disabled";
+	};
+
+	mmc1: mmc@b0344000 {
+		compatible = "actions,ats3605-mmc";
+		reg = <0xb0344000  0x100>,
+			  <0xb01c0000  0x240>,
+			  <0xb0150000  0x100>;
+		interrupts = <GIC_SPI 41 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clock CLK_SD1>;
+		clock-names = "mmc";
+		resets = <&reset RESET_SD1>;
+		reset-names = "mmc";
+		//dmas = <&dma DMA_DRQ_SD1>;
+		//dma-names = "mmc";
+		status = "disabled";
+	};
+
+	mmc2: mmc@b0340000 {
+		compatible = "actions,ats3605-mmc";
+		reg = <0xb0340000  0x100>,
+			  <0xb01c0000  0x240>,
+			  <0xb0150000  0x100>;
+		interrupts = <GIC_SPI 40 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clock CLK_SD0>;
+		clock-names = "mmc";
+		resets = <&reset RESET_SD0>;
+		reset-names = "mmc";
+		//dmas = <&dma DMA_DRQ_SD0>;
+		//dma-names = "mmc";
+		sdio_uart_supported;
+		pinctrl-names = "pinctrl_mmc0","share_uart2_5";
+		pinctrl-0 = <&mm0_pinctrl_state>;
+		pinctrl-1 = <&mmc_share_uart_state>;
+		status = "disabled";
+	};
+
+	nand0: nand@b0320000 {
+		compatible = "actions,ats3605-nand";
+		reg = <0xb0320000 0x1000>;
+		
+		//dmas = <&dma DMA_DRQ_NANDDATA0>;
+		//dma-names = "nand0";
+		clocks = <&clock CLK_NAND>;
+		clock-names = "nand0";
+		resets = <&reset RESET_NANDC>;
+		reset-names = "nand0";
+		
+		pad_drv = <3>;/* value:0-15, default 3*/
+		use_clk = <20>;/* value:10-50, default 0*/
+	};
+
+	usb2h0: usb@b0240000 {
+		compatible = "actions,ats3605-usb2.0-0";
+		reg = <0xb0240000 0x1000>;
+		interrupts = <GIC_SPI 35 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clock CLK_USB2H0_PLLEN>, <&clock CLK_USB2H0_PHY>, <&clock CLK_USB2H0_CCE>;
+		clock-names = "usb2h0_pllen", "usb2h0_phy", "usb2h0_cce";
+		resets = <&reset RESET_USB2_0>;
+		reset-names = "usb2h0";
+	};
+
+	usb2h1: usb@b0250000 {
+		compatible = "actions,ats3605-usb2.0-1";
+		reg = <0xb0250000 0x1000>;
+		interrupts = <GIC_SPI 36 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clock CLK_USB2H1_PLLEN>, <&clock CLK_USB2H0_PHY>, <&clock CLK_USB2H1_PHY>, <&clock CLK_USB2H1_CCE>;
+		clock-names = "usb2h1_pllen", "usb2h0_phy", "usb2h1_phy", "usb2h1_cce";
+		resets = <&reset RESET_USB2_1>;
+		reset-names = "usb2h1";
+	};
+	owl-audio-i2s@0xb0100000 {
+		compatible = "actions,ats3605-audio-i2s";
+		reg = <0xb0100000 0x34>,
+		      <0xb02c0000 0x1f0>,
+		      <0xb0130000 0x8010>,
+		      <0xb01c0000 0x100>,
+		      <0xb0150000 0xf9>;
+		reg-names = "regs", "hdmi_base", "pcm_base","mfp_base","cmu_base";
+		clocks = <&clock CLK_I2SRX>, <&clock CLK_I2STX>,<&clock CLK_AUDIO_PLL>, <&clock CLK_SPDIF>;
+		clock-names = "i2srx", "i2stx","audio_pll","spdif";
+		dmas = <&dma DMA_DRQ_I2S> , <&dma DMA_DRQ_I2S>;
+		dma-names = "tx" , "rx";
+	};
+
+	owl_jtag {
+		compatible = "actions,ats3605-jtag";
+		reg = <0xb01c0048  0x10>;
+		pinctl_val = <0x619c0>;
+		pinctl_mask = <0xe39e0>;
+	};
+};

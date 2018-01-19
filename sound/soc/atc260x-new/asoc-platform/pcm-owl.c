@@ -48,7 +48,7 @@ static struct snd_pcm_hardware s900_playback_hw_info = {
 	.rate_max		= 192000,
 	.channels_min		= 2,
 	.channels_max		= 8,
-	.buffer_bytes_max	= 64 * 1024,
+	.buffer_bytes_max	= 256 * 1024,
 	.period_bytes_min	= 256,
 	.period_bytes_max	= 32*1024,
 	.periods_min		= 2,
@@ -66,12 +66,12 @@ static struct snd_pcm_hardware s900_capture_hw_info = {
 	.rate_min		= 8000,
 	.rate_max		= 96000,
 	.channels_min		= 1,
-	.channels_max		= 4,
-	.buffer_bytes_max	= 64 * 1024,
+	.channels_max		= 6,
+	.buffer_bytes_max	= 256 * 1024,
 	.period_bytes_min	= 256,
 	.period_bytes_max	= 32*1024,
 	.periods_min		= 2,
-	.periods_max		= PAGE_SIZE / 16,
+	.periods_max		= 16,
 };
 
 static ssize_t error_show(struct device *dev,
@@ -413,7 +413,7 @@ static struct snd_soc_platform_driver s900_soc_platform = {
 
 static int s900_pcm_probe(struct platform_device *pdev)
 {
-	dev_err(&pdev->dev,
+	dev_info(&pdev->dev,
 			"s900_pcm_probe!!\n");
 	pdev->dev.init_name = "s900-pcm-audio";
 	return snd_soc_register_platform(&pdev->dev,

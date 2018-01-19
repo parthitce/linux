@@ -1,0 +1,10 @@
+The USB legacy module is for Actions-semi Corp, the discription is as follows.
+
+aotg_hcd/		- This is for the aotg USB host controller driver, support
+				USB2 spec, but not support usb hub.
+
+aotg_udc/		- This is for aotg USB device controller driver includes
+				aotg_udc(normal mode) and aotg_adfu_udc(Actions dfu mode).
+
+monitor/		- This is for the aotg monitor driver which is used to support
+				host/device mode switch.

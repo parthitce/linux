@@ -729,10 +729,11 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "en25q32b", INFO(0x1c3016, 0, 64 * 1024,  64, 0) },
 	{ "en25p64", INFO(0x1c2017, 0, 64 * 1024, 128, 0) },
 	{ "en25q64", INFO(0x1c3017, 0, 64 * 1024, 128, SECT_4K) },
+	{ "en25qh128a", INFO(0x1c7018, 0, 64 * 1024, 256, SECT_4K) },
 	{ "en25qh256", INFO(0x1c7019, 0, 64 * 1024, 512, 0) },
 
 	/* Everspin */
-	{ "mr25h256", CAT25_INFO(  32 * 1024, 1, 256, 2) },
+	/* { "mr25h256", CAT25_INFO(  32 * 1024, 1, 256, 2) }, */
 
 	/* GigaDevice */
 	{ "gd25q32", INFO(0xc84016, 0, 64 * 1024,  64, SECT_4K) },
@@ -750,7 +751,7 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "mx25l1606e",  INFO(0xc22015, 0, 64 * 1024,  32, SECT_4K) },
 	{ "mx25l3205d",  INFO(0xc22016, 0, 64 * 1024,  64, 0) },
 	{ "mx25l6405d",  INFO(0xc22017, 0, 64 * 1024, 128, 0) },
-	{ "mx25l12805d", INFO(0xc22018, 0, 64 * 1024, 256, 0) },
+	{ "mx25l12805d", INFO(0xc22018, 0, 64 * 1024, 256, SECT_4K) },
 	{ "mx25l12855e", INFO(0xc22618, 0, 64 * 1024, 256, 0) },
 	{ "mx25l25635e", INFO(0xc22019, 0, 64 * 1024, 512, 0) },
 	{ "mx25l25655e", INFO(0xc22619, 0, 64 * 1024, 512, 0) },
@@ -806,7 +807,7 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "m25p128", INFO(0x202018,  0, 256 * 1024,  64, 0) },
 	{ "n25q032", INFO(0x20ba16,  0,  64 * 1024,  64, 0) },
 
-	{ "m25p05-nonjedec",  INFO(0, 0,  32 * 1024,   2, 0) },
+	/* { "m25p05-nonjedec",  INFO(0, 0,  32 * 1024,   2, 0) },
 	{ "m25p10-nonjedec",  INFO(0, 0,  32 * 1024,   4, 0) },
 	{ "m25p20-nonjedec",  INFO(0, 0,  64 * 1024,   4, 0) },
 	{ "m25p40-nonjedec",  INFO(0, 0,  64 * 1024,   8, 0) },
@@ -814,7 +815,7 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "m25p16-nonjedec",  INFO(0, 0,  64 * 1024,  32, 0) },
 	{ "m25p32-nonjedec",  INFO(0, 0,  64 * 1024,  64, 0) },
 	{ "m25p64-nonjedec",  INFO(0, 0,  64 * 1024, 128, 0) },
-	{ "m25p128-nonjedec", INFO(0, 0, 256 * 1024,  64, 0) },
+	{ "m25p128-nonjedec", INFO(0, 0, 256 * 1024,  64, 0) }, */
 
 	{ "m45pe10", INFO(0x204011,  0, 64 * 1024,    2, 0) },
 	{ "m45pe80", INFO(0x204014,  0, 64 * 1024,   16, 0) },
@@ -846,11 +847,11 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "w25q256", INFO(0xef4019, 0, 64 * 1024, 512, SECT_4K) },
 
 	/* Catalyst / On Semiconductor -- non-JEDEC */
-	{ "cat25c11", CAT25_INFO(  16, 8, 16, 1) },
+	/* { "cat25c11", CAT25_INFO(  16, 8, 16, 1) },
 	{ "cat25c03", CAT25_INFO(  32, 8, 16, 2) },
 	{ "cat25c09", CAT25_INFO( 128, 8, 32, 2) },
 	{ "cat25c17", CAT25_INFO( 256, 8, 32, 2) },
-	{ "cat25128", CAT25_INFO(2048, 8, 64, 2) },
+	{ "cat25128", CAT25_INFO(2048, 8, 64, 2) }, */
 	{ },
 };
 MODULE_DEVICE_TABLE(spi, m25p_ids);

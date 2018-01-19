@@ -7,6 +7,7 @@ menuconfig VIDEO_OWL
 if VIDEO_OWL
 source "drivers/video/owl/dss/Kconfig"
 source "drivers/video/owl/vce/Kconfig"
+source "drivers/video/owl/vce_ats3605/Kconfig"
 source "drivers/video/owl/vde/Kconfig"
 source "drivers/video/owl/hde/Kconfig"
 endif

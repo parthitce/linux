@@ -38,4 +38,5 @@ obj-$(CONFIG_DMA_SA11X0) += sa11x0-dma.o
 obj-$(CONFIG_MMP_TDMA) += mmp_tdma.o
 obj-$(CONFIG_DMA_OMAP) += omap-dma.o
 obj-$(CONFIG_DMA_OWL) += dma-owl.o
+obj-$(CONFIG_DMA_ATS3605) += dma-ats3605.o
 obj-$(CONFIG_MMP_PDMA) += mmp_pdma.o

@@ -238,12 +238,19 @@
 #include <linux/proc_fs.h>
 #include <linux/owl_fs_adfus.h>
 #include <linux/reboot.h>
+#include <linux/ctype.h>
 #include <asm/unaligned.h>
 
 #include <linux/usb/ch9.h>
 #include <linux/usb/gadget.h>
+#include <linux/usb/composite.h>
 
+#include "gadget_chips.h"
+
+
+#ifndef CONFIG_USB_LEGACY
 extern void set_dwc3_gadget_plugin_flag(int flag);
+#endif
 
 #ifdef FPGA_VERIFY_MODE
 #include "mbr_info.h"
@@ -269,6 +276,9 @@ struct uparam {
  * the runtime footprint, and giving us at least some parts of what
  * a "gcc --combine ... part1.c part2.c part3.c ... " build would.
  */
+
+/* NOTICE: use libcomposite.ko instead */
+#if 0
 #ifdef FPGA_VERIFY_MODE
 #include "usbstring.c"
 #include "config.c"
@@ -278,6 +288,8 @@ struct uparam {
 #include "../gadget/config.c"
 #include "../gadget/epautoconf.c"
 #endif
+#endif
+
 /*-------------------------------------------------------------------------*/
 
 #define DRIVER_DESC		"File-backed Storage Gadget"
@@ -306,14 +318,13 @@ enum probatch_status {
 	PROBATCH_FINISH_WRITE_PHY,
 	PROBATCH_FORMAT,
 	PROBATCH_FINISH_FORMAT,
-	PROBATCH_FINISH,	
+	PROBATCH_FINISH,
 	PROBATCH_FINISH_OK,
 };
 
 #define ADFUS_PROC_FILE_LEN 64
 char probatch_phase[ADFUS_PROC_FILE_LEN];
-char all_probatch_phase[][ADFUS_PROC_FILE_LEN]=
-{
+char all_probatch_phase[][ADFUS_PROC_FILE_LEN] = {
 	"null",
 	"install_flash",
 	"finish_install_flash",
@@ -328,22 +339,23 @@ char all_probatch_phase[][ADFUS_PROC_FILE_LEN]=
 int set_probatch_phase(int id)
 {
 	strcpy(probatch_phase, all_probatch_phase[id]);
-	printk("%s %d: %s\n", __FUNCTION__, __LINE__, probatch_phase);
+	pr_info("%s %d: %s\n", __func__, __LINE__, probatch_phase);
 
 	return 0;
-}	
+}
 //EXPORT_SYMBOL_GPL(set_probatch_phase);
 
 int is_probatch_phase(int id)
 {
 	int ret;
-	
-	ret = memcmp(probatch_phase, all_probatch_phase[id], strlen(all_probatch_phase[id]));
+
+	ret = memcmp(probatch_phase, all_probatch_phase[id],
+		strlen(all_probatch_phase[id]));
 	return ret;
 }
 //EXPORT_SYMBOL_GPL(is_probatch_phase);
 
-static ssize_t adfus_proc_read(struct file *file, char __user *buf, 
+static ssize_t adfus_proc_read(struct file *file, char __user *buf,
 			       size_t count, loff_t *ppos)
 {
 	size_t len;
@@ -368,7 +380,7 @@ static ssize_t adfus_proc_write(struct file *file, const char __user *buf,
 {
 	if (*ppos != 0)
 		return 0;
-    
+
 	if (count > (ADFUS_PROC_FILE_LEN - 1))
 		count = ADFUS_PROC_FILE_LEN - 1;
 
@@ -439,7 +451,7 @@ static char need_restart = 1;
 
 char format_fs_name[8];
 char format_disk_name[32];
-char disk_label[][8]={
+char disk_label[][8] = {
 	"data",
 	"cache"
 };
@@ -451,9 +463,9 @@ static unsigned int uniSerial;
 
 /* add by hmwei */
 extern char probatch_phase[];
-int cmnd_sequence_first_flag=1;
+int cmnd_sequence_first_flag = 1;
 struct file *misc_disk_filp;
-char last_cmnd=-1;
+char last_cmnd = -1;
 
 //extern int set_probatch_phase(int id);
 //extern int is_probatch_phase(int id);
@@ -903,8 +915,8 @@ static unsigned int card_dirty_flag;
 static unsigned int nand_dirty_flag;
 
 int check_partition_flag=0, chk_HdcpFlag = 0;//partiton update
-int update_phy_boot=0;//
-	
+int update_phy_boot = 0;//
+
 /*****************************************************/
 static int do_ADFU_acmbr(struct fsg_dev *);
 static int do_ADFU_wtrootfs(struct fsg_dev *);
@@ -926,12 +938,12 @@ static int exception_in_progress(struct fsg_dev *fsg)
 static void set_bulk_out_req_length(struct fsg_dev *fsg,
 				    struct fsg_buffhd *bh, unsigned int length)
 {
-	unsigned int	rem; 
+	unsigned int	rem;
 
 	bh->bulk_out_intended_length = length;
 	rem = length % fsg->bulk_out_maxpacket;
 	if (rem > 0)
-		length += fsg->bulk_out_maxpacket - rem; 
+		length += fsg->bulk_out_maxpacket - rem;
 	bh->outreq->length = length;
 }
 
@@ -980,7 +992,7 @@ static void dump_msg(struct fsg_dev *fsg, const char *label,
 static void dump_cdb(struct fsg_dev *fsg)
 {
 	print_hex_dump(KERN_DEBUG, "SCSI CDB: ", DUMP_PREFIX_NONE,
-		       16, 1, fsg->cmnd, fsg->cmnd_size, 0);
+		16, 1, fsg->cmnd, fsg->cmnd_size, 0);
 }
 
 #else
@@ -1222,11 +1234,11 @@ static struct usb_ss_ep_comp_descriptor fsg_ss_bulk_out_comp_desc = {
 
 static struct usb_descriptor_header *fsg_ss_function[] = {
 	(struct usb_descriptor_header *)&otg_desc,
-	(struct usb_descriptor_header *) &intf_desc,
-	(struct usb_descriptor_header *) &fsg_ss_bulk_in_desc,
-	(struct usb_descriptor_header *) &fsg_ss_bulk_in_comp_desc,
-	(struct usb_descriptor_header *) &fsg_ss_bulk_out_desc,
-	(struct usb_descriptor_header *) &fsg_ss_bulk_out_comp_desc,
+	(struct usb_descriptor_header *)&intf_desc,
+	(struct usb_descriptor_header *)&fsg_ss_bulk_in_desc,
+	(struct usb_descriptor_header *)&fsg_ss_bulk_in_comp_desc,
+	(struct usb_descriptor_header *)&fsg_ss_bulk_out_desc,
+	(struct usb_descriptor_header *)&fsg_ss_bulk_out_comp_desc,
 	NULL,
 };
 
@@ -1239,20 +1251,16 @@ static struct usb_endpoint_descriptor
 	 *hs, struct usb_endpoint_descriptor
 	 *ss)
 {
-	/* printk(KERN_INFO "act_gadget_is_dualspeed:0x%x.\n",
+	/* pr_info("act_gadget_is_dualspeed:0x%x.\n",
 	   act_gadget_is_dualspeed(g));
-	   printk(KERN_INFO "%d",
-	   g->speed == USB_SPEED_HIGH); */
-	if (gadget_is_superspeed(g)&& g->speed == USB_SPEED_SUPER)
-	{
+	   pr_info("%d", g->speed == USB_SPEED_HIGH); */
+	if (gadget_is_superspeed(g) && g->speed == USB_SPEED_SUPER)
 		return ss;
-	}
-	
 	if (act_gadget_is_dualspeed(g) && g->speed == USB_SPEED_HIGH)
-	{
 		return hs;
-	}
-	printk("reutrn fs, 0x%x, 0x%x,0x%x\n",act_gadget_is_dualspeed(g),g->speed,USB_SPEED_HIGH );
+	pr_info("reutrn fs, 0x%x, 0x%x, 0x%x\n", act_gadget_is_dualspeed(g),
+		g->speed,USB_SPEED_HIGH );
+
 	return fs;
 }
 
@@ -1280,17 +1288,15 @@ static struct usb_gadget_strings stringtab = {
 int wait_adfus_proc(int probatch_phase)
 {
 	int ret;
-	while(1)
-	{
+	while (1) {
 		ret = is_probatch_phase(probatch_phase);
-		if(ret == 0)
-		{
+		if (ret == 0)
 			break;
-		}
-		VLDBG("schedule_timeout 1000,ret:%d,probatch_phase:%s\n",ret, probatch_phase);
-		schedule_timeout_interruptible(msecs_to_jiffies(1000));	
+		pr_info("schedule_timeout 1000, ret: %d, probatch_phase: %s\n",
+			ret, probatch_phase);
+		schedule_timeout_interruptible(msecs_to_jiffies(1000));
 	}
-	
+
 	return ret;
 }
 
@@ -1409,7 +1415,7 @@ static void ep0_complete(struct usb_ep *ep, struct usb_request *req)
 		usb_ep_fifo_flush(ep);
 
 	if (req->status == 0 && req->context)
-		((fsg_routine_t) (req->context)) (fsg);
+		((fsg_routine_t)(req->context))(fsg);
 }
 
 /*-------------------------------------------------------------------------*/
@@ -1438,12 +1444,12 @@ static void bulk_in_complete(struct usb_ep *ep, struct usb_request *req)
 	/* when adfu upgrade successful, disconnect and sync */
 	if (unlikely(adfu_success_flag == 1)) {
 #ifdef FPGA_VERIFY_MODE
-		if(adfu_flush_nand_cache)
+		if (adfu_flush_nand_cache)
 			adfu_flush_nand_cache();
 #endif
 		raise_exception(fsg, FSG_STATE_DISCONNECT);
-		printk(KERN_INFO "UPGRADE SUCCESSFULLY\n");
-//			if(need_restart == 0)
+		pr_info("UPGRADE SUCCESSFULLY\n");
+//			if (need_restart == 0)
 //			{
 //				machine_restart("reboot");
 //			}
@@ -1501,7 +1507,7 @@ static int class_setup_req(struct fsg_dev *fsg,
 		switch (ctrl->bRequest) {
 
 		case USB_BULK_RESET_REQUEST:
-			/* printk(KERN_INFO "****USB_BULK_RESET_REQUEST****\n"); */
+			/* pr_info("****USB_BULK_RESET_REQUEST****\n"); */
 			if (ctrl->bRequestType != (USB_DIR_OUT |
 						   USB_TYPE_CLASS |
 						   USB_RECIP_INTERFACE))
@@ -1520,14 +1526,13 @@ static int class_setup_req(struct fsg_dev *fsg,
 			break;
 
 		case USB_BULK_GET_MAX_LUN_REQUEST:
-			/* printk(KERN_INFO
-			   "****USB_BULK_GET_MAX_LUN_REQUEST****\n"); */
+			/* pr_info("****USB_BULK_GET_MAX_LUN_REQUEST****\n"); */
 			if (ctrl->bRequestType != (USB_DIR_IN |
 						   USB_TYPE_CLASS |
 						   USB_RECIP_INTERFACE))
 				break;
 			if ((w_index != 0) || (w_value != 0)
-			    || (w_length !=1)) {
+			    || (w_length != 1)) {
 				value = -EDOM;
 				break;
 			}
@@ -1546,8 +1551,7 @@ static int class_setup_req(struct fsg_dev *fsg,
 
 		case USB_CBI_ADSC_REQUEST:
 			if (ctrl->bRequestType != (USB_DIR_OUT |
-						   USB_TYPE_CLASS |
-						   USB_RECIP_INTERFACE))
+				USB_TYPE_CLASS | USB_RECIP_INTERFACE))
 				break;
 			if (w_index != 0 || w_value != 0) {
 				value = -EDOM;
@@ -1643,16 +1647,16 @@ static int standard_setup_req(struct fsg_dev *fsg,
 	switch (ctrl->bRequest) {
 
 	case USB_REQ_GET_DESCRIPTOR:
-		/* printk(KERN_INFO "****USB_REQ_GET_DESCRIPTOR_\n");*/
+		/* pr_info("****USB_REQ_GET_DESCRIPTOR_\n");*/
 		if (ctrl->bRequestType != (USB_DIR_IN | USB_TYPE_STANDARD |
 					   USB_RECIP_DEVICE)) {
-			printk("DING!!\n");
+			pr_info("DING!!\n");
 			break;
 		}
 		switch (w_value >> 8) {
 
 		case USB_DT_DEVICE:
-			/* printk(KERN_INFO "**** GET_DEVICE_DESC ****\n"); */
+			/* pr_info("**** GET_DEVICE_DESC ****\n"); */
 			VDBG(fsg, "get device descriptor\n");
 			device_desc.bMaxPacketSize0 = fsg->ep0->maxpacket;
 
@@ -1664,12 +1668,12 @@ static int standard_setup_req(struct fsg_dev *fsg,
 					//device_desc.bcdUSB = cpu_to_le16(0x0210);
 				}
 			}
-			
+
 			value = sizeof device_desc;
 			memcpy(req->buf, &device_desc, value);
 			break;
 		case USB_DT_DEVICE_QUALIFIER:
-			/* printk(KERN_INFO "QUALIFIER****\n"); */
+			/* pr_info("QUALIFIER****\n"); */
 			VDBG(fsg, "get device qualifier\n");
 			if (!act_gadget_is_dualspeed(fsg->gadget) ||
 			   fsg->gadget->speed >= USB_SPEED_SUPER)
@@ -1680,14 +1684,14 @@ static int standard_setup_req(struct fsg_dev *fsg,
 			break;
 
 		case USB_DT_OTHER_SPEED_CONFIG:
-			/* printk(KERN_INFO "OTHER_SPEED_CONFIG****\n"); */
+			/* pr_info("OTHER_SPEED_CONFIG****\n"); */
 			VDBG(fsg, "get other-speed config descriptor\n");
 			if (!act_gadget_is_dualspeed(fsg->gadget) ||
 			    fsg->gadget->speed >= USB_SPEED_SUPER)
 				break;
 			goto get_config;
 		case USB_DT_CONFIG:
-			/* printk(KERN_INFO "DT_CONFIG****\n"); */
+			/* pr_info("DT_CONFIG****\n"); */
 			VDBG(fsg, "get configuration descriptor\n");
 		get_config:
 			value = populate_config_buf(fsg->gadget,
@@ -1697,21 +1701,21 @@ static int standard_setup_req(struct fsg_dev *fsg,
 			break;
 
 		case USB_DT_STRING:
-			/* printk(KERN_INFO "DT_STRING****\n"); */
+			/* pr_info("DT_STRING****\n"); */
 			VDBG(fsg, "get string descriptor\n");
 
 			/* wIndex == language code */
 			value = usb_gadget_get_string(&stringtab,
 						      w_value & 0xff, req->buf);
 			break;
-			
+
 		case USB_DT_BOS:
 			if (gadget_is_superspeed(fsg->gadget)) {
 				value = bos_desc(fsg);
 				value = min(w_length, (u16) value);
 			}
 			break;
-			
+
 		default:
 			break;
 		}
@@ -1719,14 +1723,13 @@ static int standard_setup_req(struct fsg_dev *fsg,
 
 		/* One config, two speeds */
 	case USB_REQ_SET_CONFIGURATION:
-		/* printk(KERN_INFO "****USB_REQ_SET_CONFIGURATION****\n"); */
+		/* pr_info("****USB_REQ_SET_CONFIGURATION****\n"); */
 		if (ctrl->bRequestType != (USB_DIR_OUT | USB_TYPE_STANDARD |
 					   USB_RECIP_DEVICE))
 			break;
 		VDBG(fsg, "set configuration\n");
 		if (w_value == CONFIG_VALUE || w_value == 0) {
-			/* printk(KERN_INFO
-			   "The w_value is 0x%x.\n",w_value); */
+			/* pr_info("The w_value is 0x%x.\n",w_value); */
 			fsg->new_config = w_value;
 
 			/* Raise an exception to wipe out previous transaction
@@ -1740,7 +1743,7 @@ static int standard_setup_req(struct fsg_dev *fsg,
 		}
 		break;
 	case USB_REQ_GET_CONFIGURATION:
-		/* printk(KERN_INFO "****USB_REQ_GET_CONFIGUATION****\n"); */
+		/* pr_info("****USB_REQ_GET_CONFIGUATION****\n"); */
 		if (ctrl->bRequestType != (USB_DIR_IN | USB_TYPE_STANDARD |
 					   USB_RECIP_DEVICE))
 			break;
@@ -1750,7 +1753,7 @@ static int standard_setup_req(struct fsg_dev *fsg,
 		break;
 
 	case USB_REQ_SET_INTERFACE:
-		/* printk(KERN_INFO "****USB_REQ_SET_INTERFACE****\n"); */
+		/* pr_info("****USB_REQ_SET_INTERFACE****\n"); */
 		if (ctrl->bRequestType != (USB_DIR_OUT | USB_TYPE_STANDARD |
 					   USB_RECIP_INTERFACE))
 			break;
@@ -1764,7 +1767,7 @@ static int standard_setup_req(struct fsg_dev *fsg,
 		}
 		break;
 	case USB_REQ_GET_INTERFACE:
-		/* printk(KERN_INFO "****USB_REQ_GET_INTERFACE****\n"); */
+		/* pr_info("****USB_REQ_GET_INTERFACE****\n"); */
 		if (ctrl->bRequestType != (USB_DIR_IN | USB_TYPE_STANDARD |
 					   USB_RECIP_INTERFACE))
 			break;
@@ -1793,7 +1796,7 @@ static int standard_setup_req(struct fsg_dev *fsg,
 		value = 2;	/* This is the length of the get_status reply */
 		put_unaligned_le16(0, req->buf);
 		break;
-		
+
 	case USB_REQ_CLEAR_FEATURE:
 	case USB_REQ_SET_FEATURE:
 		if (!gadget_is_superspeed(fsg->gadget))
@@ -1807,10 +1810,10 @@ static int standard_setup_req(struct fsg_dev *fsg,
 		}
 		break;
 	default:
-		printk("unknown control req %02x.%02x v%04x i%04x l%u\n",
+		pr_info("unknown control req %02x.%02x v%04x i%04x l%u\n",
 		       ctrl->bRequestType, ctrl->bRequest,
 		       w_value, w_index, le16_to_cpu(ctrl->wLength));
-		/* printk(KERN_INFO "*****UNKNOWN_CONTROL_REQ*****.\n"); */
+		/* pr_info("*****UNKNOWN_CONTROL_REQ*****.\n"); */
 	}
 	return value;
 }
@@ -1868,7 +1871,7 @@ static void start_transfer(struct fsg_dev *fsg, struct usb_ep *ep,
 	spin_unlock_irqrestore(&fsg->lock, flag);
 	rc = usb_ep_queue(ep, req, GFP_KERNEL);
 	if (rc != 0) {
-		printk(KERN_INFO "usb_ep_queue error !!!\n");
+		pr_info("usb_ep_queue error !!!\n");
 		*pbusy = 0;
 		*state = BUF_STATE_EMPTY;
 
@@ -1930,7 +1933,8 @@ static int do_ADFU_rdrootfs(struct fsg_dev *fsg)
 	ssize_t nread;
 
 	/* Get the starting Logical Block Address and check that it's
-	 * not too big */
+	 * not too big
+	 */
 
 	lba = get_le32(&fsg->cmnd[5]);
 #if 0
@@ -1946,9 +1950,8 @@ static int do_ADFU_rdrootfs(struct fsg_dev *fsg)
 	file_offset = lba;
 	amount_left = fsg->data_size_from_cmnd;
 
-	if (unlikely(amount_left == 0))
-	{
-		//printk("return:%d\n",__LINE__);
+	if (unlikely(amount_left == 0)) {
+		//pr_info("return:%d\n",__LINE__);
 		return -EIO;	/* No default reply */
 	}
 
@@ -1975,9 +1978,8 @@ static int do_ADFU_rdrootfs(struct fsg_dev *fsg)
 		bh = fsg->next_buffhd_to_fill;
 		while (bh->state != BUF_STATE_EMPTY) {
 			rc = sleep_thread(fsg);
-			if (rc)
-			{
-				//printk("return:%d\n",__LINE__);
+			if (rc) {
+				//pr_info("return:%d\n",__LINE__);
 				return rc;
 			}
 		}
@@ -2017,7 +2019,7 @@ static int do_ADFU_rdrootfs(struct fsg_dev *fsg)
 		      (unsigned long long)file_offset, (int)nread);
 		if (signal_pending(current)) {
 			bdput(bdev_back);
-			//printk("return:%d\n",__LINE__);
+			//pr_info("return:%d\n",__LINE__);
 			return -EINTR;
 		}
 		if (nread < 0) {
@@ -2050,10 +2052,11 @@ static int do_ADFU_rdrootfs(struct fsg_dev *fsg)
 			       &bh->inreq_busy, &bh->state);
 		fsg->next_buffhd_to_fill = bh->next;
 	}
-	no_finish_reply = 0;	/* the last buf has not been transfered,
-				   move it into finish_reply() */
+
+	/* the last buf has not been transfered, move it into finish_reply() */
+	no_finish_reply = 0;
 	bdput(bdev_back);
-	//printk("return:%d\n",__LINE__);
+	//pr_info("return:%d\n",__LINE__);
 	return -EIO;		/* No default reply */
 }
 #endif
@@ -2130,6 +2133,7 @@ out:
 	filp_close(filp, current->files);
 	return rc;
 }
+
 static int do_ADFU_check_partition(struct fsg_dev *fsg)
 {
 	struct fsg_buffhd *bh;
@@ -2138,33 +2142,37 @@ static int do_ADFU_check_partition(struct fsg_dev *fsg)
 	unsigned int amount;
 	ssize_t nread;
 	unsigned long tmp;
-       struct lun *curlun = fsg->curlun;
+	struct lun *curlun = fsg->curlun;
 	int rc2 = -EINVAL;
 	int size = 1;
 
-	if(cmnd_sequence_first_flag)	//wait insmod flash
-	{
+	//wait insmod flash
+	if (cmnd_sequence_first_flag) {
 		set_probatch_phase(PROBATCH_INSTAL_FLASH);
 		wait_adfus_proc(PROBATCH_FINISH_INSTALL_FLASH);//sync with upgrade_app
 		cmnd_sequence_first_flag = 0;
 
-	    rc2=get_udisk_size(curlun, "/dev/actk");
-		if(rc2 != 0)
-		{
-			VLDBG("open /dev/actk error:%d\n",__LINE__);
+// TODO: fix
+//#ifdef CONFIG_USB_LEGACY
+#if 0
+		if (AdfuUpdateMbrFromPhyToUsr)
+			check_partition_flag =
+				AdfuUpdateMbrFromPhyToUsr(nand_part, mbr_info_buf);
+#else
+	    rc2 = get_udisk_size(curlun, "/dev/actk");
+		if (rc2 != 0) {
+			pr_debug("open /dev/actk error: %d\n", __LINE__);
 			/*return rc2;*/
 		}
 		size = (int)curlun->num_sectors;
-		printk("##udisk size:%d    0x%x\n",size,size);
+		pr_info("##udisk size: %d, 0x%x\n", size, size);
+#endif
+	}
 
-	}	
-		
 	amount_left = fsg->data_size_from_cmnd;
 
 	if (unlikely(amount_left == 0))
-	{
 		return -EIO;	/* No default reply */
-	}
 
 	for (;;) {
 		amount = (unsigned int)amount_left;
@@ -2173,29 +2181,26 @@ static int do_ADFU_check_partition(struct fsg_dev *fsg)
 		while (bh->state != BUF_STATE_EMPTY) {
 			rc = sleep_thread(fsg);
 			if (rc)
-			{
 				return rc;
-			}
 		}
-		printk("%s %d: bh %p, bh->buf %p\n", __FUNCTION__, __LINE__,
-		       bh, bh->buf);
+		pr_info("%s %d: bh %p, bh->buf %p\n", __func__,
+			__LINE__, bh, bh->buf);
 
 		/* Perform the read */
 		memset((char *)bh->buf, 0, amount);
 
-		//printk("%s %d\n", __FUNCTION__, __LINE__);
+		//pr_info("%s %d\n", __func__, __LINE__);
 
 		/*
 		 * return results, there may be
 		 * partition error, or hdcp key error
 		 */
-		if(check_partition_flag < 0)
-		{
+		if (check_partition_flag < 0) {
 			tmp = (unsigned long)bh->buf;
 			writel(-check_partition_flag, tmp);
 		}
 
-		//printk("%s %d\n", __FUNCTION__, __LINE__);
+		//pr_info("%s %d\n", __func__, __LINE__);
 
 
 		//add partition cap info
@@ -2203,7 +2208,6 @@ static int do_ADFU_check_partition(struct fsg_dev *fsg)
 		memcpy((unsigned long)bh->buf + 0x10, (unsigned long *)&size, sizeof(unsigned int));
 #endif
 		nread = amount;
-
 		amount_left -= (unsigned int)nread;
 		fsg->residue -= (unsigned int)nread;
 		bh->inreq->length = (unsigned int)nread;
@@ -2218,8 +2222,9 @@ static int do_ADFU_check_partition(struct fsg_dev *fsg)
 			       &bh->inreq_busy, &bh->state);
 		fsg->next_buffhd_to_fill = bh->next;
 	}
-	no_finish_reply = 0;	/* the last buf has not been transfered,
-				   move it into finish_reply() */	   
+
+	/* the last buf has not been transfered, move it into finish_reply() */
+	no_finish_reply = 0;
 
 	return -EIO;		/* No default reply */
 }
@@ -2228,6 +2233,7 @@ static int do_ADFU_check_partition(struct fsg_dev *fsg)
 #define FLASH_READ_BUF_SIZE (FLASH_READ_BUF_SECTORS*512)
 unsigned int image_sectors, check_image_sectors;
 struct uparam read_param;
+
 #ifdef FPGA_VERIFY_MODE
 static int do_ADFU_check_image_checksum(struct fsg_dev *fsg)
 {
@@ -2243,62 +2249,51 @@ static int do_ADFU_check_image_checksum(struct fsg_dev *fsg)
 	u32 amount_left;
 	unsigned int amount;
 	ssize_t nread;
-	
+
 	int read_err=0;
 	unsigned int tmp;
 	unsigned int file_offset=0,read_sectors=0;
 
-	//Don't check phy_boot_partition 			
-	if(read_param.flash_partition == 0)
-	{
-		goto finish_check;	
-	}
-	
+	//Don't check phy_boot_partition
+	if (read_param.flash_partition == 0)
+		goto finish_check;
+
 	read_param.flash_partition -= 1;
 	read_param.devnum_in_phypart -= 1;
-	
-	void *buf = kmalloc(FLASH_READ_BUF_SIZE, GFP_KERNEL);
-	
-	for(;;)
-	{
-		if(check_image_sectors == 0)
-		{
-			break;
-		}		
-		if(check_image_sectors>FLASH_READ_BUF_SECTORS)
-		{
-			read_sectors = FLASH_READ_BUF_SECTORS;
-		}
-		else
-		{
-			read_sectors = check_image_sectors;
-		}
 
-//		printk("nand_read:0x%x,0x%x,%d,%d\n", file_offset, read_sectors, read_param.flash_partition, read_param.devnum_in_phypart);
+	void *buf = kmalloc(FLASH_READ_BUF_SIZE, GFP_KERNEL);
+
+	for (;;) {
+		if (check_image_sectors == 0)
+			break;
+		if (check_image_sectors > FLASH_READ_BUF_SECTORS)
+			read_sectors = FLASH_READ_BUF_SECTORS;
+		else
+			read_sectors = check_image_sectors;
+
+//		pr_info("nand_read:0x%x,0x%x,%d,%d\n",
+//			file_offset, read_sectors, read_param.flash_partition,
+//			read_param.devnum_in_phypart);
 #ifdef FPGA_VERIFY_MODE
 #else
 		read_err = adfus_nand_read(file_offset, read_sectors,
-					   buf, &read_param);
+			buf, &read_param);
 #endif
-		if(read_err < 0)
-		{
+		if (read_err < 0)
 			break;
-		}					
-		file_offset += read_sectors;					
-		check_image_sectors -= read_sectors;		
+		file_offset += read_sectors;
+		check_image_sectors -= read_sectors;
 	}
-	
+
 	kfree(buf);
 	buf=NULL;
 
 finish_check:
-						
+
 	amount_left = fsg->data_size_from_cmnd;
 
 	if (unlikely(amount_left == 0))
-	{
 		return -EIO;	/* No default reply */
-	}
 
 	for (;;) {
 		amount = (unsigned int)amount_left;
@@ -2307,16 +2302,13 @@ finish_check:
 		while (bh->state != BUF_STATE_EMPTY) {
 			rc = sleep_thread(fsg);
 			if (rc)
-			{
 				return rc;
-			}
 		}
 		/* Perform the read */
 		memset((char *)bh->buf, 0, amount);
-		if(read_err < 0)
-		{
+		if (read_err < 0) {
 			tmp = (unsigned int)bh->buf;
-			writel(1, tmp);			
+			writel(1, tmp);
 		}
 		nread = amount;
 
@@ -2334,28 +2326,30 @@ finish_check:
 			       &bh->inreq_busy, &bh->state);
 		fsg->next_buffhd_to_fill = bh->next;
 	}
-	no_finish_reply = 0;	/* the last buf has not been transfered,
-				   move it into finish_reply() */
+
+	/* the last buf has not been transfered, move it into finish_reply() */
+	no_finish_reply = 0;
+
 	return -EIO;		/* No default reply */
 }
 #endif
 int do_ADFU_INFO(struct fsg_dev *fsg)
 {
-	int ret=0;
+	int ret = 0;
 	struct timeval tv1,tv2;
-	
-	switch(fsg->cmnd[2])
-	{
+
+	switch (fsg->cmnd[2]) {
 	case 0x20:
-		printk("do_ADFU_check_partition begin\n");
+		pr_info("do_ADFU_check_partition begin\n");
 		ret = do_ADFU_check_partition(fsg);
-		printk("do_ADFU_check_partition end\n");
+		pr_info("do_ADFU_check_partition end\n");
 		break;
 	case 0x21:
 		do_gettimeofday(&tv1);
 		ret = do_ADFU_check_image_checksum(fsg);
 		do_gettimeofday(&tv2);
-		printk("do_ADFU_check_image_checksum,timing:%ds\n", tv2.tv_sec-tv1.tv_sec);
+		pr_info("do_ADFU_check_image_checksum, timing: %ds\n",
+			tv2.tv_sec-tv1.tv_sec);
 		break;
 	default:
 		break;
@@ -2364,9 +2358,9 @@ int do_ADFU_INFO(struct fsg_dev *fsg)
 }
 
 #ifdef FPGA_VERIFY_MODE
-
 #else
 extern int asoc_get_board_opt(void);
+
 static int modify_afi(afinfo_t *p_afinfo)
 {
 	unsigned char *afinfo_buf = p_afinfo;
@@ -2375,17 +2369,15 @@ static int modify_afi(afinfo_t *p_afinfo)
 	unsigned char offset, value;
 
 	cur_board_opt = asoc_get_board_opt();
-	printk("%s(): cur_board_opt %d\n", __FUNCTION__, cur_board_opt);
+	pr_info("%s(): cur_board_opt %d\n", __func__, cur_board_opt);
 
-	if (!has_board_opt(p_afinfo) || cur_board_opt == 0)
-	{
-		printk("%s(): use default board opt 0\n", __FUNCTION__);
+	if (!has_board_opt(p_afinfo) || cur_board_opt == 0) {
+		pr_info("%s(): use default board opt 0\n", __func__);
 		return 0;
 	}
 
-	if (cur_board_opt < 0 || cur_board_opt >= BOARD_OPT_MAX_CNT)
-	{
-		printk("%s(): invalid board opt %d\n", __FUNCTION__, cur_board_opt);
+	if (cur_board_opt < 0 || cur_board_opt >= BOARD_OPT_MAX_CNT) {
+		pr_info("%s(): invalid board opt %d\n", __func__, cur_board_opt);
 		return -1;
 	}
 
@@ -2404,25 +2396,20 @@ static int modify_afi(afinfo_t *p_afinfo)
 
 int write_ram_bin(u32 addr, char *buf, u32 len)
 {
-	int ret=0;
+	int ret = 0;
 	char val;
 	char ram_bin_name[64];
 	static struct file *ram_bin_filp;
 	loff_t file_offset_byte;
-	
+
 	memset(ram_bin_name, 0, 64);
 	strcpy(ram_bin_name, "/usr/");
-	
-	if(addr == 0x21340000)
-	{
+
+	if (addr == 0x21340000)
 		strcat(ram_bin_name, "oem.bin");
-	}
-	else if(addr == 0x21340001)
-	{
+	else if (addr == 0x21340001)
 		strcat(ram_bin_name, "oem.ko");
-	}
-	else if(addr == 0x32140000)
-	{
+	else if (addr == 0x32140000) {
 		strcat(ram_bin_name, "mbr_info.bin");
 #ifdef FPGA_VERIFY_MODE
 		mbr_info_buf = kmalloc(sizeof(mbr_info_t), GFP_KERNEL);
@@ -2430,75 +2417,58 @@ int write_ram_bin(u32 addr, char *buf, u32 len)
 	//	memcpy(mbr_info_buf, buf, len);
 		need_format = readb((volatile void *)buf + 0x04);
 
-		printk("need_format:%d\n", need_format);
-		printk("need_restart:%d\n", need_restart);
-#endif		
-	}
-	else if(addr == 0x32140001)
-	{
+		pr_info("need_format:%d\n", need_format);
+		pr_info("need_restart:%d\n", need_restart);
+#endif
+	} else if (addr == 0x32140001)
 		strcat(ram_bin_name, "startup.bin");
-
-	}	
-	else if(addr == 0x32140002)
-	{
+	else if (addr == 0x32140002)
 		strcat(ram_bin_name, "shutoff.bin");
-	}				
-	else if(addr == 0x1e000000)
-	{
+	else if (addr == 0x1e000000)
 		strcat(ram_bin_name, "adfudec.bin");
-	}		
-	else
-	{
+	else {
 #ifdef FPGA_VERIFY_MODE
 		strcat(ram_bin_name, "afinfo.bin");
 		need_format = readb(buf + 0x10);
 		need_restart = readb(buf + 0x11);
-		printk("need_restart:%d\n", need_restart);
+		pr_info("need_restart:%d\n", need_restart);
 
-		printk("need_format:%d\n", need_format);
+		pr_info("need_format:%d\n", need_format);
 #else
 		static const unsigned int ddr_cap[] =
 			{32, 64, 128, 256, 512, 1024, 2048, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-     /*
-		if (asoc_get_board_opt() != 0)
-		{
-			modify_afi(buf);
-		}
-    */
+
+		//if (asoc_get_board_opt() != 0)
+			//modify_afi(buf);
+
 		strcat(ram_bin_name, "afinfo.bin");
 		need_format = readb((unsigned int)buf + 0x10);
 		need_restart = readb((unsigned int)buf + 0x11);
-	
-		printk("need_format:%d\n", need_format);			
-		printk("need_restart:%d\n", need_restart);
-				
-		
-#endif		
+
+		pr_info("need_format:%d\n", need_format);
+		pr_info("need_restart:%d\n", need_restart);
+#endif
 	}
-	printk("addr:0x%x, ram_bin_name:%s\n", addr, ram_bin_name);
-			
-	if(!ram_bin_filp)
-	{
-		ram_bin_filp = filp_open(ram_bin_name, O_WRONLY|O_CREAT, 0700);
-		if(!ram_bin_filp)
-		{
-			printk("fail to creat %s,errno:%p\n", ram_bin_name, ram_bin_filp);
+	pr_info("addr: 0x%x, ram_bin_name: %s\n", addr, ram_bin_name);
+
+	if (!ram_bin_filp) {
+		ram_bin_filp = filp_open(ram_bin_name, O_WRONLY | O_CREAT, 0700);
+		if (!ram_bin_filp) {
+			pr_info("fail to creat %s, errno: %p\n", ram_bin_name,
+				ram_bin_filp);
 			ret = -1;
 			goto out;
-		}
-		else
-		{
-			printk("creat %s,filp:%p\n", ram_bin_name, ram_bin_filp);
-		}
+		} else
+			pr_info("creat %s,filp:%p\n", ram_bin_name, ram_bin_filp);
 	}
 
 	file_offset_byte = 0;
 	ret = vfs_write(ram_bin_filp, buf, len, &file_offset_byte);
 	filp_close(ram_bin_filp, current->files);
 	ram_bin_filp = NULL;
-	
-out:	
-	return ret;	
+
+out:
+	return ret;
 }
 
 
@@ -2515,7 +2485,7 @@ static int do_ADFU_access_iram(struct fsg_dev *fsg)
 
 	if (curlun->ro) {
 		curlun->sense_data = SS_WRITE_PROTECTED;
-		printk("return:%d\n",__LINE__);
+		pr_info("return:%d\n",__LINE__);
 		return -EINVAL;
 	}
 
@@ -2540,7 +2510,7 @@ static int do_ADFU_access_iram(struct fsg_dev *fsg)
 			 *      to write past the end of file.
 			 * Finally, round down to a block boundary. */
 			amount = min(amount_left_to_req, mod_data.buflen);
-			
+
 
 			/* Get the next buffer */
 			fsg->usb_amount_left -= amount;
@@ -2561,9 +2531,9 @@ static int do_ADFU_access_iram(struct fsg_dev *fsg)
 
 		/* Write the received data to the backing file */
 		bh = fsg->next_buffhd_to_drain;
-		if (bh->state == BUF_STATE_EMPTY && !get_some_more)
-		{
-			VLDBG("break:%d,bh->state:%d, BUF_STATE_EMPTY:%d\n",__LINE__, bh->state, BUF_STATE_EMPTY);
+		if (bh->state == BUF_STATE_EMPTY && !get_some_more) {
+			pr_debug("break: %d, bh->state: %d, BUF_STATE_EMPTY: %d\n",
+				__LINE__, bh->state, BUF_STATE_EMPTY);
 			break;	/* We stopped early */
 		}
 
@@ -2576,26 +2546,25 @@ static int do_ADFU_access_iram(struct fsg_dev *fsg)
 			if (bh->outreq->status != 0) {
 				curlun->sense_data = SS_COMMUNICATION_FAILURE;
 				curlun->info_valid = 1;
-				VLDBG("break:%d,bh->outreq->status:%d\n",__LINE__, bh->outreq->status);
+				pr_debug("break: %d, bh->outreq->status: %d\n", __LINE__,
+					bh->outreq->status);
 				break;
 			}
 
 			amount = bh->outreq->actual; /* unit by sector */
-			
+
 			/* Don't accept excess data.  The spec doesn't say
 			 * what to do in this case.  We'll ignore the error.
 			 */
 			amount = min(amount, bh->bulk_out_intended_length);
 			//amount = round_down(amount, curlun->blksize);
-			/* Perform the write */		
+			/* Perform the write */
 			nwritten = write_ram_bin(download_addr, bh->buf, amount);
-			if(nwritten >= 0)
-			{
+			if (nwritten >= 0)
 				nwritten = amount;
-			}
 
 			if (signal_pending(current)) {
-				printk("return:%d\n",__LINE__);
+				pr_info("return: %d\n",__LINE__);
 				return -EINTR;	/* Interrupted! */
 			}
 			if (nwritten < 0) {
@@ -2614,33 +2583,30 @@ static int do_ADFU_access_iram(struct fsg_dev *fsg)
 			if (nwritten < amount) {
 				curlun->sense_data = SS_WRITE_ERROR;
 				curlun->info_valid = 1;
-				VLDBG("break:%d\n",__LINE__);
+				pr_debug("break: %d\n", __LINE__);
 				break;
 			}
 
 			/* Did the host decide to stop early? */
 			if (bh->outreq->actual != bh->outreq->length) {
 				fsg->short_packet_received = 1;
-				VLDBG("break:%d\n",__LINE__);
+				pr_debug("break: %d\n", __LINE__);
 				break;
 			}
 			continue;
-		}
-		else
-		{
-			VLDBG("break:%d,bh->state:%d\n",__LINE__, bh->state);
-		}
+		} else
+			pr_debug("break: %d, bh->state: %d\n", __LINE__, bh->state);
 
 		/* Wait for something to happen */
 		rc = sleep_thread(fsg);
 		if (rc) {
-			printk("return:%d\n",__LINE__);
+			pr_info("return:%d\n",__LINE__);
 			return rc;
 		}
 	}
 
 	no_finish_reply = 1;
-	printk("return:%d\n",__LINE__);
+	pr_info("return:%d\n",__LINE__);
 	return -EIO;		/* No default reply */
 }
 
@@ -2667,38 +2633,39 @@ static int do_ADFU_wtrootfs(struct fsg_dev *fsg)
 	char fs_len;
 	int i,error;
 
-	//printk("%s %d\n", __FUNCTION__, __LINE__);
+	//pr_info("%s %d\n", __func__, __LINE__);
 
 	if (curlun->ro) {
 		curlun->sense_data = SS_WRITE_PROTECTED;
-		printk("return:%d\n",__LINE__);
+		pr_info("return:%d\n",__LINE__);
 		return -EINVAL;
 	}
 
-	//printk("%s %d\n", __FUNCTION__, __LINE__);
+	//pr_info("%s %d\n", __func__, __LINE__);
 
 	/* Get the starting Logical Block Address and check that it's
 	 * not too big */
 	lba = get_le32(&fsg->cmnd[9]);
 	wt_param.flash_partition = fsg->cmnd[2] & ~0x80;
 	wt_param.devnum_in_phypart = fsg->cmnd[2] & ~0x80;
-	
-	//printk("%s %d: flash_partition %d, devnum_in_phypart %d\n", __FUNCTION__, __LINE__,
-	//       wt_param.flash_partition, wt_param.devnum_in_phypart);
 
+	//pr_info("%s %d: flash_partition %d, devnum_in_phypart %d\n", __func__,
+	//	__LINE__, wt_param.flash_partition, wt_param.devnum_in_phypart);
+
+	/* FIXME: remove the old scheme */
 #if 0
 	if(wt_param.flash_partition == 0x0) {
-		printk("%s %d\n", __FUNCTION__, __LINE__);
+		pr_info("%s %d\n", __func__, __LINE__);
 
 		if (!write_file_fp) {
-			printk("%s %d\n", __FUNCTION__, __LINE__);
+			pr_info("%s %d\n", __func__, __LINE__);
 
 			/*unit of probatch tool download img is 10MB*/
-			printk("write boot.bin\n");	
-			strcpy(write_file_name, "/tmp/mbrc");			
+			pr_info("write boot.bin\n");
+			strcpy(write_file_name, "/tmp/mbrc");
 			write_file_fp = filp_open(write_file_name, O_RDWR | O_CREAT, 0644);
-			printk("%s:0x%08x\n", write_file_name, write_file_fp);
-			update_phy_boot = 1;			
+			pr_info("%s:0x%08x\n", write_file_name, write_file_fp);
+			update_phy_boot = 1;
 		}
 	}
 
@@ -2707,94 +2674,96 @@ static int do_ADFU_wtrootfs(struct fsg_dev *fsg)
 		wt_param.devnum_in_phypart -= 1;
 	}
 #endif
-	
-	if(wt_param.flash_partition == 0x0 || wt_param.flash_partition == 0x1)
-	{
-		if (!write_file_fp)
-		{
+
+	if (wt_param.flash_partition == 0x0 || wt_param.flash_partition == 0x1) {
+		if (!write_file_fp) {
 			//unit of probatch tool download img is 10MB
 			if (wt_param.flash_partition == 0x0 ) {
-				printk("write mbrec.bin\n");	
+				pr_info("write mbrec.bin\n");
 				strcpy(write_file_name, "/tmp/mbrec.bin");
 			} else {
-				printk("write uboot.bin\n");	
-				strcpy(write_file_name, "/tmp/uboot.bin");			
+				pr_info("write uboot.bin\n");
+				strcpy(write_file_name, "/tmp/uboot.bin");
 			}
 			write_file_fp = filp_open(write_file_name, O_RDWR | O_CREAT, 0644);
-			printk("boot:%s\n", write_file_name);
+			pr_info("boot:%s\n", write_file_name);
 			update_phy_boot = 1;
 		}
-
-	} else  {
-		//if(wt_param.flash_partition != UDISK_ACCESS)
+	} else {
+		//if (wt_param.flash_partition != UDISK_ACCESS)
 		//{
 		   wt_param.flash_partition -= 2;
 		   wt_param.devnum_in_phypart -= 2;
 		//}
-		printk("flash_partition:%d, devnum_in_phypart:%d\n", wt_param.flash_partition, wt_param.devnum_in_phypart);
-		sprintf(format_disk_name, "/dev/act%c", 'a'+wt_param.flash_partition);
-		printk("format_disk_name = %s\n", format_disk_name);
+		pr_info("flash_partition: %d, devnum_in_phypart: %d\n",
+			wt_param.flash_partition, wt_param.devnum_in_phypart);
+		sprintf(format_disk_name, "/dev/act%c", 'a' + wt_param.flash_partition);
+		pr_info("format_disk_name = %s\n", format_disk_name);
 	}
 
-
 #if 0
-	printk("flash_partition:%d, devnum_in_phypart:%d\n", wt_param.flash_partition, wt_param.devnum_in_phypart);
+	pr_info("flash_partition:%d, devnum_in_phypart:%d\n",
+		wt_param.flash_partition, wt_param.devnum_in_phypart);
 
 	sprintf(format_disk_name, "/dev/act%c", 'a'+wt_param.flash_partition);
-	printk("format_disk_name = %s\n", format_disk_name);
+	pr_info("format_disk_name = %s\n", format_disk_name);
 #endif
 
 	op_type = fsg->cmnd[3];
-	if(op_type == 1) {
-		printk("%s %d\n", __FUNCTION__, __LINE__);
+	if (op_type == 1) {
+		pr_info("%s %d\n", __func__, __LINE__);
 
 		fs_len = fsg->cmnd[4];
 		memcpy(format_fs_name, &(fsg->cmnd[5]), fs_len);
 		format_fs_name[fs_len]=0;
-		for(i=0; i<fs_len; i++) {
+		for (i=0; i<fs_len; i++) {
 			format_fs_name[i] = tolower(format_fs_name[i]);
 		}
-// FIXME: where is the label?
-//		format_disk_label = disk_label[wt_param.flash_partition-3];
+
+		// FIXME: where is the label?
+		// format_disk_label = disk_label[wt_param.flash_partition-3];
 		format_disk_label = "label";
-		printk("format_fs_name:%s, format_disk_name:%s, format_disk_label:%s\n", format_fs_name, format_disk_name, format_disk_label);
-		
+
+		pr_info("format_fs_name: %s, format_disk_name: %s, format_disk_label: %s\n",
+			format_fs_name, format_disk_name, format_disk_label);
+
 		set_probatch_phase(PROBATCH_FORMAT);
-		wait_adfus_proc(PROBATCH_FINISH_FORMAT);//sync with upgrade_app		
+		wait_adfus_proc(PROBATCH_FINISH_FORMAT);//sync with upgrade_app
 		goto out;
 	}
-	
+
 	/* Carry out the file writes */
 	get_some_more = 1;
 	usb_offset = ((loff_t) lba) << 9;
 	file_offset = lba;  /* unit by sector */
 	amount_left_to_req = amount_left_to_write = fsg->data_size_from_cmnd;
-	
-	/*changed by liyong, to add a file operation to write flash*/
-	if(!write_file_fp) { 
+
+	/* changed by liyong, to add a file operation to write flash */
+	if (!write_file_fp) {
 		write_file_fp = filp_open(format_disk_name, O_RDWR, 0644);
 		error = PTR_ERR(write_file_fp);
-		if(IS_ERR(write_file_fp)) {
-				printk("open %s error ,error = %d\n", format_disk_name, error);	
-				return -1;	
+		if (IS_ERR(write_file_fp)) {
+			pr_info("open %s error ,error = %d\n", format_disk_name, error);
+			return -1;
 		}
 	}
-	
-	if(amount_left_to_write == 0) {
+
+	if (amount_left_to_write == 0) {
 		read_param.flash_partition = fsg->cmnd[2] & ~0x80;
 		read_param.devnum_in_phypart = fsg->cmnd[2] & ~0x80;
-		printk("image_sectors:0x%x,%d,%d\n", image_sectors, read_param.flash_partition, read_param.devnum_in_phypart);	
+		pr_info("image_sectors: 0x%x, %d, %d\n", image_sectors,
+			read_param.flash_partition, read_param.devnum_in_phypart);
 		check_image_sectors = image_sectors;
 		image_sectors = 0;
-		if(write_file_fp) {
+		if (write_file_fp) {
 			filp_close(write_file_fp, current->files);
 			write_file_fp = NULL;
 			pos = 0;
 			write_file_name[0] = 0;
-		}		
+		}
 		goto out;
 	}
-	image_sectors += amount_left_to_write>>9;	
+	image_sectors += amount_left_to_write>>9;
 	while (amount_left_to_write > 0) {
 
 		/* Queue a request for more data from the host */
@@ -2857,7 +2826,8 @@ static int do_ADFU_wtrootfs(struct fsg_dev *fsg)
 		/* Write the received data to the backing file */
 		bh = fsg->next_buffhd_to_drain;
 		if (bh->state == BUF_STATE_EMPTY && !get_some_more) {
-			VLDBG("break:%d,bh->state:%d, BUF_STATE_EMPTY:%d\n",__LINE__, bh->state, BUF_STATE_EMPTY);
+			pr_debug("break: %d,bh->state: %d, BUF_STATE_EMPTY: %d\n",
+				__LINE__, bh->state, BUF_STATE_EMPTY);
 			break;	/* We stopped early */
 		}
 
@@ -2871,12 +2841,13 @@ static int do_ADFU_wtrootfs(struct fsg_dev *fsg)
 				curlun->sense_data = SS_COMMUNICATION_FAILURE;
 				curlun->sense_data_info = file_offset;
 				curlun->info_valid = 1;
-				VLDBG("break:%d,bh->outreq->status:%d\n",__LINE__, bh->outreq->status);
+				pr_debug("break: %d, bh->outreq->status: %d\n",
+					__LINE__, bh->outreq->status);
 				break;
 			}
 
 			amount = bh->outreq->actual; /* unit by sector */
-			
+
 			/* Don't accept excess data.  The spec doesn't say
 			 * what to do in this case.  We'll ignore the error.
 			 */
@@ -2886,35 +2857,38 @@ static int do_ADFU_wtrootfs(struct fsg_dev *fsg)
 			/* Perform the write */
 			file_offset_tmp = file_offset;
 
-			VLDBG("Perform the write,wt_param.devnum_in_phypart:0x%x\n", wt_param.devnum_in_phypart);		
-//			if(wt_param.devnum_in_phypart == 0x1)
+			pr_debug("Perform the write, wt_param.devnum_in_phypart: 0x%x\n",
+				wt_param.devnum_in_phypart);
+//			if (wt_param.devnum_in_phypart == 0x1)
 			{
-				if(!write_file_fp) {
+				if (!write_file_fp) {
 //#ifdef FPGA_VERIFY_MODE
 //nwritten = amount >> 9;
 //#else
-
 					nwritten = adfus_nand_write(file_offset, amount >> 9,
 								    bh->buf, &wt_param);
 //#endif
-					nwritten = nwritten << 9;	
-					VLDBG("amount:0x%x,nwritten:0x%x,file_offset:0x%x\n", amount, nwritten, (unsigned long)file_offset);					
-				}
-				else {
-					//printk("amount:0x%x,nwritten:0x%x,pos:0x%x\n", amount, nwritten, (unsigned long)pos);
+					nwritten = nwritten << 9;
+					pr_debug("amount: 0x%x, nwritten: 0x%x, file_offset: 0x%x\n",
+						amount, nwritten, (unsigned long)file_offset);
+				} else {
+					//pr_info("amount:0x%x,nwritten:0x%x,pos:0x%x\n",
+					//amount, nwritten, (unsigned long)pos);
 					/* reinitialize offset for random write */
 					pos = file_offset << 9;
-					nwritten = write_file_fp->f_op->write(write_file_fp, bh->buf, amount, &pos);
-					VLDBG("write file: amount:0x%x,nwritten:0x%x,file_offset:0x%x\n", amount, nwritten, file_offset << 9);
-				}	
+					nwritten = write_file_fp->f_op->write(write_file_fp,
+						bh->buf, amount, &pos);
+					pr_debug("write file: amount: 0x%x, nwritten: 0x%x, file_offset: 0x%x\n",
+						amount, nwritten, file_offset << 9);
+				}
 			}
-			
+
 			if (signal_pending(current)) {
-				printk("return:%d\n",__LINE__);
+				pr_info("return: %d\n", __LINE__);
 				return -EINTR;	/* Interrupted! */
 			}
 			if (nwritten < 0) {
-				printk("adfus.error in file write: %d.file_offset:%d, amount:%d\n",
+				pr_info("adfus.error in file write: %d.file_offset: %d, amount: %d\n",
 				       (int)nwritten, file_offset, amount);
 				nwritten = 0;
 			} else if (nwritten < amount) {
@@ -2931,34 +2905,31 @@ static int do_ADFU_wtrootfs(struct fsg_dev *fsg)
 				curlun->sense_data = SS_WRITE_ERROR;
 				curlun->sense_data_info = file_offset;
 				curlun->info_valid = 1;
-				VLDBG("break:%d\n",__LINE__);
+				pr_debug("break: %d\n", __LINE__);
 				break;
 			}
 
 			/* Did the host decide to stop early? */
 			if (bh->outreq->actual != bh->outreq->length) {
 				fsg->short_packet_received = 1;
-				VLDBG("break:%d\n",__LINE__);
+				pr_debug("break: %d\n", __LINE__);
 				break;
 			}
 			continue;
-		}
-		else
-		{
-			VLDBG("break:%d,bh->state:%d\n",__LINE__, bh->state);
-		}
+		} else
+			pr_debug("break: %d, bh->state: %d\n", __LINE__, bh->state);
 
 		/* Wait for something to happen */
 		rc = sleep_thread(fsg);
 		if (rc) {
-			VLDBG("return:%d\n",__LINE__);
+			pr_debug("return: %d\n", __LINE__);
 			return rc;
 		}
 	}
 
 out:
 	no_finish_reply = 1;
-	VLDBG("return:%d\n",__LINE__);
+	pr_debug("return: %d\n", __LINE__);
 	return -EIO;		/* No default reply */
 }
 #endif
@@ -2976,9 +2947,9 @@ static int fsync_sub(struct lun *curlun)
 		media_dev_t = curlun->devnum;
 		bdev_back = bdget(media_dev_t);
 		disk = bdev_back->bd_disk;
-			
+
 		if (disk == NULL)
-		{ 
+		{
 			bdput(bdev_back);
 			return 0;
 		}
@@ -3270,7 +3241,7 @@ static void clear_is_running(void)
 u32 get_phBaseAddr(void)
 {
 	u32 tmp;
-	
+
 	__asm__ __volatile__ ("mrc p15, 4, %0, c15, c0, 0":"=r"(tmp));
 	return tmp;
 }
@@ -3281,18 +3252,16 @@ u32 get_phBaseAddr(void)
 // r1:  IF 0 (AutoReload) ELSE (SingleShot)
 void init_WD_timer(unsigned int load_value, unsigned int auto_reload)
 {
-	u32 phBaseAddr, wdCountAddr, wdModeAddr, tmp=0;
-   	
-   	phBaseAddr = get_phBaseAddr();
-   	wdCountAddr = phBaseAddr+0x620;
-   	wdModeAddr = phBaseAddr+0x628;
-   	
-   	act_writel(load_value, wdCountAddr);
-   	if(auto_reload == 0)
-   	{
-   		tmp = 0x2;	
-   	}
-   	act_writel(tmp, wdModeAddr);
+	u32 phBaseAddr, wdCountAddr, wdModeAddr, tmp = 0;
+
+	phBaseAddr = get_phBaseAddr();
+	wdCountAddr = phBaseAddr + 0x620;
+	wdModeAddr = phBaseAddr + 0x628;
+
+	act_writel(load_value, wdCountAddr);
+	if (auto_reload == 0)
+		tmp = 0x2;
+	act_writel(tmp, wdModeAddr);
 }
 
 static void WD_is_running(void)
@@ -3300,7 +3269,7 @@ static void WD_is_running(void)
 	u32 phBaseAddr, wdModeAddr;
 
 	phBaseAddr = get_phBaseAddr();
-   	wdModeAddr = phBaseAddr+0x628;
+	wdModeAddr = phBaseAddr + 0x628;
 
 	if (act_readl(wdModeAddr) & 0x8)
 		return 1;
@@ -3313,7 +3282,7 @@ static void clear_is_running(void)
 	u32 phBaseAddr, wdModeAddr;
 
 	phBaseAddr = get_phBaseAddr();
-   	wdModeAddr = phBaseAddr+0x628;
+	wdModeAddr = phBaseAddr + 0x628;
 
 	if (act_readl(wdModeAddr) & 0x8)
 		return 1;
@@ -3337,26 +3306,28 @@ extern struct atc260x_dev *atc260x_dev_handle;
 
 static void clear_enteradfu_flag(void)
 {
-	atc260x_set_bits(atc260x_dev_handle, atc2603_PMU_UV_INT_EN, 0x2 , 0x0);
+	atc260x_set_bits(atc260x_dev_handle, atc2603_PMU_UV_INT_EN, 0x2, 0x0);
 	mdelay(1);
-	printk(KERN_INFO "atc2603_PMU_UV_INT_EN: %x\n", atc260x_reg_read(atc260x_dev_handle, atc2603_PMU_UV_INT_EN));
+	pr_info("atc2603_PMU_UV_INT_EN: %x\n",
+		atc260x_reg_read(atc260x_dev_handle, atc2603_PMU_UV_INT_EN));
 }
 
 static int need_enteradfu(void)
 {
-	return (atc260x_reg_read(atc260x_dev_handle, atc2603_PMU_UV_INT_EN) & 0x2) ? 1 : 0;
+	return (atc260x_reg_read(atc260x_dev_handle,
+		atc2603_PMU_UV_INT_EN) & 0x2) ? 1 : 0;
 }
 #endif
 // void set_WD_mode(unsigned int mode)
-// Sets up the WD timer  
+// Sets up the WD timer
 // r0:  IF 0 (timer mode) ELSE (watchdog mode)
 //	void set_WD_mode(unsigned int mode)
 //	{
 //		u32 phBaseAddr, wdModeAddr;
-//		
+//
 //		phBaseAddr = get_phBaseAddr();
 //	   	wdModeAddr = phBaseAddr+0x628;
-//	   	
+//
 //	   	if(mode == 0)
 //	   	{
 //	   		act_writel((act_readl(wdModeAddr) & 0xf7) | 0x4, wdModeAddr);
@@ -3366,29 +3337,29 @@ static int need_enteradfu(void)
 //	   		act_writel(act_readl(wdModeAddr) | 0x8, wdModeAddr);
 //	   	}
 //	}
-//	
+//
 //	void start_WD_timer(void)
 //	{
 //		u32 phBaseAddr, wdModeAddr;
-//		
+//
 //		phBaseAddr = get_phBaseAddr();
 //	   	wdModeAddr = phBaseAddr+0x628;
-//	   	
+//
 //		act_writel(act_readl(wdModeAddr) | 0x1, wdModeAddr);
 //	}
-//	
+//
 //	int wd_restart(void)
 //	{
-//	    printk(KERN_INFO "wd_restart\n");
-//	
+//	    pr_info("wd_restart\n");
+//
 //	    if (need_enteradfu())
 //	    {
-//	        printk(KERN_INFO "clear enter adfu flag\n");
+//	        pr_info("clear enter adfu flag\n");
 //	        clear_enteradfu_flag();
 //	    }
-//	
+//
 //	    msleep(10);
-//	
+//
 //		//bit26=1,使WD0复位所有cpu及整个系统(除了该bit和WDRESET0)，其它寄存器全部复位
 //	    act_writel(act_readl(SPS_PG_CTL)|0x04000000, SPS_PG_CTL);
 //	    init_WD_timer(0x98, 0x01);
@@ -3414,7 +3385,6 @@ static int send_status(struct fsg_dev *fsg)
 		rc = sleep_thread(fsg);
 		if (rc)
 			return rc;
-
 	}
 	if (curlun) {
 		sd = curlun->sense_data;
@@ -3443,13 +3413,12 @@ static int send_status(struct fsg_dev *fsg)
 		csw->Residue = cpu_to_le32(fsg->residue);
 		csw->Status = status;
 #if 1
-		printk(
-			"csw-> SIG: %x Tag:%x Residue:%x Status:%x\n",
+		pr_info("csw-> SIG: %x Tag: %x Residue: %x Status: %x\n",
 			csw->Signature, csw->Tag, csw->Residue, csw->Status);
 #endif
 		bh->inreq->length = USB_BULK_CS_WRAP_LEN;
 		bh->inreq->zero = 0;
-		//printk("  send_status sss\n");
+		//pr_info("send_status sss\n");
 		start_transfer(fsg, fsg->bulk_in, bh->inreq,
 			       &bh->inreq_busy, &bh->state);
 
@@ -3486,14 +3455,16 @@ static int send_status(struct fsg_dev *fsg)
 //		if (unlikely(adfu_success_flag == 1)) {
 //			raise_exception(fsg, FSG_STATE_DISCONNECT);
 //			adfu_flush_nand_cache();
-//			
+//
 //			if (boot_info_write && boot_info_read) {
 //				boot_info_write(atc2603_PMU_SYS_CTL8, 0x0);
 //				boot_info_write(atc2603_PMU_SYS_CTL9, 0x0);
-//				printk("\n%s, %d, ctl8: %x, ctl9: %x\n", __func__, __LINE__, boot_info_read(atc2603_PMU_SYS_CTL8), boot_info_read(atc2603_PMU_SYS_CTL9));
+//				pr_info("\n%s, %d, ctl8: %x, ctl9: %x\n", __func__,
+//					__LINE__, boot_info_read(atc2603_PMU_SYS_CTL8),
+//					boot_info_read(atc2603_PMU_SYS_CTL9));
 //			}
-//			
-//			printk(KERN_INFO "UPGRADE SUCCESSFULLY\n");
+//
+//			pr_info("UPGRADE SUCCESSFULLY\n");
 //			if(need_restart == 0)
 //			{
 //				machine_restart("reboot");
@@ -3518,8 +3489,8 @@ static int check_command(struct fsg_dev *fsg, int cmnd_size,
 	struct lun *curlun;
 
 
-	if (0 != lun){
-		printk("[adfus]we donot support no-lun0 now\n");
+	if (0 != lun) {
+		pr_info("[adfus]we donot support no-lun0 now\n");
 		return -EINVAL;
 	}
 	/* There's some disagreement as to whether RBC pads commands or not.
@@ -3673,11 +3644,13 @@ int do_scsi_command(struct fsg_dev *fsg)
 	fsg->short_packet_received = 0;
 
 	down_read(&fsg->filesem);	/* We're using the backing file */
-	printk("fsg->cmnd[0-2] = 0x%x 0x%x 0x%x\n", fsg->cmnd[0], fsg->cmnd[1], fsg->cmnd[2]);
+	pr_info("fsg->cmnd[0-2] = 0x%x 0x%x 0x%x\n",
+		fsg->cmnd[0], fsg->cmnd[1], fsg->cmnd[2]);
+
 	switch (fsg->cmnd[0]) {
 
 	case SC_ADFU_UPGRADE:
-		/* printk(KERN_INFO "*******ADFU_UPGRADE_COMMAND:*******\n"); */
+		/* pr_info("*******ADFU_UPGRADE_COMMAND:*******\n"); */
 
 		fsg->lun = 0; /* cheat the OS */
 		fsg->curlun = curlun = &fsg->luns[fsg->lun];
@@ -3689,27 +3662,27 @@ int do_scsi_command(struct fsg_dev *fsg)
 		switch (sub_code) {
 
 //		case SC_ADFU_FORMAT_FLASH:
-//		printk(KERN_INFO "\n****** ERASE THE FLASH ******\n");
+//		pr_info("\n****** ERASE THE FLASH ******\n");
 //			need_format = 1;
 //			fsg->data_dir = DATA_DIR_NONE;
 //
 //			break;
 
 //		case SC_ADFU_TEST_FLASHRDY:
-//		/* printk(KERN_INFO "\n****** TEST FLASH ERASE READY ******\n"); */
+//		/* pr_info("\n****** TEST FLASH ERASE READY ******\n"); */
 //			fsg->data_dir = DATA_DIR_NONE;
 //			if (!backing_file_is_open(curlun)) {
-//				/* printk(KERN_INFO "\n****** NOT READY ******\n"); */
+//				/* pr_info("\n****** NOT READY ******\n"); */
 //				curlun->sense_data = SS_MEDIUM_NOT_PRESENT;
 //			} else {
 //				/* */
-//				printk(KERN_INFO "\n****** READY ******\n");
+//				pr_info("\n****** READY ******\n");
 //			}
 //
 //			break;
 
 //		case SC_ADFU_ACCESS_MBR:
-//		/* printk(KERN_INFO "*******ACCESS THE MBR !!*******\n"); */
+//		/* pr_info("*******ACCESS THE MBR !!*******\n"); */
 //			fsg->data_size = 0x400;
 //			fsg->residue = fsg->usb_amount_left = fsg->data_size;
 //			fsg->data_dir = DATA_DIR_TO_HOST;
@@ -3722,14 +3695,14 @@ int do_scsi_command(struct fsg_dev *fsg)
 			reply = do_ADFU_access_iram(fsg);
 			break;
 		case SC_ADFU_DOWNLOAD_IMG:
-//			printk("*******WRITE THE ROOTFS !!*******\n");
+//			pr_info("*******WRITE THE ROOTFS !!*******\n");
 			/* prepare */
 			/* fsg->data_size = */
 			fsg->data_dir = DATA_DIR_FROM_HOST;
 			fsg->data_size_from_cmnd = (get_le32(&fsg->cmnd[5]))<<9;
 			fsg->residue = fsg->usb_amount_left = fsg->data_size;
 			reply = do_ADFU_wtrootfs(fsg);
-//			printk("handle SC_ADFU_WRITE_ROOTFS end\n");
+//			pr_info("handle SC_ADFU_WRITE_ROOTFS end\n");
 			break;
 		case SC_ADFU_INFO:
 			fsg->data_dir = DATA_DIR_TO_HOST;
@@ -3738,7 +3711,7 @@ int do_scsi_command(struct fsg_dev *fsg)
 			reply = do_ADFU_INFO(fsg);
 			break;
 //		case SC_ADFU_READ_ROOTFS:
-//		/* printk(KERN_INFO "*******READ THE ROOTFS !!*******\n"); */
+//		/* pr_info("*******READ THE ROOTFS !!*******\n"); */
 //			/* prepare */
 //			/* fsg->data_size = */
 //			fsg->data_dir = DATA_DIR_TO_HOST;
@@ -3747,17 +3720,16 @@ int do_scsi_command(struct fsg_dev *fsg)
 //			reply = do_ADFU_rdrootfs(fsg);
 //			break;
 		case SC_ADFU_TFEROVER:
-			printk("SC_ADFU_TFEROVER\n");
+			pr_info("SC_ADFU_TFEROVER\n");
 			//update phy if downloading misc.img or updating mbr_info.bin
-			if((update_phy_boot == 1) || (check_partition_flag > 0))
-			{
+			if ((update_phy_boot == 1) || (check_partition_flag > 0)) {
 				set_probatch_phase(PROBATCH_WRITE_PHY);
-				wait_adfus_proc(PROBATCH_FINISH_WRITE_PHY);	
+				wait_adfus_proc(PROBATCH_FINISH_WRITE_PHY);
 			}
-	
-			//check udisk formatted ?					
+
+			//check udisk formatted ?
 			set_probatch_phase(PROBATCH_FINISH);
-			wait_adfus_proc(PROBATCH_FINISH_OK);			
+			wait_adfus_proc(PROBATCH_FINISH_OK);
 			break;
 		}
 		break;
@@ -3778,10 +3750,10 @@ int do_scsi_command(struct fsg_dev *fsg)
 	case SC_RELEASE:
 	case SC_RESERVE:
 	case SC_SEND_DIAGNOSTIC:
-		/* printk(KERN_INFO "SC_ENTENSIVE.\n"); */
+		/* pr_info("SC_ENTENSIVE.\n"); */
 
 	default:
-		/* printk(KERN_INFO "SC_UNKNOW.\n"); */
+		/* pr_info("SC_UNKNOW.\n"); */
 
 		fsg->data_size_from_cmnd = 0;
 		sprintf(unknown, "Unknown x%02x", fsg->cmnd[0]);
@@ -3822,14 +3794,14 @@ static int received_cbw(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 		return -EINVAL;
 #if 0
 	int k;
-	printk(KERN_INFO "CDB:");
+	pr_info("CDB:");
 	for (k = 0; k < MAX_COMMAND_SIZE; k++) {
 		/**/
-		printk(KERN_INFO "%x ", cbw->CDB[k]);
+		pr_info("%x ", cbw->CDB[k]);
 	}
-	printk(KERN_INFO "\n");
-	printk(KERN_INFO "Signature:%x Tag:%x Flags: \
-		%x DataTransferLength:%x\n",
+	pr_info("\n");
+	pr_info("Signature: %x Tag: %x Flags: \
+		%x DataTransferLength: %x\n",
 	       cbw->Signature, cbw->Tag, cbw->Flags,
 	       le32_to_cpu(cbw->DataTransferLength));
 #endif
@@ -3870,7 +3842,7 @@ static int received_cbw(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 		return -EINVAL;
 	}
 common_use:
-#endif	
+#endif
 	/* Save the command for later */
 	fsg->cmnd_size = cbw->Length;
 	memcpy(fsg->cmnd, cbw->CDB, fsg->cmnd_size);
@@ -3883,32 +3855,33 @@ common_use:
 		fsg->data_dir = DATA_DIR_NONE;
 	fsg->lun = cbw->Lun;
 	fsg->tag = cbw->Tag;
+
 	return 0;
 }
 
 static int is_adfu_cmd(char *buf)
 {
-	if( (buf[0] == 0x55)&&(buf[1] == 0x53)&&(buf[2] == 0x42)&&(buf[3] == 0x43) )
+	if ((buf[0] == 0x55) && (buf[1] == 0x53) &&
+		(buf[2] == 0x42) && (buf[3] == 0x43))
 		return 1;
-	
+
 	return 0;
 }
 
 static void printk_adfu_cmd(struct usb_request *req)
 {
 	int i;
-	char *buf=req->buf;
+	char *buf = req->buf;
 
-	printk("usb_request:length=%d,actual=%d\n", req->length, req->actual);
+	pr_info("usb_request: length = %d, actual = %d\n",
+		req->length, req->actual);
 
-	for(i=0; i<req->actual; i++)
-	{
-		printk("0x%x ", *buf);
+	for (i = 0; i < req->actual; i++) {
+		pr_info("0x%x ", *buf);
 		buf++;
 	}
 
-	printk("\n%x\n", __FUNCTION__);
-	
+	pr_info("\n%x\n", __func__);
 }
 
 static int get_next_command(struct fsg_dev *fsg)
@@ -3929,8 +3902,7 @@ static int get_next_command(struct fsg_dev *fsg)
 		/* Queue a request to read a Bulk-only CBW */
 		set_bulk_out_req_length(fsg, bh, USB_BULK_CB_WRAP_LEN);
 		bh->outreq->short_not_ok = 1;
-		/* printk(KERN_INFO
-		   "get command length: %d\n",bh->outreq->length); */
+		/* pr_info("get command length: %d\n", bh->outreq->length); */
 		start_transfer(fsg, fsg->bulk_out, bh->outreq,
 			       &bh->outreq_busy, &bh->state);
 
@@ -3947,9 +3919,9 @@ static int get_next_command(struct fsg_dev *fsg)
 		}
 		smp_rmb();
 
-		if(0==is_adfu_cmd(bh->outreq->buf))
+		if (0 == is_adfu_cmd(bh->outreq->buf))
 			printk_adfu_cmd(bh->outreq);
-		
+
 		rc = received_cbw(fsg, bh);
 		bh->state = BUF_STATE_EMPTY;
 
@@ -4011,9 +3983,10 @@ static int act_config_ep_by_speed(struct usb_gadget *g,
 			struct usb_ep *_ep)
 {
 	if (g->speed == USB_SPEED_SUPER && gadget_is_superspeed(g)) {
-		if (!comp_desc ||(comp_desc->bDescriptorType != USB_DT_SS_ENDPOINT_COMP))
+		if (!comp_desc || (comp_desc->bDescriptorType !=
+			USB_DT_SS_ENDPOINT_COMP))
 			return -EIO;
-		
+
 		_ep->comp_desc = comp_desc;
 		_ep->maxburst = comp_desc->bMaxBurst;
 	}
@@ -4082,9 +4055,12 @@ reset:
 		goto reset;
 	fsg->bulk_in_enabled = 1;
 
-	d = ep_desc(fsg->gadget, &fs_bulk_out_desc, &hs_bulk_out_desc, &fsg_ss_bulk_out_desc);
-	if (fsg->gadget->speed == USB_SPEED_SUPER && gadget_is_superspeed(fsg->gadget))
-		act_config_ep_by_speed(fsg->gadget, &fsg_ss_bulk_out_comp_desc,fsg->bulk_out);
+	d = ep_desc(fsg->gadget, &fs_bulk_out_desc, &hs_bulk_out_desc,
+		&fsg_ss_bulk_out_desc);
+	if (fsg->gadget->speed == USB_SPEED_SUPER &&
+		gadget_is_superspeed(fsg->gadget))
+		act_config_ep_by_speed(fsg->gadget, &fsg_ss_bulk_out_comp_desc,
+			fsg->bulk_out);
 	rc = enable_endpoint(fsg, fsg->bulk_out, d);
 	if (rc != 0)
 		goto reset;
@@ -4093,7 +4069,7 @@ reset:
 	clear_bit(IGNORE_BULK_OUT, &fsg->atomic_bitflags);
 
 	if (transport_is_cbi()) {
-		d = ep_desc(fsg->gadget, &fs_intr_in_desc, &hs_intr_in_desc,NULL);
+		d = ep_desc(fsg->gadget, &fs_intr_in_desc, &hs_intr_in_desc, NULL);
 		rc = enable_endpoint(fsg, fsg->intr_in, d);
 		if (rc != 0)
 			goto reset;
@@ -4167,7 +4143,7 @@ static int do_set_config(struct fsg_dev *fsg, u8 new_config)
 				break;
 			case USB_SPEED_SUPER:
 				speed = "super";
-				break;	
+				break;
 			default:
 				speed = "?";
 				break;
@@ -4206,7 +4182,7 @@ static void handle_exception(struct fsg_dev *fsg)
 			raise_exception(fsg, FSG_STATE_EXIT);
 		}
 	}
-	
+
 	if (unlikely(first_start != 0)) {
 		first_start = 0;
 		return;
@@ -4218,11 +4194,11 @@ static void handle_exception(struct fsg_dev *fsg)
 	for (i = 0; i < NUM_BUFFERS; ++i) {
 		bh = &fsg->buffhds[i];
 		if (bh->inreq_busy) {
-			printk("bulk in dequeue\n");
+			pr_info("bulk in dequeue\n");
 			usb_ep_dequeue(fsg->bulk_in, bh->inreq);
 		}
 		if (bh->outreq_busy) {
-			printk("bulk out dequeue\n");
+			pr_info("bulk out dequeue\n");
 			usb_ep_dequeue(fsg->bulk_out, bh->outreq);
 		}
 	}
@@ -4334,20 +4310,14 @@ static void handle_exception(struct fsg_dev *fsg)
 		do_set_config(fsg, 0);	/* Unconfigured state */
         if (unlikely(adfu_success_flag == 1)) {
             usb_gadget_disconnect(fsg->gadget);
-            
-            if(need_restart == 1)   //shutdown
-            {
-                kernel_restart("upgrade_halt");
-            }
-            else if(need_restart == 2)  //reboot
-            {
-                kernel_restart("upgrade_reboot");
-            }
-            else
-            {     
-                //do nothing           
-            }
-    	}
+
+			if (need_restart == 1)   //shutdown
+				kernel_restart("upgrade_halt");
+			else if (need_restart == 2)  //reboot
+				kernel_restart("upgrade_reboot");
+			else
+				;	//do nothing
+		}
 		break;
 
 	case FSG_STATE_EXIT:
@@ -4384,7 +4354,7 @@ static int fsg_main_thread(void *fsg_)
 	while (fsg->state != FSG_STATE_TERMINATED) {
 
 		if (exception_in_progress(fsg) || signal_pending(current)) {
-			printk("stat= %d\n", fsg->state);
+			pr_info("stat = %d\n", fsg->state);
 			handle_exception(fsg);
 			continue;
 		}
@@ -4402,11 +4372,11 @@ static int fsg_main_thread(void *fsg_)
 			fsg->state = FSG_STATE_DATA_PHASE;
 		spin_unlock_irqrestore(&fsg->lock, flag);
 
-		//printk("  do_scsi_command yyyyyy\n");
+		//pr_info("  do_scsi_command yyyyyy\n");
 		if (do_scsi_command(fsg) || finish_reply(fsg))
 			continue;
-		//printk("  do_scsi_command sss\n");
-		
+		//pr_info("  do_scsi_command sss\n");
+
 		spin_lock_irqsave(&fsg->lock, flag);
 		if (!exception_in_progress(fsg))
 			fsg->state = FSG_STATE_STATUS_PHASE;
@@ -4505,21 +4475,19 @@ static int open_backing_file(struct lun *curlun, const char *filename)
 	curlun->devnum = filp->f_path.dentry->d_inode->i_rdev;
 	/* add by wlt, disk type decided */
 	if (MAJOR(filp->f_path.dentry->d_inode->i_rdev) == MAJOR_OF_CARD) {
-		printk("device num:MAJOR: %u MINOR: %u\n",
+		pr_info("device num: MAJOR: %u MINOR: %u\n",
 		       MAJOR(filp->f_path.dentry->d_inode->i_rdev),
 		       MINOR(filp->f_path.dentry->d_inode->i_rdev));
 		curlun->disk_type = CARD_MEDIUM;
 		card_dirty_flag = 0;
-	}
-	else if (MAJOR(filp->f_path.dentry->d_inode->i_rdev) == MAJOR_OF_NAND) {
-		printk("device num:MAJOR: %u MINOR: %u\n",
+	} else if (MAJOR(filp->f_path.dentry->d_inode->i_rdev) == MAJOR_OF_NAND) {
+		pr_info("device num: MAJOR: %u MINOR: %u\n",
 		       MAJOR(filp->f_path.dentry->d_inode->i_rdev),
 		       MINOR(filp->f_path.dentry->d_inode->i_rdev));
 		curlun->disk_type = NAND_MEDIUM;
 		nand_dirty_flag = 0;
-	}
-	else if (MAJOR(filp->f_path.dentry->d_inode->i_rdev) == MAJOR_OF_MMS) {
-		printk("device num:MAJOR: %u MINOR: %u\n",
+	} else if (MAJOR(filp->f_path.dentry->d_inode->i_rdev) == MAJOR_OF_MMS) {
+		pr_info("device num: MAJOR: %u MINOR: %u\n",
 		       MAJOR(filp->f_path.dentry->d_inode->i_rdev),
 		       MINOR(filp->f_path.dentry->d_inode->i_rdev));
 		curlun->disk_type = MMS_MEDIUM;
@@ -4665,8 +4633,8 @@ static ssize_t show_need_format(struct device *dev, struct device_attribute *att
 	return sprintf(buf, "%d", need_format);
 }
 
-static ssize_t store_need_format(struct device *dev, struct device_attribute *attr,
-				 const char *buf, size_t count)
+static ssize_t store_need_format(struct device *dev,
+	struct device_attribute *attr, const char *buf, size_t count)
 {
 	/* for future use */
 	return 0;
@@ -4674,20 +4642,20 @@ static ssize_t store_need_format(struct device *dev, struct device_attribute *at
 
 static DEVICE_ATTR(need_format, 0444, show_need_format, NULL);
 
-static ssize_t show_fs_name(struct device *dev, struct device_attribute *attr,
-			    char *buf)
+static ssize_t show_fs_name(struct device *dev,
+	struct device_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%s", format_fs_name);
 }
 
-static ssize_t show_disk_name(struct device *dev, struct device_attribute *attr,
-			      char *buf)
+static ssize_t show_disk_name(struct device *dev,
+	struct device_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%s", format_disk_name);
 }
 
-static ssize_t show_disk_label(struct device *dev, struct device_attribute *attr,
-			       char *buf)
+static ssize_t show_disk_label(struct device *dev,
+	struct device_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%s", format_disk_label);
 }
@@ -4909,11 +4877,10 @@ static void start_adfu_transfer(struct fsg_dev *fsg)
 	unsigned int exception_req_tag;
 	unsigned long flag;
 	struct usb_ep *ep;
-	
-	ep = fsg->bulk_out;
 
+	ep = fsg->bulk_out;
 	fsg->config = 0;
-	
+
 /* 	is_high_speed = aotg_test_speed_mod();
 	if (is_high_speed == 0) {
 	fsg->gadget->speed = USB_SPEED_FULL;
@@ -4921,11 +4888,11 @@ static void start_adfu_transfer(struct fsg_dev *fsg)
 
 	//do_set_config(fsg, 1);
 
-	//printk("BEGIN TO SWITCH BUF & ACK PC WITH ACK\n");
+	//pr_info("BEGIN TO SWITCH BUF & ACK PC WITH ACK\n");
 //	aotg_ep_switchbuf(ep);
 
 	//mdelay(50);
-	//printk("AFTER SWITCH BUF & BEGIN TO REAISE EXCEPTION\n");
+	//pr_info("AFTER SWITCH BUF & BEGIN TO REAISE EXCEPTION\n");
 
 	first_start = 1;
 	spin_lock_irqsave(&fsg->lock, flag);
@@ -4953,7 +4920,7 @@ static void start_adfu_transfer(struct fsg_dev *fsg)
 		}
 		fsg->state = FSG_STATE_IDLE;
 	}
-	
+
 	do_set_config(fsg, 1);
 	wakeup_thread(fsg);
 
@@ -4971,8 +4938,8 @@ static int __init fsg_bind(struct usb_gadget *gadget)
 	struct usb_ep *ep;
 	struct usb_request *req;
 	char *pathbuf, *p;
-	
-	
+
+
 	first_start =0;
 
 	fsg->gadget = gadget;
@@ -5159,7 +5126,7 @@ static int __init fsg_bind(struct usb_gadget *gadget)
 		}
 		serial[0] = 0x2C;	//invalid serial
 	}
-	/* printk("Now The Serial is %s\n", serial); */
+	/* pr_info("Now The Serial is %s\n", serial); */
 	fsg->thread_task = kthread_create(fsg_main_thread, fsg,
 					  "file-storage-gadget");
 	if (IS_ERR(fsg->thread_task)) {
@@ -5271,36 +5238,42 @@ static int __init fsg_alloc(void)
 	return 0;
 }
 
+#ifndef CONFIG_USB_LEGACY
 typedef void (*FUNC)(void);
 static FUNC dwc3_mask_supper_speed = 0;
-
+#endif
 
 int __init fsg_init(void)
 {
 	int rc;
 	struct fsg_dev *fsg;
 
-	printk("adfus: %s %d %s %s\n", __func__, __LINE__, __DATE__, __TIME__);
+	pr_info("adfus: %s %d %s %s\n", __func__, __LINE__, __DATE__, __TIME__);
 
-	dwc3_mask_supper_speed = (FUNC)kallsyms_lookup_name("dwc3_mask_supper_speed_for_adfus");
-	if(dwc3_mask_supper_speed)
+#ifndef CONFIG_USB_LEGACY
+	dwc3_mask_supper_speed =
+		(FUNC)kallsyms_lookup_name("dwc3_mask_supper_speed_for_adfus");
+	if (dwc3_mask_supper_speed)
 		dwc3_mask_supper_speed();
+#endif
 
 #ifdef ADFUS_PROC
-	adfus_proc_entry = proc_create(adfus_proc_path, 0, NULL, &proc_adfu_operations);
-	if (adfus_proc_entry) {
-		strcpy(probatch_phase, all_probatch_phase[0]);		
-	} else {
-		printk("adfus :can not create proc file\n");
-	}
+	adfus_proc_entry = proc_create(adfus_proc_path, 0, NULL,
+		&proc_adfu_operations);
+	if (adfus_proc_entry)
+		strcpy(probatch_phase, all_probatch_phase[0]);
+	else
+		pr_info("adfus: can not create proc file\n");
 #endif
 
 	adfu_success_flag = 0;
 
 	no_finish_reply = 0;
 
+#ifndef CONFIG_USB_LEGACY
 	/* adfu need to set flag by itself, normally it is ruled by usb monitor */
 	set_dwc3_gadget_plugin_flag(1);
+#endif
 
 	rc = fsg_alloc();
 	if (rc != 0)
@@ -5321,15 +5294,14 @@ module_init(fsg_init);
 void __exit fsg_cleanup(void)
 {
 	struct fsg_dev *fsg = the_fsg;
-	printk("file-storage unload ... \n");
+
+	pr_info("file-storage unload...\n");
 	/* Unregister the driver iff the thread hasn't already done so */
 	if (test_and_clear_bit(REGISTERED, &fsg->atomic_bitflags))
 		usb_gadget_unregister_driver(&fsg_driver);
 
 	/* Wait for the thread to finish up */
 	wait_for_completion(&fsg->thread_notifier);
-
-
 
 	close_all_backing_files(fsg);
 	kref_put(&fsg->ref, fsg_release);
@@ -5338,7 +5310,6 @@ void __exit fsg_cleanup(void)
 	if (adfus_proc_entry)
 		remove_proc_entry(adfus_proc_path, NULL);
 #endif
-
 }
 module_exit(fsg_cleanup);
 

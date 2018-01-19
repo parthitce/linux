@@ -71,7 +71,7 @@ endif
 check_for_multiple_loadaddr = \
 if [ $(words $(UIMAGE_LOADADDR)) -ne 1 ]; then \
 	echo 'multiple (or no) load addresses: $(UIMAGE_LOADADDR)'; \
-	echo 'This is incompatible with uImages'; \
+	echo 'This is incompatible with uImages $(LOADADDR),  $(ZRELADDR), $(CONFIG_ZBOOT_ROM), $(MACHINE)  '; \
 	echo 'Specify LOADADDR on the commandline to build an uImage'; \
 	false; \
 fi

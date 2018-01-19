@@ -11,7 +11,11 @@
 #include "./../host_comm/owl_device.h"
 
 #define CAMERA_COMMON_NAME      "sensor_common"
+#ifdef LEGACY_SI
+#define SI_FDT_COMPATIBLE       "actions,ats3605-isp"
+#else
 #define SI_FDT_COMPATIBLE       "actions,s700-isp"
+#endif
 #define ISP_FDT_COMPATIBLE      "actions,s900-isp"
 
 #define CAMERA_MODULE_CLOCK     24000000
@@ -144,7 +148,7 @@ static void gpio_exit(struct dts_gpio *gpio, bool value)
 {
     if (gpio != NULL) {
 	    if (gpio->num >= 0) {
-	    	//set_gpio_level(gpio, value);
+	    	set_gpio_level(gpio, value);
 	    	gpio_free(gpio->num);
 	    }
     }

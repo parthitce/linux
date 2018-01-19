@@ -203,6 +203,7 @@ int module_register_v4l2_subdev(struct camera_module_priv *priv,
 #define DROP_NUM_CAPTURE		0
 #define DROP_NUM_PREVIEW		0
 
+#define SI_RECEIVE_SINGLE_FIELDX
 /*Every sensor must set this value*/
 #define USE_AS_FRONT 0
 #define USE_AS_REAR 1

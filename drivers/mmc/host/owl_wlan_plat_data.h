@@ -14,6 +14,7 @@ struct wlan_plat_data {
 	void (*set_exit) (struct wlan_plat_data *pdata);
 
 	struct platform_device *parent;
+	int wl_bt_vddio_ref_count;    /* vddio power reference count */
 	int wl_bt_ref_count;	/* power reference count */
 	int self_card_detect;
 

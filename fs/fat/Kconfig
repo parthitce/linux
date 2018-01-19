@@ -98,3 +98,10 @@ config FAT_DEFAULT_IOCHARSET
 
 	  Enable any character sets you need in File Systems/Native Language
 	  Support.
+
+config FAT_ERR_NOTMOUNT_RO
+	bool "FAT error not mount read only"
+	depends on VFAT_FS
+	help
+		fix Abnormal shutdown causes fat file system error,
+		FAT error not mount read only

@@ -25,6 +25,11 @@
 #include <linux/regmap.h>
 #include <linux/mfd/atc260x/atc260x.h>
 #include <linux/owl_pm.h>
+#include <linux/gpio.h>
+#include <linux/of_platform.h>
+#include <linux/of_gpio.h>
+#include <linux/reboot.h>
+#include <linux/bootafinfo.h>
 
 /* #include <mach/power.h> */
 
@@ -49,6 +54,20 @@ struct atc260x_onoff_regdef {
 	u32 kdwn_int_en_bitm;
 };
 
+
+struct atc260x_hard_onoff {
+	int gpio;
+	unsigned int  keycode;
+	unsigned char  active;
+	unsigned char  cur_stat;
+	unsigned char  old_stat;
+	unsigned char tries_num;
+	unsigned char timer_off;
+	unsigned char  poweroff; //是否判断关机
+};
+static int hard_key= -1;    /*硬件开关状态,0表示关机状态，1表示开机状态,-1表示不配置*/
+
+
 /* On/Off module structure */
 struct atc260x_onoff_dev {
 	struct device *dev;
@@ -59,6 +78,9 @@ struct atc260x_onoff_dev {
 	uint irq;
 	uint key_trigger;
 	uint suspend_state;
+
+	struct delayed_work hard_work;
+	struct atc260x_hard_onoff  hardkey;
 };
 
 /* for atc2603a ------------------------------------------------------------- */
@@ -192,6 +214,88 @@ static void _atc260x_onoff_w1clr_pndreg(struct atc260x_dev *atc260x,
 	}
 }
 
+int hard_key_get_state(void)
+{
+	return  hard_key;
+}
+
+EXPORT_SYMBOL_GPL(hard_key_get_state);
+
+//hard key onoff handle
+static void atc260x_poll_hard_onoff(struct work_struct *work)
+{
+	struct atc260x_hard_onoff  *atc260x_hardkey;
+	struct atc260x_onoff_dev *atc260x_onoff =
+	    container_of(work, struct atc260x_onoff_dev,
+			 hard_work.work);
+	 unsigned char state , send;
+
+	 atc260x_hardkey = &atc260x_onoff->hardkey;
+
+	if (atc260x_hardkey->gpio < 0) {
+		printk("--hard_onoff_key gpio fail =%d --\n", atc260x_hardkey->gpio);
+		return ;
+	}
+	send = 0;
+
+	state = !!gpio_get_value(atc260x_hardkey->gpio);
+	if ( state == atc260x_hardkey->cur_stat) {
+		atc260x_hardkey->tries_num++;
+		if ( atc260x_hardkey->tries_num > 4) {
+			if  ( owl_get_boot_mode() == BOOT_MODE_CHARGER) {
+				if ( atc260x_hardkey->old_stat != state) {
+					atc260x_hardkey->old_stat = state;
+					if (atc260x_hardkey->active)  // on is low active
+						state=!state;
+					if( state) { // hardkey ON , power off
+						 send = 1;
+						 hard_key = 0;
+						 atc260x_hardkey->tries_num = 0;
+						 printk("charger:hard_onoff_key: reboot\n");
+
+					}
+				}
+
+			} else {
+				if (!atc260x_hardkey->active) 
+					state=!state;
+				if ( state) {  // hardkey off  , power off
+					 send = 1;
+					 hard_key = 0;
+					 atc260x_hardkey->tries_num = 0;
+					 printk("normal:hard_onoff_key: shutdown\n");
+				}
+			}
+		} 
+	} else {
+		atc260x_hardkey->tries_num = 0;  // init try nums
+		atc260x_hardkey->cur_stat  =  state;
+	}
+/*
+	if ( atc260x_hardkey->old_stat == atc260x_hardkey->active) {
+		atc260x_hardkey->timer_off++;
+		if ( atc260x_hardkey->timer_off > 40 )  {// each 2 s  send power to sure system poweroff
+			send = 1;
+			printk("hard_onoff_key: shutdown 2s\n");
+			hard_key = 0;
+		}
+	}
+*/
+	if (send) {
+		atc260x_hardkey->timer_off = 0;
+		/* report key pressed */
+		input_report_key(atc260x_onoff->idev, atc260x_hardkey->keycode, 1); //shut down
+		input_sync(atc260x_onoff->idev);
+		msleep(3500);
+		input_report_key(atc260x_onoff->idev, atc260x_hardkey->keycode , 0); //shut down
+		if (atc260x_hardkey->poweroff )
+			kernel_power_off(); //poweroff
+		msleep(1000);
+	}
+
+	schedule_delayed_work(&atc260x_onoff->hard_work, msecs_to_jiffies(50));
+
+}
 /**
  * The chip gives us an interrupt when the ON/OFF pin is asserted but we
  * then need to poll to see when the pin is deasserted.
@@ -388,6 +492,58 @@ void atc260x_onoff_shutdown(struct platform_device *pdev)
 				   kdwn_int_en_bitm), 0);
 }
 
+static void hard_onoff_init( struct atc260x_onoff_dev *atc260x_onoff)
+{
+	int error, gpio;
+	unsigned int keycode, ipower;
+	enum of_gpio_flags flags;
+
+	atc260x_onoff->hardkey.gpio = -1;
+	gpio = of_get_gpio_flags(atc260x_onoff->dev->of_node, 0, &flags);
+	if (gpio < 0) {
+		printk("gpio:hard_onoff_key not config\n");
+		return ;
+	}
+
+	error = gpio_request(gpio,  "hard_onoff_key");
+	if (error) {
+		printk("hard_onoff_key: unable to claim gpio %u, err=%d\n", gpio, error);
+		return ;
+	}
+	error = gpio_direction_input(gpio);
+	if (error) {
+		printk("hard_onoff_key: unable to set direction on gpio %u, err=%d\n",
+			gpio, error);
+		return;
+	}
+	atc260x_onoff->hardkey.gpio = gpio;
+	atc260x_onoff->hardkey.active = flags & OF_GPIO_ACTIVE_LOW;
+	atc260x_onoff->hardkey.tries_num = 0;
+	atc260x_onoff->hardkey.old_stat =  !!gpio_get_value(gpio);
+	printk("hard_onoff_key:gpio=%d, active=%d, gpio_stat=%d\n",
+			gpio, atc260x_onoff->hardkey.active,  atc260x_onoff->hardkey.old_stat);
+
+	if (of_property_read_u32(atc260x_onoff->dev->of_node, "keycode", &keycode)) {
+		keycode  = KEY_POWER;
+	} else {
+		if ( keycode  < KEY_CNT )
+      			atc260x_onoff->idev->keybit[BIT_WORD(keycode)] = BIT_MASK(keycode);
+		else
+			keycode  = KEY_POWER;
+	}
+	if (of_property_read_u32(atc260x_onoff->dev->of_node, "poweroff", &ipower))
+		ipower  = 0;
+
+	atc260x_onoff->hardkey.poweroff = ipower;
+	atc260x_onoff->hardkey.keycode = keycode;
+	printk("hard keycode=0x%x, opoweroff=%d\n", keycode, ipower);
+	hard_key = 1;
+
+	INIT_DELAYED_WORK(&atc260x_onoff->hard_work, atc260x_poll_hard_onoff);
+	schedule_delayed_work(&atc260x_onoff->hard_work,  msecs_to_jiffies(500));
+
+}
+
 static int atc260x_onoff_probe(struct platform_device *pdev)
 {
 	struct atc260x_dev *atc260x;
@@ -427,7 +583,7 @@ static int atc260x_onoff_probe(struct platform_device *pdev)
 		ret = -ENOMEM;
 		goto err;
 	}
-
+	hard_onoff_init(atc260x_onoff);
 	atc260x_onoff->idev->evbit[0] = BIT_MASK(EV_KEY);
 	atc260x_onoff->idev->keybit[BIT_WORD(KEY_POWER)] = BIT_MASK(KEY_POWER);
 	atc260x_onoff->idev->name = "atc260x_onoff";
@@ -451,6 +607,7 @@ static int atc260x_onoff_probe(struct platform_device *pdev)
 			__func__, ret);
 		goto err_input_reg_dev;
 	}
+
 
 	/*
 	 *use default primary handle, and atc260x_onoff_irq run in ATC260X core irq kernel thread

@@ -1,0 +1,9 @@
+config USB_LEGACY_MONITOR
+	tristate "Actions legacy usb2.0 monitor support"
+	depends on USB_LEGACY
+	default n
+	---help---
+	  The Actions chips have USB2.0 otg controllers. Enable
+	  this option if your board uses this chip. If unsure, say N.
+
+	  To compile this driver as a module, choose M here.

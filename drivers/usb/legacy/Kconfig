@@ -1,0 +1,13 @@
+config USB_LEGACY
+	tristate "Actions legacy usb drivers"
+	depends on USB
+	---help---
+	  used to support Actions legacy usb drivers.
+
+if USB_LEGACY
+
+source "drivers/usb/legacy/aotg_udc/Kconfig"
+source "drivers/usb/legacy/aotg_hcd/Kconfig"
+source "drivers/usb/legacy/monitor/Kconfig"
+
+endif

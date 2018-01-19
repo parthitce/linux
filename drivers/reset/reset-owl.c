@@ -129,6 +129,7 @@ static int owl_reset_probe(struct platform_device *pdev)
 static struct of_device_id owl_reset_match[] = {
 	{ .compatible = "actions,s900-reset", },
 	{ .compatible = "actions,s700-reset", },
+	{ .compatible = "actions,ats3605-reset", },
 	{},
 };
 

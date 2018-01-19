@@ -4,7 +4,7 @@
 
 config USB_AOTG
 	tristate "Actions usb2.0 otg support"
-	default y
+	#default y
 	---help---
 	  The Actions chips have USB2.0 otg controllers. Enable
 	  this option if your board uses this chip. If unsure, say N.
@@ -15,7 +15,7 @@ config USB_AOTG
 config USB_AOTG_HCD
 	tristate "Actions usb2.0 HCD support"
 	depends on USB_AOTG
-	default y
+	#default y
 	---help---
 	  The Actions USB2.0 otg controllers have USB2.0 host controllers. Enable
 	  this option if your board uses this chip. If unsure, say N.

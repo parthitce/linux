@@ -393,7 +393,7 @@ static int atc260x_switch_ldo_probe(struct platform_device *pdev)
 	}
 	ldo->pmic_type = atc260x_get_ic_type(atc260x);
 	ldo->pmic_ver = atc260x_get_ic_ver(atc260x);
-	dev_err(&pdev->dev, "pmic_ver=%u\n", ldo->pmic_ver);
+	dev_info(&pdev->dev, "pmic_ver=%u\n", ldo->pmic_ver);
 
 	ret = ldo_init(ldo, init_data);
 	if (ret) {

@@ -55,4 +55,8 @@ extern void owl_pmic_set_pm_ops(struct owl_pmic_pm_ops *ops);
 /* other drivers (IR/TP/REMCON/SGPIO...) can use this API to setup their own wakeup source */
 extern int owl_pmic_setup_aux_wakeup_src(uint wakeup_src, uint on);
 
+//nach-owl  for suspend
+extern void owl_finish_suspend(unsigned long cpu_state);
+extern void owl_cpu_resume(void);
+
 #endif /* _LINUX_OWL_PM_H */

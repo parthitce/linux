@@ -29,4 +29,9 @@ obj-$(CONFIG_CLKSRC_SAMSUNG_PWM)	+= samsung_pwm_timer.o
 
 obj-$(CONFIG_ARM_ARCH_TIMER)		+= arm_arch_timer.o
 obj-$(CONFIG_CLKSRC_METAG_GENERIC)	+= metag_generic.o
+
+ifeq ($(CONFIG_ARCH_OWL_ATS3605_SOC), y)
+obj-$(CONFIG_ARCH_OWL)		+= ats3605-timer.o
+else
 obj-$(CONFIG_ARCH_OWL)		+= timer-owl.o
+endif

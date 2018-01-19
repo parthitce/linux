@@ -2,25 +2,15 @@ config DRM_OWL
 	tristate "DRM Support for Owl Soc"
 	depends on DRM
 	select DRM_KMS_HELPER
-	select FB_CFB_FILLRECT
-	select FB_CFB_COPYAREA
-	select FB_CFB_IMAGEBLIT
+	select FB_SYS_FILLRECT
+	select FB_SYS_COPYAREA
+	select FB_SYS_IMAGEBLIT
+	select FB_SYS_FOPS
 	select VT_HW_CONSOLE_BINDING if FRAMEBUFFER_CONSOLE
+	default n
 	help
 	  Choose this option if you have a Owl SoC chipset.
 	  If M is selected the module will be called owldrm.
-
-config DRM_OWL_IOMMU
-	bool "OWL DRM IOMMU Support"
-	depends on DRM_OWL && OWL_IOMMU
-	help
-	  Choose this option if you want to use IOMMU feature for DRM.
-
-config DRM_OWL_DMABUF
-	bool "OWL DRM DMABUF"
-	depends on DRM_OWL
-	help
-	  Choose this option if you want to use DMABUF feature for DRM.
 
 config DRM_OWL_LCD
 	  bool "Owl DRM LCD"

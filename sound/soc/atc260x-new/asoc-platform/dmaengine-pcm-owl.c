@@ -36,6 +36,11 @@ extern void set_dai_reg_base(int num);
 extern u32 snd_dai_readl(u32 reg);
 extern void snd_dai_writel(u32 val, u32 reg);
 
+#ifdef	CONFIG_SND_SOC_ACT_DAI_OWL_SPI
+extern void set_spi_dai_reg_base(int num);
+extern u32 snd_spi_dai_readl(u32 reg);
+extern void snd_spi_dai_writel(u32 val, u32 reg);
+#endif
 
 
 //#define DUMP_DMA_DATA
@@ -169,7 +174,13 @@ static void dmaengine_pcm_dma_complete(void *arg)
 				bufferlen += snd_pcm_lib_period_bytes(substream);
 			}
 #endif
+#ifdef	CONFIG_SND_SOC_ACT_DAI_OWL_SPI
 
+			if(!strcasecmp(rtd->cpu_dai->name,"owl-audio-spi")){
+				set_spi_dai_reg_base(SPI_NUM);
+				snd_spi_dai_writel(0xFFF0, SPI_RXCR);
+			}
+#endif
 			int prev_pos = prtd->pos;
 			int diff;
 			int this_interrupt_num;

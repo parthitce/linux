@@ -58,7 +58,7 @@ struct owl_pwm_channel {
 
 struct owl_pwm_chip_data {
 	/*
-	 * s500 & s700: 1, s900: 2
+	 * s500 & s700: 1, s900: 2,  ats3605:3 
 	 */
 	int					chip_type;
 
@@ -234,7 +234,8 @@ static int owl_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
 		/* round up or down */
 		clk_set_parent(channel->clk, parent_clk);
 		clk_set_rate(channel->clk, rate * 64);
-		channel->period_ns = ((u64)NS_IN_HZ)* 64 / clk_get_rate(channel->clk);
+		//channel->period_ns = ((u64)NS_IN_HZ)* 64 / clk_get_rate(channel->clk);
+		channel->period_ns = (NS_IN_HZ / (clk_get_rate(channel->clk)>>3))<<8;
 	}
 
 	/* round up or down */
@@ -444,6 +445,10 @@ static const struct pwm_ops owl_pwm_ops = {
 
 /* PWM control regitser offset */
 
+static const uint32_t pwm_ctl_reg_array_ats3605[] = {
+	0x50, 0x54, 0x58, 0x5c,
+};
+
 static const uint32_t pwm_ctl_reg_array_s700[] = {
 	0x50, 0x54, 0x58, 0x5c, 0x78, 0x7c,
 };
@@ -455,12 +460,14 @@ static const uint32_t pwm_ctl_reg_array_s900[] = {
 static struct owl_pwm_chip_data pwm_chip_data[] = {
 	{ .chip_type = 1, .pwm_num = 6, .reg_array = pwm_ctl_reg_array_s700 }, /* s500 & s700 */
 	{ .chip_type = 2, .pwm_num = 6, .reg_array = pwm_ctl_reg_array_s900 }, /* s900 */
+	{ .chip_type = 3, .pwm_num = 4, .reg_array = pwm_ctl_reg_array_ats3605 }, /* ats3605 */
 };
 
 static struct of_device_id owl_pwm_of_match[] = {
 	{ .compatible = "actions,s500-pwm", .data = &pwm_chip_data[0] },
 	{ .compatible = "actions,s700-pwm", .data = &pwm_chip_data[0] },
 	{ .compatible = "actions,s900-pwm", .data = &pwm_chip_data[1] },
+	{ .compatible = "actions,ats3605-pwm", .data = &pwm_chip_data[2] },
 	{ }
 };
 

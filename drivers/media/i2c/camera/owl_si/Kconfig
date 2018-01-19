@@ -4,7 +4,7 @@
 # 
 
 config OWL_CAMERA_SI
-	tristate "owl camera isp driver"
+	tristate "owl camera si driver"
 	depends on VIDEO_V4L2
 	help
 	  Support for owl camera si

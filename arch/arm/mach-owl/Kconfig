@@ -1,0 +1,17 @@
+if ARCH_OWL
+
+menu "Actions OWL options"
+
+
+
+config ARCH_OWL_ATS3605_SOC
+	bool "Enable support for ATS3605 family"
+
+	help
+	  Support for Actions ATS3605 processor family, based on the
+	  ARM CortexA5 SMP CPU
+
+
+endmenu
+
+endif

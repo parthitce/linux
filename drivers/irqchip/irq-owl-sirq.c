@@ -273,6 +273,9 @@ err_unmap:
 }
 
 
+
+
+
 int __init s700_sirq_of_init(struct device_node *np,
 		struct device_node *parent)
 {
@@ -280,6 +283,8 @@ int __init s700_sirq_of_init(struct device_node *np,
 			ARRAY_SIZE(s700_sirq_info), np);
 }
 IRQCHIP_DECLARE(s700_sirq, "actions,s700-sirq", s700_sirq_of_init);
+IRQCHIP_DECLARE(ats3605_sirq, "actions,ats3605-sirq", s700_sirq_of_init);
+
 int __init s900_sirq_of_init(struct device_node *np,
 		struct device_node *parent)
 {

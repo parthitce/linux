@@ -443,7 +443,7 @@ static int module_set_mbusformat(struct i2c_client *client,
 	   break;
 
 	   default:
-	   printk("[gc2155] mbus code error in %s() line %d\n",
+	   printk("[ov5645] mbus code error in %s() line %d\n",
 	   __FUNCTION__, __LINE__);
 	   return -1;
 	   }

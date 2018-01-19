@@ -1593,10 +1593,14 @@ extern int console_suspend_enabled;
 #endif
 
 /* add for actions usb host driver. */
-#ifdef CONFIG_PLATFORM_OWL	
+#ifdef CONFIG_PLATFORM_OWL
+#ifdef CONFIG_USB_LEGACY_AOTG_HCD
+extern int aotg_device_register(int dev_id);
+extern void aotg_device_unregister(int dev_id);
+#else
 extern int aotg_hub_register(int dev_id);
 extern void aotg_hub_unregister(int dev_id);
-
+#endif
 uint aotg_id = 1;
 module_param(aotg_id, uint, 0644);
 MODULE_PARM_DESC(aotg_id, "0 for aotg dev0, 1 for aotg dev1.");
@@ -1604,15 +1608,21 @@ MODULE_PARM_DESC(aotg_id, "0 for aotg dev0, 1 for aotg dev1.");
 
 static void wifi_power_on(void)
 {
-	//aotg_device_register(aotg_id);
+#ifdef CONFIG_USB_LEGACY_AOTG_HCD
+	aotg_device_register(aotg_id);
+#else
 	aotg_hub_register(aotg_id);
+#endif
 	msleep(200);
 }
 
 static void wifi_power_off(void)
 {
-	//aotg_device_unregister(aotg_id);
+#ifdef CONFIG_USB_LEGACY_AOTG_HCD
+	aotg_device_unregister(aotg_id);
+#else
 	aotg_hub_unregister(aotg_id);
+#endif
 }
 #endif
 

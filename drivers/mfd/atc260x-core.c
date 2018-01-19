@@ -539,8 +539,8 @@ static int _atc2603c_init_hardware(struct atc260x_dev *atc260x)
 					    (1U << 2), (vsel_31 << 2));
 			atc260x_reg_setbits(atc260x, ATC2603C_MFP_CTL,
 					    (3U << 7), (2U << 7));
-			atc260x_reg_setbits(atc260x, ATC2603C_PAD_EN, (1U << 2),
-					    (1U << 2));
+			atc260x_reg_setbits(atc260x, ATC2603C_PAD_EN, (3U << 2),
+					    (3U << 2));
 		}
 	}
 

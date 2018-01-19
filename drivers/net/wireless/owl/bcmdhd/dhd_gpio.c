@@ -92,6 +92,17 @@ void bcm_wlan_free_oob_gpio(void)
 
 #endif
 
+#ifdef CONFIG_PLATFORM_OWL
+static inline void check_and_set_gpio(u32 gpio, int value)
+{
+    if (gpio_cansleep(gpio)) {
+        gpio_set_value_cansleep(gpio, value);
+    } else {
+        gpio_set_value(gpio, value);
+    }
+}
+#endif
+
 int bcm_wlan_set_power(bool on)
 {
 	int err = 0;
@@ -102,14 +113,14 @@ int bcm_wlan_set_power(bool on)
 	if (on) {
 		printf("======== PULL WL_REG_ON HIGH! ========\n");
 #ifdef CONFIG_PLATFORM_OWL
-		gpio_set_value(pdata->wifi_en_gpios, 1);
+		check_and_set_gpio(pdata->wifi_en_gpios, 1);
 #endif
 		/* Lets customer power to get stable */
 		mdelay(100);
 	} else {
 		printf("======== PULL WL_REG_ON LOW! ========\n");
 #ifdef CONFIG_PLATFORM_OWL
-		gpio_set_value(pdata->wifi_en_gpios, 0);
+		check_and_set_gpio(pdata->wifi_en_gpios, 0);
 #endif
 	}
 

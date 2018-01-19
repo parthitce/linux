@@ -89,6 +89,8 @@ source "drivers/usb/image/Kconfig"
 
 source "drivers/usb/aotg/Kconfig"
 
+source "drivers/usb/legacy/Kconfig"
+
 endif
 
 source "drivers/usb/dwc3/Kconfig"

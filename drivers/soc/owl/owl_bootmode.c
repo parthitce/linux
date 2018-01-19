@@ -20,23 +20,43 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
-
+#include <linux/bootafinfo.h>
+#include <linux/module.h> 
+#include <asm/setup.h>
+#include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 /*
  * boot mode:
  *   0: normal
  *   1: upgrade
+ *   2: minicharge	
+ *   3: recovery
  */
-static int owl_boot_mode = 0;
+static int owl_boot_mode = BOOT_MODE_NORMAL;
 
 static int __init boot_mode_process(char *str)
 {
 	if (strcmp(str, "upgrade") == 0) {
 		printk("owl bootmode: upgrade\n");
-		owl_boot_mode = 1;
+		owl_boot_mode = BOOT_MODE_UPGRADE;
+	}else if (strcmp(str, "charger") == 0) {
+		printk("owl bootmode: charger\n");
+		owl_boot_mode = BOOT_MODE_CHARGER;
+	}else if (strcmp(str, "recovery") == 0) {
+		printk("owl bootmode: recovery\n");
+		owl_boot_mode = BOOT_MODE_RECOVERY;
 	}
 	return 1;
 }
+
 __setup("bootmode=", boot_mode_process);
+
+static int __init boot1_mode_process(char *str)
+{
+	return boot_mode_process(str);
+}
+
+__setup("androidboot.mode=", boot1_mode_process);
 
 int owl_get_boot_mode(void)
 {
@@ -45,6 +65,42 @@ int owl_get_boot_mode(void)
 EXPORT_SYMBOL(owl_get_boot_mode);
 
 
+
+
+static int bootmode_proc_show(struct seq_file *m, void *v)
+{
+	
+	if (owl_boot_mode == BOOT_MODE_UPGRADE) {
+		seq_printf(m, "%s\n", "upgrade"); 
+	}else if (owl_boot_mode == BOOT_MODE_CHARGER) {
+		seq_printf(m, "%s\n", "charger"); 
+	}else if (owl_boot_mode == BOOT_MODE_RECOVERY) {
+		seq_printf(m, "%s\n", "recovery"); 
+	}else {
+		seq_printf(m, "%s\n", "normal"); 
+	}
+	return 0;
+}
+
+static int bootmode_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, bootmode_proc_show, NULL);
+}
+
+static const struct file_operations bootmode_proc_fops = {
+	.open		= bootmode_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+static int __init proc_bootmode_init(void)
+{
+	proc_create("bootmode", 0, NULL, &bootmode_proc_fops);
+	return 0;
+}
+
+module_init(proc_bootmode_init);
 /*
  *
  *   vendor id (boardinfo)

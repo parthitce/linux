@@ -37,7 +37,9 @@ void __fat_fs_error(struct super_block *sb, int report, const char *fmt, ...)
 	if (opts->errors == FAT_ERRORS_PANIC)
 		panic("FAT-fs (%s): fs panic from previous error\n", sb->s_id);
 	else if (opts->errors == FAT_ERRORS_RO && !(sb->s_flags & MS_RDONLY)) {
+		#ifndef CONFIG_FAT_ERR_NOTMOUNT_RO
 		sb->s_flags |= MS_RDONLY;
+		#endif
 		printk(KERN_ERR "FAT-fs (%s): Filesystem has been "
 				"set read-only\n", sb->s_id);
 	}
@@ -90,7 +92,9 @@ int fat_clusters_flush(struct super_block *sb)
 			fsinfo->free_clusters = cpu_to_le32(sbi->free_clusters);
 		if (sbi->prev_free != -1)
 			fsinfo->next_cluster = cpu_to_le32(sbi->prev_free);
+		#ifndef CONFIG_FAT_ERR_NOTMOUNT_RO
 		mark_buffer_dirty(bh);
+		#endif
 	}
 	brelse(bh);
 

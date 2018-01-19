@@ -55,6 +55,7 @@ static const char *snd_earphone_detect_method = "earphone_detect_method";
 static const char *snd_adc_plugin_threshold = "adc_plugin_threshold";
 static const char *snd_adc_level = "adc_level";
 static const char *snd_adc_num = "adc_num";
+static const char *snd_record_source = "record_source";
 
 
 static int speaker_gpio_num = -1;
@@ -364,6 +365,16 @@ static int atc2603c_mic_mode_get(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static int atc2603c_record_source_get(struct snd_kcontrol *kcontrol,
+		struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] =
+		audio_hw_cfg.record_source;
+
+	return 0;
+}
+
+
 static int atc2603c_earphone_detect_method_get(struct snd_kcontrol *kcontrol,
 		struct snd_ctl_elem_value *ucontrol)
 {
@@ -426,6 +437,12 @@ const struct snd_kcontrol_new atc2603c_snd_controls[] = {
 	SOC_SINGLE_EXT_TLV("Dummy mic num",
 		0, 0, 0x2, 0,
 		atc2603c_mic_num_get,
+		NULL,
+		NULL),
+		
+	SOC_SINGLE_EXT_TLV("Dummy record source",
+		0, 0, 0x2, 0,
+		atc2603c_record_source_get,
 		NULL,
 		NULL),
 
@@ -1152,6 +1169,11 @@ void atc2603c_pa_up_all(struct snd_soc_codec *codec)
     snd_soc_update_bits(codec, AGC_CTL0, 0xf << AGC_CTL0_AMP1G0R_SFT, 0xd << AGC_CTL0_AMP1G0R_SFT);
     snd_soc_update_bits(codec, ADC_DIGITALCTL, 0xF << ADC_DIGITALCTL_ADGC0_SFT, 0x0 << ADC_DIGITALCTL_ADGC0_SFT);
     snd_soc_update_bits(codec, AGC_CTL0, 0x7 << AGC_CTL0_AMP0GR1_SET, 0x0 << AGC_CTL0_AMP0GR1_SET);
+
+	if (audio_hw_cfg.record_source== 1)//rongxing to do 
+    	snd_soc_update_bits(codec, ADC_CTL, 0x1f << 0, 0x1 << 0);//FM
+    else
+		snd_soc_update_bits(codec, ADC_CTL, 0x1f << 0, 0x2 << 0);
 
 	//set playback params
 	snd_soc_update_bits(codec, DAC_ANALOG1, 0x3f << DAC_ANALOG1_VOLUME_SFT, 0x28 << DAC_ANALOG1_VOLUME_SFT);
@@ -1929,6 +1951,14 @@ static int atc2603c_get_cfg(void)
 	if (ret) {
 		printk("fail get snd_adc_num\r\n");
 		audio_hw_cfg.adc_num = 2;
+		/*goto of_get_failed;*/
+	}
+
+	ret = of_property_read_u32(dn, snd_record_source,
+		&audio_hw_cfg.record_source);
+	if (ret) {
+		printk("fail get snd record source\r\n");
+		audio_hw_cfg.record_source = 2;// 1 for fm,2 for mic
 		/*goto of_get_failed;*/
 	}
 

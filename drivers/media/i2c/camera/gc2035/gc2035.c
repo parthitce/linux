@@ -277,7 +277,7 @@ static int module_set_auto_white_balance(struct v4l2_subdev *sd,
 		auto_white_balance = 1;
   
 	if (auto_white_balance < 0 || auto_white_balance > 1) {
-		printk("[gc2155] set auto_white_balance over range, auto_white_balance = %d\n", auto_white_balance);
+		printk("[gc2035] set auto_white_balance over range, auto_white_balance = %d\n", auto_white_balance);
 		return -ERANGE;
 	}
 	

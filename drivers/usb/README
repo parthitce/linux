@@ -52,3 +52,6 @@ class/		- This is for all USB device drivers that do not fit
 		  of USB Class specified devices. 
 misc/		- This is for all USB device drivers that do not fit
 		  into any of the above categories.
+
+legacy/		- This is for Actions legacy aotg_hcd, aotg_udc and monitor
+		  drivers, which distinguish to aotg/ and monitor/.

@@ -971,14 +971,14 @@ static int rtw_sdio_resume(struct device *dev)
 
 }
 
+#ifdef CONFIG_PLATFORM_OWL
 void rtw_drv_shutdown(void)
 {
 	sdio_drvpriv.drv_registered = _FALSE;
-
 	sdio_unregister_driver(&sdio_drvpriv.r871xs_drv);
-
 	rtw_android_wifictrl_func_del();
 }
+#endif
 
 static int __init rtw_drv_entry(void)
 {

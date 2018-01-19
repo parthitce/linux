@@ -175,6 +175,7 @@ void __attribute__ ((weak)) arch_suspend_enable_irqs(void)
  *
  * This function should be called after devices have been suspended.
  */
+
 static int suspend_enter(suspend_state_t state, bool *wakeup)
 {
 	int error;
@@ -230,6 +231,11 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 
 	arch_suspend_enable_irqs();
 	BUG_ON(irqs_disabled());
+
+#ifdef CONFIG_CACHE_L2X0
+	printk(KERN_INFO "%s(), outer_resume()\n", __func__);
+	outer_resume();
+#endif
 
  Enable_cpus:
 	enable_nonboot_cpus();

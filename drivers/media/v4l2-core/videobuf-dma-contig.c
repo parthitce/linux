@@ -381,6 +381,21 @@ void videobuf_dma_contig_free(struct videobuf_queue *q,
 	   So, it should free memory only if the memory were allocated for
 	   read() operation.
 	 */
+	/* fix for owl_camera, mapped memory should be free here, because
+     * mapped memory is not needed anymore.
+	 */
+	if (buf->memory == V4L2_MEMORY_MMAP) {
+	    if (!mem)
+	    	return;
+
+	    MAGIC_CHECK(mem->magic, MAGIC_DC_MEM);
+	    if (mem->vaddr) {
+	    	__videobuf_dc_free(q->dev, mem);
+	    	mem->vaddr = NULL;
+	    }
+        return;
+    }
+
 	if (buf->memory != V4L2_MEMORY_USERPTR)
 		return;
 

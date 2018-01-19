@@ -308,6 +308,7 @@ static const struct clk_ops owl_pll_ops = {
 	.set_rate = owl_pll_set_rate,
 };
 
+#ifndef CONFIG_ARCH_OWL_ATS3605_SOC
 /**
  * owl_corepll_recalc_rate() - Recalculate clock frequency of corepll
  * @hw:			Handle between common and hardware-specific interfaces
@@ -357,7 +358,7 @@ static const struct clk_ops owl_corepll_ops = {
 	.recalc_rate = owl_corepll_recalc_rate,
 	.set_rate = owl_corepll_set_rate,
 };
-
+#endif
 /**
  * owl_clk_register_pll() - Register PLL with the clock framework
  * @name	PLL name
@@ -387,9 +388,11 @@ struct clk *owl_pll_clk_register(const char *name, const char *parent_name,
 	initd.name = name;
 	initd.parent_names = (parent_name ? &parent_name : NULL);
 	initd.num_parents = (parent_name ? 1 : 0);
+#ifndef CONFIG_ARCH_OWL_ATS3605_SOC
 	if (strcmp(name, "core_pll") == 0)
 		initd.ops = &owl_corepll_ops;
-	else 
+	else
+#endif 
 		initd.ops = &owl_pll_ops;
 	initd.flags = flags;
 

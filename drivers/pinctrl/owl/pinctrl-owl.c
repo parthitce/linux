@@ -433,15 +433,28 @@ static inline int get_group_mfp_mask_val(const struct owl_group *g,
 	return 0;
 }
 
+/*gpio/owl_gpio.c*/
+extern int owl_gpio_check_dir_by_pinctrl(unsigned int gpio);
 static int pinmux_request_check_gpio(struct pinctrl_dev *pctldev, u32 pin)
 {
 	struct pin_desc *desc;
-	desc = pin_desc_get(pctldev, pin);
+	struct owl_pinctrl *apctl = pinctrl_dev_get_drvdata(pctldev);
+	struct pinctrl_gpio_range *range = apctl->info->gpio_ranges;
 
+	desc = pin_desc_get(pctldev, pin);
+	pr_info("%s,pin=%d\n", __func__, pin);
 	if (desc->gpio_owner) {
 		PINCTRL_ERR("%s\n", __func__);
-		PINCTRL_ERR("CHECK PMX:%s has already been requested by %s",
+		PINCTRL_ERR("error:%s has already been requested by %s",
 				desc->name, desc->gpio_owner);
+	} else if ( pin < range->npins)  { // check gpio reg
+		/* Convert to the gpio controllers number space */
+		u32 gpio   =  pin + range->base - range->pin_base;
+		if (owl_gpio_check_dir_by_pinctrl(gpio)) {
+			PINCTRL_ERR("%s\n", __func__);
+			PINCTRL_ERR("error:%s has already used by %d\n",
+				desc->name,  gpio);
+		}
 	}
 
 	return 0;
@@ -454,7 +467,7 @@ static int gpio_request_check_pinmux(struct pinctrl_dev *pctldev, u32 pin)
 
 	if (desc->mux_owner) {
 		PINCTRL_ERR("%s\n", __func__);
-		PINCTRL_ERR("CHECK PMX:%s has already been requested by %s",
+		PINCTRL_ERR("error:%s has already been requested by %s\n",
 				desc->name, desc->mux_owner);
 	}
 

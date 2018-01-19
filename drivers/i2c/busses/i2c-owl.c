@@ -754,6 +754,7 @@ static int owl_i2c_remove(struct platform_device *pdev)
 static const struct of_device_id owl_i2c_dt_ids[] = {
 	{.compatible = "actions,s900-i2c"},
 	{.compatible = "actions,s700-i2c"},
+	{.compatible = "actions,ats3605-i2c"},
 	{},
 };
 MODULE_DEVICE_TABLE(of, owl_i2c_dt_ids);

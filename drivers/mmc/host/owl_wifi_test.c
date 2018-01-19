@@ -31,7 +31,7 @@
 
 #include "owl_wifi_test.h"
 
-static int __init owl_mmc_init(void)
+static int __init owl_wifi_test_init(void)
 {
 	int ret;
 
@@ -44,13 +44,13 @@ static int __init owl_mmc_init(void)
 	return 0;
 }
 
-static void __exit acts_mmc_exit(void)
+static void __exit owl_wifi_test_exit(void)
 {
 	owl_wifi_cleanup();
 }
 
-module_init(owl_mmc_init);
-module_exit(owl_mmc_exit);
+module_init(owl_wifi_test_init);
+module_exit(owl_wifi_test_exit);
 
 MODULE_AUTHOR("Actions");
 MODULE_DESCRIPTION("MMC/SD host controller driver");

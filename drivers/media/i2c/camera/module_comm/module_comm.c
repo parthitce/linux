@@ -249,14 +249,18 @@ static int camera_module_set_flash_led_mode(struct v4l2_subdev *sd,
 		DBG_INFO("----V4L2_FLASH_LED_MODE_NONE %d",
 		       V4L2_FLASH_LED_MODE_NONE);
 		priv->flash_led_mode = mode;
+#ifndef LEGACY_SI
 		flashlight_control(FLASHLIGHT_OFF);
+#endif
 		break;
 
 	case V4L2_FLASH_LED_MODE_TORCH:
 		DBG_INFO("----V4L2_FLASH_LED_MODE_TORCH %d",
 		       V4L2_FLASH_LED_MODE_TORCH);
 		priv->flash_led_mode = mode;
+#ifndef LEGACY_SI
 		flashlight_control(FLASHLIGHT_TORCH);
+#endif
 		break;
 
 	case V4L2_FLASH_LED_MODE_FLASH:
@@ -361,14 +365,18 @@ static int camera_module_s_ctrl(struct v4l2_ctrl *ctrl)
 
 	case V4L2_CID_FLASH_STROBE:
 		if (priv->info->flags & SENSOR_FLAG_CHANNEL0) {
+#ifndef LEGACY_SI
 			flashlight_control(FLASHLIGHT_TORCH);
+#endif
 			light_on = true;
 		}
 		break;
 
 	case V4L2_CID_FLASH_STROBE_STOP:
 		if (priv->info->flags & SENSOR_FLAG_CHANNEL0) {
+#ifndef LEGACY_SI
 			flashlight_control(TORCHLIGHT_OFF);
+#endif
 			light_on = false;
 		}
 		break;
@@ -455,6 +463,7 @@ static int camera_module_s_stream(struct v4l2_subdev *sd, int enable)
 		DBG_INFO("ACTS_CAPTURE_MODE....");
 		enter_capture_mode(client->adapter);
 	}
+#ifndef LEGACY_SI
 	if (enable) {
 		if (light_on)
 			flashlight_control(FLASHLIGHT_FLASH);
@@ -462,6 +471,7 @@ static int camera_module_s_stream(struct v4l2_subdev *sd, int enable)
 		if (light_on)
 			flashlight_control(FLASHLIGHT_OFF);
 	}
+#endif
 	ret = module_set_stream(client, enable);
 
 	if (ACTS_PREVIEW_MODE == priv->pcv_mode) {

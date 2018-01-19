@@ -76,6 +76,7 @@ static int owl_jtag_probe(struct platform_device *pdev)
 
 static const struct of_device_id owl_of_match[] = {
 	{ .compatible = "actions,s700-jtag" },
+	{ .compatible = "actions,ats3605-jtag" },
 	{ /* Sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, owl_of_match);

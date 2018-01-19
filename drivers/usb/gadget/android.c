@@ -30,6 +30,10 @@
 
 #include "gadget_chips.h"
 
+#ifdef CONFIG_USB_LEGACY
+#include "f_mass_storage.c"
+#include "f_adb.c"
+#else
 #include "f_fs.c"
 #include "f_audio_source.c"
 #include "f_mass_storage.c"
@@ -40,6 +44,7 @@
 #include "f_rndis.c"
 #include "rndis.c"
 #include "u_ether.c"
+#endif
 
 MODULE_AUTHOR("Mike Lockwood");
 MODULE_DESCRIPTION("Android Composite USB Driver");
@@ -158,6 +163,7 @@ static void android_work(struct work_struct *data)
 	char *disconnected[2] = { "USB_STATE=DISCONNECTED", NULL };
 	char *connected[2]    = { "USB_STATE=CONNECTED", NULL };
 	char *configured[2]   = { "USB_STATE=CONFIGURED", NULL };
+	char *unconfigured[2] = { "USB_STATE=UNCONFIGURED", NULL };
 	char **uevent_envp = NULL;
 	unsigned long flags;
 
@@ -166,6 +172,8 @@ static void android_work(struct work_struct *data)
 		uevent_envp = configured;
 	else if (dev->connected != dev->sw_connected)
 		uevent_envp = dev->connected ? connected : disconnected;
+	else if (!cdev->config)
+		uevent_envp = unconfigured;
 	dev->sw_connected = dev->connected;
 	spin_unlock_irqrestore(&cdev->lock, flags);
 
@@ -230,6 +238,7 @@ struct functionfs_config {
 	struct ffs_data *data;
 };
 
+#ifndef CONFIG_USB_LEGACY
 static int ffs_function_init(struct android_usb_function *f,
 			     struct usb_composite_dev *cdev)
 {
@@ -378,6 +387,7 @@ static void *functionfs_acquire_dev_callback(const char *dev_name)
 static void functionfs_release_dev_callback(struct ffs_data *ffs_data)
 {
 }
+#endif
 
 struct adb_data {
 	bool opened;
@@ -473,6 +483,8 @@ static void adb_closed_callback(void)
 
 	mutex_unlock(&dev->mutex);
 }
+
+#ifndef CONFIG_USB_LEGACY
 #define MAX_ACM_INSTANCES 4
 struct acm_function_config {
 	int instances;
@@ -856,7 +868,7 @@ static struct android_usb_function rndis_function = {
 	.unbind_config	= rndis_function_unbind_config,
 	.attributes	= rndis_function_attributes,
 };
-
+#endif
 
 struct mass_storage_function_config {
 	struct fsg_config fsg;
@@ -1056,7 +1068,7 @@ static struct android_usb_function mass_storage_function = {
 	.attributes	= mass_storage_function_attributes,
 };
 
-
+#ifndef CONFIG_USB_LEGACY
 static int accessory_function_init(struct android_usb_function *f,
 					struct usb_composite_dev *cdev)
 {
@@ -1150,8 +1162,13 @@ static struct android_usb_function audio_source_function = {
 	.unbind_config	= audio_source_function_unbind_config,
 	.attributes	= audio_source_function_attributes,
 };
+#endif
 
 static struct android_usb_function *supported_functions[] = {
+#ifdef CONFIG_USB_LEGACY
+	&adb_function,
+	&mass_storage_function,
+#else
 	&adb_function,
 	&ffs_function,
 	&acm_function,
@@ -1161,6 +1178,7 @@ static struct android_usb_function *supported_functions[] = {
 	&mass_storage_function,
 	&accessory_function,
 	&audio_source_function,
+#endif
 	NULL
 };
 
@@ -1615,11 +1633,13 @@ android_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *c)
 		}
 	}
 
+#ifndef CONFIG_USB_LEGACY
 	/* Special case the accessory function.
 	 * It needs to handle control requests before it is enabled.
 	 */
 	if (value < 0)
 		value = acc_ctrlrequest(cdev, c);
+#endif
 
 	if (value < 0)
 		value = composite_setup_func(gadget, c);
@@ -1631,6 +1651,10 @@ android_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *c)
 	} else if (c->bRequest == USB_REQ_SET_CONFIGURATION &&
 						cdev->config) {
 		schedule_work(&dev->work);
+	} else if (c->bRequest == USB_REQ_SET_CONFIGURATION &&
+						!cdev->config) {
+		/* handle "Set Configuration 0" */
+		schedule_work(&dev->work);
 	}
 	spin_unlock_irqrestore(&cdev->lock, flags);
 
@@ -1641,11 +1665,13 @@ static void android_disconnect(struct usb_composite_dev *cdev)
 {
 	struct android_dev *dev = _android_dev;
 
+#ifndef CONFIG_USB_LEGACY
 	/* accessory HID support can be active while the
 	   accessory function is not actually enabled,
 	   so we need to inform it when we are disconnected.
 	 */
 	acc_disconnect();
+#endif
 
 	dev->connected = 0;
 	schedule_work(&dev->work);

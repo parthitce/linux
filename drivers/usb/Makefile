@@ -8,6 +8,8 @@ obj-$(CONFIG_USB)		+= core/
 
 obj-$(CONFIG_USB_AOTG)		+= aotg/
 
+obj-$(CONFIG_USB_LEGACY)		+= legacy/
+
 obj-$(CONFIG_USB_PHY)		+= phy/
 
 obj-$(CONFIG_USB_DWC3)		+= dwc3/

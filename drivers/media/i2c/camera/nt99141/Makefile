@@ -1,0 +1,4 @@
+ifeq ($(CONFIG_OWL_CAMERA_LEGACY_SI), m)
+EXTRA_CFLAGS += -DLEGACY_SI
+endif
+obj-m	+= nt99141.o

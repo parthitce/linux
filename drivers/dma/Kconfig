@@ -313,6 +313,14 @@ config DMA_OWL
 	---help---
 	  Enable support for the Actions OWL SoC DMA controllers.
 
+config DMA_ATS3605
+	tristate "Actions ats3605 SoC DMA support"
+	depends on ARCH_OWL
+	select DMA_ENGINE
+	select DMA_VIRTUAL_CHANNELS
+	---help---
+	  Enable support for the Actions OWL ats3605 SoC DMA controllers.
+
 config MMP_PDMA
 	bool "MMP PDMA support"
 	depends on (ARCH_MMP || ARCH_PXA)

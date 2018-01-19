@@ -163,8 +163,7 @@
 #endif
 
 #ifndef CONFIG_RTW_PLL_REF_CLK_SEL
-	//#define CONFIG_RTW_PLL_REF_CLK_SEL 0x0F		/* 26M */
-	#define CONFIG_RTW_PLL_REF_CLK_SEL 0x0E				/* 24M */
+	#define CONFIG_RTW_PLL_REF_CLK_SEL 0x0F
 #endif
 
 #define MACID_NUM_SW_LIMIT 32

@@ -281,6 +281,10 @@ static volatile int readtimeout_times = 0;
 static volatile int is_vfs_writting = 0;
 static volatile int is_vfs_reading = 0;
 
+#ifdef CONFIG_USB_LEGACY_MONITOR
+extern void monitor_send_msg(char *str);
+#endif
+
 /* FSF callback functions */
 struct fsg_operations {
 	/*
@@ -1918,6 +1922,9 @@ static int do_start_stop(struct fsg_common *common)
 {
 	struct fsg_lun	*curlun = common->curlun;
 	int		loej, start;
+#ifdef CONFIG_USB_LEGACY_MONITOR
+	char str[20];
+#endif
 
 	if (!curlun) {
 		return -EINVAL;
@@ -1954,6 +1961,18 @@ static int do_start_stop(struct fsg_common *common)
 
 	if (!loej)
 		return 0;
+
+#ifdef CONFIG_USB_LEGACY_MONITOR
+	/*
+	 * notify usb monitor to send uevent when eject media.
+	 * fix: check curlun->filp first in case that ejecting
+	 * null-disk would send msg too.
+	 */
+	if (curlun->filp && !start && loej) {
+		sprintf(str, "START_STOP_UNIT%d", common->lun);
+		monitor_send_msg(str);
+	}
+#endif
 
 	up_read(&common->filesem);
 	down_write(&common->filesem);

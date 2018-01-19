@@ -75,18 +75,33 @@ static inline void check_and_set_gpio(u32 gpio, int value)
 
 void owl_wlan_bt_power(int on)
 {
+	int ret;
 	struct wlan_plat_data *pdata = g_pdata;
 
 	if (pdata != NULL) {
-		if (use_ldo) {
+		if (use_wifi_bt_vddio == 1) {
 			if (on) {
-				if (++pdata->wl_bt_ref_count == 1) {
-					regulator_enable(pwifiregulator);
+				if (++pdata->wl_bt_vddio_ref_count == 1) {
+					ret = regulator_enable(pwifiregulator_vddio);
 					mdelay(100);
 				}
 			} else {
-				if (--pdata->wl_bt_ref_count == 0)
-					regulator_disable(pwifiregulator);
+				if (--pdata->wl_bt_vddio_ref_count == 0) {
+					ret = regulator_disable(pwifiregulator_vddio);
+				}
+			}
+		}
+
+		if (use_ldo) {
+			if (on) {
+				if (++pdata->wl_bt_ref_count == 1) {
+					ret = regulator_enable(pwifiregulator);
+					mdelay(100);
+				}
+			} else {
+				if (--pdata->wl_bt_ref_count == 0) {
+					ret = regulator_disable(pwifiregulator);
+				}
 			}
 		} else {
 			if (gpio_is_valid(pdata->wifi_bt_power_gpios)) {
@@ -104,7 +119,7 @@ void owl_wlan_bt_power(int on)
 			}
 		}
 
-		pr_info("Wlan or BT power %s, ref count:%d",
+		pr_info("Wlan or BT power %s, ref count:%d \n",
 			(on ? "on" : "off"), pdata->wl_bt_ref_count);
 	}
 }
@@ -147,7 +162,6 @@ fail:
 
 static int owl_wlan_set_power(struct wlan_plat_data *pdata, int on)
 {
-
 	owl_wlan_bt_power(on);
 
 	if (gpio_is_valid(pdata->wifi_en_gpios)) {
@@ -207,7 +221,6 @@ int owl_wlan_bt_power_init(struct wlan_plat_data *pdata)
 {
 	struct device_node *np = NULL;
 	int ret;
-	unsigned int scope[2];
 	const char *pm;
 	g_pdata = pdata;
 
@@ -249,7 +262,6 @@ int owl_wlan_bt_power_init(struct wlan_plat_data *pdata)
 		}
 		use_ldo = 1;
 		pdata->wl_bt_ref_count = 0;
-
 		printk("Regulator wifi bt power init\n");
 	}
 	
@@ -281,10 +293,10 @@ int owl_wlan_bt_power_init(struct wlan_plat_data *pdata)
 			}
 			printk("get wifi bt vddio  voltage:%d-%d\n",
 			       wifi_vol_scope[0], wifi_vol_scope[1]);
-
+			pdata->wl_bt_vddio_ref_count = 0;
 		}
 		use_wifi_bt_vddio = 1;
-		printk("Regulator wifi bt vddio 1.8V init\n");
+		printk("Regulator wifi bt vddio init\n");
 	}
 
 	if (of_find_property(np, "wifi_bt_power_gpios", NULL)) {
@@ -303,6 +315,8 @@ int owl_wlan_bt_power_init(struct wlan_plat_data *pdata)
 		} else {
 			pr_err("gpio for sdio wifi power supply invalid.\n");
 		}
+
+		printk("wifi_bt_power_gpios init\n");
 	}
 	return 0;
 
@@ -316,6 +330,8 @@ void owl_wlan_bt_power_release(void)
 
 	if (gpio_is_valid(pdata->wifi_bt_power_gpios))
 		gpio_free(pdata->wifi_bt_power_gpios);
+
+	regulator_put(pwifiregulator_vddio);
 }
 
 void owl_wlan_status_check_register(struct owl_mmc_host *host)

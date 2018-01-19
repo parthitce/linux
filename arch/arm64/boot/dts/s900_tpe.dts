@@ -476,7 +476,7 @@
 
 	owl_usb_config {
 		compatible = "actions,owl-usb-config";
-		usb_serialnumber_config = <1>; /* config serialnumber string format, 0: fixed serial no in ascii format; 1: fixed serial no in unicode format; 2:non-fixed serial no in unicode format*/
+		usb_serialnumber_config = <2>; /* config serialnumber string format, 0: fixed serial no in ascii format; 1: fixed serial no in unicode format; 2:non-fixed serial no in unicode format*/
 		usb_hs_output_strength = <3>; /*defaut:3,range:0~7; 0:min,7:max;usb high speed(2.0)transmitter output strength*/
 		status = "okay";
 	};

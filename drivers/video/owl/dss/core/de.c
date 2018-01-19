@@ -55,6 +55,15 @@
 
 #define OWL_DE_KEEP_PRLINE_IRQ_ON
 
+/*
+ * For the case that MMU from disable to enable,
+ * If skip_for_mmu_cnt is 0, 1, disable video layers, using default color,
+ * and do not enable MMU.
+ * if skip_for_mmu_cnt is 2, enable MMU.
+ * if skip_for_mmu_cnt is 3, enable video layers.
+ */
+static int skip_for_mmu_cnt = 0;
+
 static struct owl_de_device		*g_cur_de;
 
 static int				de_hscaler_min;
@@ -663,18 +672,23 @@ void owl_de_path_set_info(struct owl_de_path *path,
 }
 EXPORT_SYMBOL(owl_de_path_set_info);
 
+/* Given a way to cancel "mmu skipping" for linux distribution, debian, etc. */
+void owl_de_path_set_mmuskip(struct owl_de_path *path, int n_skip)
+{
+	if (n_skip <= 0) {
+		if (skip_for_mmu_cnt < OWL_DE_NUM_ENABLE_MMU)
+			skip_for_mmu_cnt = OWL_DE_NUM_ENABLE_MMU;
+		if (skip_for_mmu_cnt < OWL_DE_NUM_ENABLE_VIDEO)
+			skip_for_mmu_cnt = OWL_DE_NUM_ENABLE_VIDEO;
+	} else {
+		skip_for_mmu_cnt = n_skip;
+	}
+}
+EXPORT_SYMBOL(owl_de_path_set_mmuskip);
+
 void owl_de_path_apply(struct owl_de_path *path)
 {
 	bool need_set_go = false, need_mmu = false;
-
-	/*
-	 * For the case that MMU from disable to enable,
-	 * If skip_for_mmu_cnt is 0, 1, disable video layers, using default color,
-	 * and do not enable MMU.
-	 * if skip_for_mmu_cnt is 2, enable MMU.
-	 * if skip_for_mmu_cnt is 3, enable video layers.
-	 */
-	static int skip_for_mmu_cnt = 0;
 
 	struct owl_de_video *video;
 

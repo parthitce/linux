@@ -40,7 +40,7 @@
 #include "owl_wlan_device.h"
 
 #undef pr_debug
-/*#define OWL_MMC_DEBUG*/
+//#define OWL_MMC_DEBUG
 #ifdef OWL_MMC_DEBUG
 #define pr_debug(format, arg...)	\
 	printk(KERN_INFO format, ##arg)
@@ -50,11 +50,22 @@
 static int owl_check_trs_date_status(struct owl_mmc_host *host,
 				     struct mmc_request *mrq);
 static void owl_dump_reg(struct owl_mmc_host *host);
-
 static int owl_switch_sd_pinctr(struct mmc_host *mmc);
 static int owl_switch_uartsd_pinctr(struct mmc_host *mmc);
+static void owl_dump_mfp(struct owl_mmc_host *host);
 
-void owl_dump_mfp(struct owl_mmc_host *host);
+
+#ifdef CONFIG_ARCH_OWL_ATS3605_SOC
+/* s700, s900 not have this interface */
+extern int *leopard_request_dma_sync_addr(void);
+extern int leopard_free_dma_sync_addr(int *addr);
+extern int leopard_dma_sync_ddr(int *addr);
+#else
+static int *leopard_request_dma_sync_addr(void){ return NULL;}
+static int leopard_free_dma_sync_addr(int *addr){return -1;}
+static int leopard_dma_sync_ddr(int *addr){return -1;}
+#endif
+
 /*
  * SD Controller Linked Card type, one of those:
  * MMC_CARD_DISABLE | MMC_CARD_MEMORY | MMC_CARD_WIFI
@@ -93,32 +104,20 @@ void owl_dump_mfp(struct owl_mmc_host *host)
 	pr_debug("\tMFP_CTL1:0x%x\n", readl(DUMP_MFP_CTL1(host->mfp_base)));
 	pr_debug("\tMFP_CTL2:0x%x\n", readl(DUMP_MFP_CTL2(host->mfp_base)));
 	pr_debug("\tMFP_CTL3:0x%x\n", readl(DUMP_MFP_CTL3(host->mfp_base)));
-	pr_debug("\tPAD_PULLCTL0:0x%x\n",
-	       readl(DUMP_PAD_PULLCTL0(host->mfp_base)));
-	pr_debug("\tPAD_PULLCTL1:0x%x\n",
-	       readl(DUMP_PAD_PULLCTL1(host->mfp_base)));
-	pr_debug("\tPAD_PULLCTL2:0x%x\n",
-	       readl(DUMP_PAD_PULLCTL2(host->mfp_base)));
+	pr_debug("\tPAD_PULLCTL0:0x%x\n", readl(DUMP_PAD_PULLCTL0(host->mfp_base)));
+	pr_debug("\tPAD_PULLCTL1:0x%x\n", readl(DUMP_PAD_PULLCTL1(host->mfp_base)));
+	pr_debug("\tPAD_PULLCTL2:0x%x\n", readl(DUMP_PAD_PULLCTL2(host->mfp_base)));
 	pr_debug("\tPAD_DRV0:0x%x\n", readl(DUMP_PAD_DVR0(host->mfp_base)));
 	pr_debug("\tPAD_DRV1:0x%x\n", readl(DUMP_PAD_DVR1(host->mfp_base)));
 	pr_debug("\tPAD_DRV2:0x%x\n", readl(DUMP_PAD_DVR2(host->mfp_base)));
-
-	pr_debug("\tCMU_DEVCLKEN0:0x%x\n",
-	       readl(DUMP_CMU_DEVCLKEN0(host->cmu_base)));
-	pr_debug("\tCMU_DEVCLKEN1:0x%x\n",
-	       readl(DUMP_CMU_DEVCLKEN1(host->cmu_base)));
-
+	pr_debug("\tCMU_DEVCLKEN0:0x%x\n", readl(DUMP_CMU_DEVCLKEN0(host->cmu_base)));
+	pr_debug("\tCMU_DEVCLKEN1:0x%x\n", readl(DUMP_CMU_DEVCLKEN1(host->cmu_base)));
 	pr_debug("\tCMU_DEVPLL:0x%x\n", readl(DUMP_CMU_DEVPLL(host->cmu_base)));
 	pr_debug("\tCMU_NANDPLL:0x%x\n", readl(DUMP_CMU_NANDPLL(host->cmu_base)));
-
-	pr_debug("\tCMU_SD0CLK:0x%x\n",
-	       readl(DUMP_CMU_CMU_SD0CLK(host->cmu_base)));
-	pr_debug("\tCMU_SD1CLK:0x%x\n",
-	       readl(DUMP_CMU_CMU_SD1CLK(host->cmu_base)));
-	pr_debug("\tCMU_SD2CLK:0x%x\n",
-	       readl(DUMP_CMU_CMU_SD2CLK(host->cmu_base)));
-	pr_debug("\tANALOGDEBUG:0x%x\n",
-	       readl(DUMP_CMU_ANALOGDEBUG(host->cmu_base)));
+	pr_debug("\tCMU_SD0CLK:0x%x\n", readl(DUMP_CMU_CMU_SD0CLK(host->cmu_base)));
+	pr_debug("\tCMU_SD1CLK:0x%x\n", readl(DUMP_CMU_CMU_SD1CLK(host->cmu_base)));
+	pr_debug("\tCMU_SD2CLK:0x%x\n", readl(DUMP_CMU_CMU_SD2CLK(host->cmu_base)));
+	pr_debug("\tANALOGDEBUG:0x%x\n", readl(DUMP_CMU_ANALOGDEBUG(host->cmu_base)));
 }
 
 static void owl_dump_sdc(struct owl_mmc_host *host)
@@ -139,36 +138,22 @@ static void owl_dump_sdc(struct owl_mmc_host *host)
 	pr_debug("\tSD_BUF_SIZE:0x%x\n", readl(HOST_BUF_SIZE(host)));
 }
 
-static void owl_dump_dmac(struct owl_mmc_host *host)
-{
-/*
-	if (!mmc_card_expected_mem(host->type_expected)) {
-		owl_dma_debug_dump();
-	}
-*/
-}
-
 static int owl_switch_uartsd_pinctr(struct mmc_host *mmc)
 {
-
 	struct owl_mmc_host *host;
 	host = mmc_priv(mmc);
 
 	if (mmc_card_expected_mem(host->type_expected) &&
 	    (host->sdio_uart_supported)) {
-
 		if (host->switch_pin_flag == UART_PIN) {
-
 			host->pcl = pinctrl_get_select(host->mmc->parent,
 						       "share_uart2_5");
 			if (IS_ERR(host->pcl)) {
-				pr_err
-				    ("swtich SDC%d get default pinctrl failed, %ld\n",
-				     host->id, PTR_ERR(host->pcl));
+				pr_err("swtich SDC%d get default pinctrl failed, %ld\n",
+						host->id, PTR_ERR(host->pcl));
 				return (long)PTR_ERR(host->pcl);
 			}
 			host->switch_pin_flag = UART_SD_PIN;
-
 		} else if (host->switch_pin_flag == SD_PIN) {
 			/* release sd pin */
 			if ((host->pcl) && (!IS_ERR(host->pcl))) {
@@ -178,9 +163,8 @@ static int owl_switch_uartsd_pinctr(struct mmc_host *mmc)
 			host->pcl = pinctrl_get_select(host->mmc->parent,
 						       "share_uart2_5");
 			if (IS_ERR(host->pcl)) {
-				pr_err
-				    ("swtich uart SDC%d get default pinctrl failed, %ld\n",
-				     host->id, PTR_ERR(host->pcl));
+				pr_err("swtich uart SDC%d get default pinctrl failed, %ld\n",
+						host->id, PTR_ERR(host->pcl));
 				return (long)PTR_ERR(host->pcl);
 			}
 
@@ -193,13 +177,11 @@ static int owl_switch_uartsd_pinctr(struct mmc_host *mmc)
 
 static int owl_switch_sd_pinctr(struct mmc_host *mmc)
 {
-
 	struct owl_mmc_host *host;
 	host = mmc_priv(mmc);
 
 	if (mmc_card_expected_mem(host->type_expected) &&
 	    (host->sdio_uart_supported)) {
-
 		if (host->switch_pin_flag == UART_SD_PIN) {
 			/* release sd pin */
 			if ((host->pcl) && (!IS_ERR(host->pcl))) {
@@ -209,26 +191,22 @@ static int owl_switch_sd_pinctr(struct mmc_host *mmc)
 			host->pcl = pinctrl_get_select(host->mmc->parent,
 						       host->pinctrname);
 			if (IS_ERR(host->pcl)) {
-				pr_err
-				    ("swtich sd SDC%d get default pinctrl failed, %ld\n",
-				     host->id, PTR_ERR(host->pcl));
+				pr_err("swtich sd SDC%d get default pinctrl failed, %ld\n",
+						host->id, PTR_ERR(host->pcl));
 				return (long)PTR_ERR(host->pcl);
 			}
 			host->switch_pin_flag = SD_PIN;
 
 		} else if (host->switch_pin_flag == UART_PIN) {
-
 			host->pcl = pinctrl_get_select(host->mmc->parent,
 						       host->pinctrname);
 			if (IS_ERR(host->pcl)) {
-				pr_err
-				    ("swtich sd SDC%d get default pinctrl failed, %ld\n",
-				     host->id, PTR_ERR(host->pcl));
+				pr_err("swtich sd SDC%d get default pinctrl failed, %ld\n",
+						host->id, PTR_ERR(host->pcl));
 				return (long)PTR_ERR(host->pcl);
 			}
 			host->switch_pin_flag = SD_PIN;
 		}
-
 	}
 
 	return 0;
@@ -328,18 +306,15 @@ static void owl_mmc_set_clk(struct owl_mmc_host *host, int rate)
 	 * Set the RDELAY and WDELAY based on the sd clk.
 	 */
 	if (rate <= 1000000) {
-
 		writel((readl(HOST_CTL(host)) & (~(0xff << 16))) |
 		       SD_CTL_RDELAY(host->rdelay.delay_lowclk) |
 		       SD_CTL_WDELAY(host->wdelay.delay_lowclk),
 		       HOST_CTL(host));
-
 	} else if ((rate > 1000000) && (rate <= 26000000)) {
 		writel((readl(HOST_CTL(host)) & (~(0xff << 16))) |
 		       SD_CTL_RDELAY(host->rdelay.delay_midclk) |
 		       SD_CTL_WDELAY(host->wdelay.delay_midclk),
 		       HOST_CTL(host));
-
 	} else if ((rate > 26000000) && (rate <= 52000000)) {
 		if ((readl(HOST_EN(host)) & (1 << 2))
 		    && (SDC0_SLOT == host->id)) {
@@ -356,7 +331,6 @@ static void owl_mmc_set_clk(struct owl_mmc_host *host, int rate)
 		}
 
 	} else if ((rate > 52000000) && (rate <= 100000000)) {
-
 		writel((readl(HOST_CTL(host)) & (~(0xff << 16))) |
 		       SD_CTL_RDELAY(SDC0_RDELAY_DDR50) |
 		       SD_CTL_WDELAY(SDC0_WDELAY_DDR50), HOST_CTL(host));
@@ -371,7 +345,6 @@ static void owl_mmc_set_clk(struct owl_mmc_host *host, int rate)
 	host->read_delay_chain_bak = host->read_delay_chain;
 
 	owl_clk_set_rate(host, rate);
-
 }
 
 static int owl_mmc_opt_regulator(struct owl_mmc_host *host, bool enable)
@@ -387,7 +360,7 @@ static int owl_mmc_opt_regulator(struct owl_mmc_host *host, bool enable)
 			ret = regulator_disable(host->reg);
 			host->regulator_status = OWL_REGULATOR_OFF;
 			pr_debug("%s() SD%d, This is SD mode\n",
-				 __function__,  host->id);
+				 __FUNCTION__,  host->id);
 		} else {
 			WARN_ON(1);
 		}
@@ -406,7 +379,6 @@ void owl_mmc_ctr_reset(struct owl_mmc_host *host)
 
 static int owl_enable_powergate_clk(struct owl_mmc_host *host)
 {
-
 	unsigned int nand_alg_ctr;
 	int ret = 0;
 
@@ -433,7 +405,6 @@ static int owl_enable_powergate_clk(struct owl_mmc_host *host)
 		/*set powerpin for host2 and host3 */
 
 		host->nand_powergate = POWER_GATE_ON;
-
 	}
 
 	return ret;
@@ -441,11 +412,11 @@ static int owl_enable_powergate_clk(struct owl_mmc_host *host)
 
 static inline void owl_disable_powergate_clk(struct owl_mmc_host *host)
 {
-
 	if (host->nandclk_on) {
 		clk_disable_unprepare(host->nandclk);
 		host->nandclk_on = 0;
 	}
+
 	if (host->nand_powergate == POWER_GATE_ON) {
 		pm_runtime_put_sync(host->mmc->parent);
 		host->nand_powergate = POWER_GATE_OFF;
@@ -454,7 +425,6 @@ static inline void owl_disable_powergate_clk(struct owl_mmc_host *host)
 
 static void owl_mmc_power_up(struct owl_mmc_host *host)
 {
-
 	u32 pad_ctr;
 	/* enable gl5302 power for card */
 	/* power on reset */
@@ -491,7 +461,6 @@ static void owl_mmc_power_up(struct owl_mmc_host *host)
 *	sd mfp is ok ,we wil use comm pinctr like
 *	S900
 */
-
 static void owl_set_paddrv_pull(struct owl_mmc_host *host)
 {
 	unsigned int sd1pull, sd2pull, sd2drv, sd1drv;
@@ -541,16 +510,13 @@ static void owl_set_paddrv_pull(struct owl_mmc_host *host)
 * we set uart ux rx vaild,sd0 clk cmd vaild,
 * so it rescan sdcard and uart pin is vaild
 */
-
 static int owl_mmc_request_pinctrl(struct owl_mmc_host *host)
 {
-
 	/* host0 usd for sdcard need not free,
 	   it will free when resan fail */
 	if (mmc_card_expected_mem(host->type_expected) &&
 	    (host->sdio_uart_supported)) {
 		goto out;
-
 	} else {
 		if (NULL == host->pcl) {
 			host->pcl =
@@ -576,7 +542,6 @@ out:
 
 static int owl_mmc_free_pinctrl(struct owl_mmc_host *host)
 {
-
 	/* host0 usd for sdcard need not free,
 	   it will free when resan fail */
 	if (mmc_card_expected_mem(host->type_expected) &&
@@ -597,12 +562,10 @@ static int owl_mmc_free_pinctrl(struct owl_mmc_host *host)
 
 out:
 	return 0;
-
 }
 
 static void owl_mmc_power_on(struct owl_mmc_host *host)
 {
-
 	mutex_lock(&host->pin_mutex);
 	if (owl_mmc_request_pinctrl(host) < 0)
 		pr_err("SDC%d request pinctrl failed\n", host->id);
@@ -618,7 +581,6 @@ static void owl_mmc_power_on(struct owl_mmc_host *host)
 	}
 
 	owl_mmc_send_init_clk(host);
-
 }
 
 static void owl_mmc_power_off(struct owl_mmc_host *host)
@@ -644,7 +606,6 @@ static void owl_mmc_power_off(struct owl_mmc_host *host)
 			owl_disable_powergate_clk(host);
 		}
 	}
-
 }
 
 static void owl_mmc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
@@ -662,32 +623,27 @@ static void owl_mmc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		host->power_state = ios->power_mode;
 
 		switch (ios->power_mode) {
-		case MMC_POWER_UP:
+			case MMC_POWER_UP:
+				pr_debug("\tMMC_POWER_UP\n");
+				owl_mmc_power_up(host);
+				break;
 
-			pr_debug("\tMMC_POWER_UP\n");
-			owl_mmc_power_up(host);
+			case MMC_POWER_ON:
+				pr_debug("\tMMC_POWER_ON\n");
+				owl_mmc_power_on(host);
+				break;
 
-			break;
-		case MMC_POWER_ON:
+			case MMC_POWER_OFF:
+				pr_debug("\tMMC_POWER_OFF\n");
+				/*
+				   disable sd clk,so msut return
+				   not rw sd reg
+				 */
+				owl_mmc_power_off(host);
+				return;
 
-			pr_debug("\tMMC_POWER_ON\n");
-			owl_mmc_power_on(host);
-
-			break;
-		case MMC_POWER_OFF:
-
-			pr_debug("\tMMC_POWER_OFF\n");
-			/*
-			   disable sd clk,so msut return
-			   not rw sd reg
-			 */
-
-			owl_mmc_power_off(host);
-
-			return;
-		default:
-
-			pr_debug("Power mode not supported\n");
+			default:
+				pr_debug("Power mode not supported\n");
 		}
 	}
 
@@ -749,7 +705,6 @@ static void owl_mmc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 	}
 
 	writel(ctrl_reg, HOST_EN(host));
-
 }
 
 static void owl_mmc_gpio_check_status(unsigned long data)
@@ -813,8 +768,33 @@ static irqreturn_t owl_sdc_irq_handler(int irq, void *devid)
 	unsigned long flags;
 	u32 state;
 	u32 temp;
+	unsigned int host_ctl_status = 0;
 
 	spin_lock_irqsave(&host->lock, flags);
+
+	if (host->devid == ATS3605_SD) {
+		host_ctl_status = readl(HOST_DMA_CTL(host));
+	    if(0x20000000 == (host_ctl_status & 0x20000000))
+	    {
+	        /* Avoid spurious interrupts */
+	        if (!host || !host->mrq)
+	        {
+	            pr_err("%s, (!host || !host->mrq),host:0x%x, host->mrq:0x%x, host_ctl_status:0x%x\n",
+						__FUNCTION__, (unsigned int)host, (unsigned int)host->mrq, host_ctl_status);
+	            writel(host_ctl_status | 0x20000000, HOST_DMA_CTL(host));
+				spin_unlock_irqrestore(&host->lock, flags);
+	            return IRQ_HANDLED;
+	        }
+
+	        writel(host_ctl_status | 0x20000000, HOST_DMA_CTL(host));
+	        tasklet_schedule(&host->data_task);
+	    }
+	    else
+	    {
+	        pr_debug("host_ctl_status:0x%x\n", host_ctl_status);
+	    }
+	}
+
 	state = readl(HOST_STATE(host));
 	/* check cmd irq */
 	if (state & SD_STATE_TEI) {
@@ -838,7 +818,6 @@ tag:
 	}
 
 	return IRQ_HANDLED;
-
 }
 
 static void owl_mmc_finish_request(struct owl_mmc_host *host)
@@ -854,12 +833,13 @@ static void owl_mmc_finish_request(struct owl_mmc_host *host)
 	if (mrq->data) {
 		data = mrq->data;
 		/* Finally finished */
-		dma_unmap_sg(host->dma->device->dev, data->sg, data->sg_len,
-			     host->dma_dir);
+		if (host->dma) {
+			dma_unmap_sg(host->dma->device->dev, data->sg, data->sg_len,
+							host->dma_dir);
+		}
 	}
 
 	mmc_request_done(host->mmc, mrq);
-
 }
 
 /*
@@ -867,11 +847,9 @@ static void owl_mmc_finish_request(struct owl_mmc_host *host)
  * so it should not "finish the request".
  * owl_mmc_send_command May sleep!
  */
-
 static int owl_mmc_send_command(struct owl_mmc_host *host,
 				struct mmc_command *cmd, struct mmc_data *data)
 {
-
 	u32 mode;
 	u32 rsp[2];
 	unsigned int cmd_rsp_mask = 0;
@@ -950,6 +928,9 @@ static int owl_mmc_send_command(struct owl_mmc_host *host,
 
 	/* start transfer */
 	writel(mode, HOST_CTL(host));
+	if (data &&(host->devid == ATS3605_SD)) {
+		writel(readl(HOST_DMA_CTL(host))  | 0x90000000, HOST_DMA_CTL(host));
+	}
 
 	pr_debug("SDC%d send CMD%d, SD_CTL=0x%x\n", host->id,
 		 cmd->opcode, readl(HOST_CTL(host)));
@@ -977,10 +958,8 @@ static int owl_mmc_send_command(struct owl_mmc_host *host,
 		if (cmd_rsp_mask & status) {
 			if (status & SD_STATE_CLNR) {
 				cmd->error = -EILSEQ;
-#if 0
-				pr_err("SDC%d send CMD%d: CMD_NO_RSP...\n",
-				       host->id, cmd->opcode);
-#endif
+				//pr_err("SDC%d send CMD%d: CMD_NO_RSP...\n",
+				//       host->id, cmd->opcode);
 				goto out;
 			}
 
@@ -1009,12 +988,10 @@ static int owl_mmc_send_command(struct owl_mmc_host *host,
 
 out:
 	return PURE_CMD;
-
 }
 
 static void owl_mmc_dma_complete(void *dma_async_param)
 {
-
 	struct owl_mmc_host *host = (struct owl_mmc_host *)dma_async_param;
 
 	BUG_ON(!host->mrq->data);
@@ -1022,6 +999,222 @@ static void owl_mmc_dma_complete(void *dma_async_param)
 	if (host->mrq->data) {
 		complete(&host->dma_complete);
 	}
+}
+
+static void acts_mmc_dma_sync(struct owl_mmc_host * host)
+{
+	if (host->dma_sync_addr != NULL)
+		leopard_dma_sync_ddr(host->dma_sync_addr);
+	return;
+}
+
+static void acts_mmc_request_dma_sync_addr(struct owl_mmc_host * host)
+{
+	if (host->dma_sync_addr == NULL)
+	{
+		host->dma_sync_addr = leopard_request_dma_sync_addr();
+		if(host->dma_sync_addr == NULL)
+		{
+			printk("%s err!\n", __FUNCTION__);
+		}
+	}
+	return;
+}
+
+static void acts_mmc_free_dma_sync_addr(struct owl_mmc_host * host)
+{
+	if (host->dma_sync_addr != NULL)
+		leopard_free_dma_sync_addr(host->dma_sync_addr);
+	return;
+}
+
+static void acts_mmc_data_complete(struct owl_mmc_host *host)
+{
+    struct mmc_data *data;
+    dma_addr_t dma_address;
+    unsigned int dma_length;
+
+    if (!host || !host->mrq) {
+        pr_err("%s, !host || !host->mrq\n", __FUNCTION__);
+        return;
+    }
+
+    data = host->mrq->data;
+    if (0 == host->sg_len || data->sg == NULL) {
+        /*all sg entry has been handled */
+        /*wait until card read complete */
+        while (readl(HOST_CTL(host)) & SD_CTL_TS);
+
+		if (host->send_continuous_clock) {
+			writel(readl(HOST_CTL(host)) | (1 << 12), HOST_CTL(host));
+        }
+
+        if (readl(HOST_STATE(host)) & SD_STATE_TOUTE) {
+            pr_err("card trandfer data timeout error!\n");
+            owl_dump_sdc(host);
+            owl_dump_mfp(host);
+            data->error = -ETIME;
+        }
+
+        if (readl(HOST_STATE(host)) & SD_STATE_RC16ER) {
+            if ((host->mrq->cmd->opcode != MMC_BUS_TEST_W) &&
+				(host->mrq->cmd->opcode != MMC_BUS_TEST_R)) {
+                pr_err("card read:crc error\n");
+				owl_dump_sdc(host);
+				owl_dump_mfp(host);
+				data->error = -ETIME;
+            }
+        }
+
+        if (readl(HOST_STATE(host)) & SD_STATE_WC16ER) {
+            if ((host->mrq->cmd->opcode != MMC_BUS_TEST_W) &&
+				(host->mrq->cmd->opcode != MMC_BUS_TEST_R)) {
+                    pr_err("card write:crc error\n");
+                    owl_dump_sdc(host);
+                    owl_dump_mfp(host);
+                    data->error = -ETIME;
+            }
+        }
+
+        /* we are finally finished */
+        if(data->sg) {
+			dma_unmap_sg(mmc_dev(host->mmc), data->sg, data->sg_len, host->dma_dir);
+			acts_mmc_dma_sync(host);
+		} else {
+			dma_unmap_single(host->mmc->parent, host->dma_address, host->dma_length, host->dma_dir);
+		}
+
+        pr_debug("data_complete!!!!!!!!!!!!!!!!!!!\n");
+        pr_debug("address %x, len %x\n", (u32) data->sg[0].dma_address, data->sg[0].length);
+        pr_debug("SD0_BLK_NUM:0x%x\n", readl(HOST_BLK_NUM(host)));
+        pr_debug("SD0_BLK_SIZE:0x%x\n", readl(HOST_BLK_SIZE(host)));
+
+        if (!data->error) {
+            data->bytes_xfered = data->blocks * data->blksz;
+			complete(&host->dma_complete);
+        } else {
+			//acts_mmc_data_error_reset(host);
+			/* clear SD_CTL bit 7*/
+			//act_writel(act_readl(HOST_CTL(host)) & ~SD_CTL_TS, HOST_CTL(host));
+			/* clear dam */
+			//act_writel(act_readl(HOST_DMA_CTL(host)) & 0x0fffffff | 0x20000000, HOST_DMA_CTL(host));
+			//act_writel(act_readl(HOST_EN(host)) & ~SD_ENABLE,HOST_EN(host));
+			// mdelay(1);
+			//act_writel( SD_ENABLE,HOST_EN(host));
+        }
+    } else {
+        /*Still have  data to be trred */
+        data->bytes_xfered += sg_dma_len(&data->sg[host->current_sg - 1]);
+        dma_address = sg_dma_address(&data->sg[host->current_sg]);
+        dma_length = sg_dma_len(&data->sg[host->current_sg]);
+
+        pr_debug("%s, dma_address:0x %x\n", __FUNCTION__, dma_address);
+        pr_debug("Still have  data to be trred, %s, dma_address:0x%x\n", __FUNCTION__, dma_address);
+        pr_debug("Still have  data to be trred, %s, dma_length:0x%x\n", __FUNCTION__, dma_length);
+        pr_debug("Still have  data to be trred,SD0_BLK_NUM:0x%x\n", readl(HOST_BLK_NUM(host)));
+        pr_debug("Still have  data to be trred,SD0_BLK_SIZE:0x%x\n", readl(HOST_BLK_SIZE(host)));
+        pr_debug("Still have  data to be trred,SD0_CTL:0x%x\n", readl(HOST_CTL(host)));
+        pr_debug("Still have  data to be trred,HOST_DMA_CTL:0x%x\n", readl(HOST_DMA_CTL(host)));
+
+        if (DMA_FROM_DEVICE == host->dma_dir) {
+            writel(dma_address, HOST_DMA_ADDR(host));
+            writel((readl(HOST_DMA_CTL(host)) & 0xff000000) | dma_length, HOST_DMA_CTL(host));
+        } else {
+            writel(dma_address, HOST_DMA_ADDR(host));
+            writel((readl(HOST_DMA_CTL(host)) & 0xff000000) | dma_length, HOST_DMA_CTL(host));
+        }
+
+        host->current_sg++;
+        pr_debug("host->current_sg:0x%x\n", host->current_sg);
+        host->sg_len--;
+        pr_debug("host->sg_len:0x%x\n", host->sg_len);
+
+        writel(readl(HOST_DMA_CTL(host))  | 0x90000000, HOST_DMA_CTL(host));
+    }
+}
+
+static void owl_mmc_tasklet_data(unsigned long param)
+{
+	struct owl_mmc_host *host = (struct owl_mmc_host *)param;
+
+	acts_mmc_data_complete(host);
+}
+
+static int acts_mmc_prepare_data(struct owl_mmc_host *host,
+				struct mmc_data *data)
+{
+    int flags = data->flags;
+    int sg_cnt;
+    dma_addr_t dma_address = 0;
+    unsigned int dma_length = 0;
+
+    /*use sdc master dma*/
+    writel(readl(HOST_EN(host)) | SD_EN_BSEL, HOST_EN(host));
+
+    if (flags & MMC_DATA_READ)
+    {
+        host->dma_dir = DMA_FROM_DEVICE;
+    }
+    else if (flags & MMC_DATA_WRITE)
+    {
+        host->dma_dir = DMA_TO_DEVICE;
+    }
+    else
+    {
+        BUG_ON(1);
+    }
+
+	/* for_upgrade , don't use sg */
+	if(data->sg == NULL)
+	{
+		if (flags & MMC_DATA_READ)
+		{
+			host->dma_dir = DMA_FROM_DEVICE;
+			dma_length = data->blocks * data->blksz;
+			dma_address = dma_map_single(host->mmc->parent, (void *)(data->sg_len), dma_length, host->dma_dir);
+		} else if (flags & MMC_DATA_WRITE) {
+			host->dma_dir = DMA_TO_DEVICE;
+			dma_length = data->blocks * data->blksz;
+			dma_address = dma_map_single(host->mmc->parent,(void *)(data->sg_len), dma_length, host->dma_dir);
+		}
+
+		host->dma_length = dma_length;
+		host->dma_address = dma_address;
+		writel(data->blksz, HOST_BLK_SIZE(host));
+		writel(data->blocks, HOST_BLK_NUM(host));
+        writel(dma_address, HOST_DMA_ADDR(host));
+        writel(dma_length, HOST_DMA_CTL(host));
+
+        pr_debug("SDx_BLK_NUM:0X%x\n", readl(HOST_BLK_NUM(host)));
+		pr_debug("SDx_BLK_SIZE:0X%x\n", readl(HOST_BLK_SIZE(host)));
+        return 0;
+	}
+
+    sg_cnt = dma_map_sg(mmc_dev(host->mmc), data->sg, data->sg_len, host->dma_dir);
+    if(0 == sg_cnt)
+    {
+        printk("%s,%d,dma_map_sg error! sg_cnt = %d\n",__FUNCTION__,__LINE__,sg_cnt);
+		return -1;
+    }
+
+    host->sg_len = sg_cnt;
+    host->sg = data->sg;
+    host->current_sg = 0;
+
+    dma_address = sg_dma_address(&data->sg[host->current_sg]);
+    dma_length = sg_dma_len(&data->sg[host->current_sg]);
+
+    writel(data->blksz, HOST_BLK_SIZE(host));
+    writel(data->blocks, HOST_BLK_NUM(host));
+	writel(dma_address, HOST_DMA_ADDR(host));
+    writel(dma_length, HOST_DMA_CTL(host));
+    pr_debug("SDx_BLK_NUM:0X%x\n", readl(HOST_BLK_NUM(host)));
+    pr_debug("SDx_BLK_SIZE:0X%x\n", readl(HOST_BLK_SIZE(host)));
+
+    host->current_sg++; 	/*move on to next sg entry */
+    host->sg_len--;
+
+    return 0;
 }
 
 static int owl_mmc_prepare_data(struct owl_mmc_host *host,
@@ -1188,7 +1381,12 @@ static void owl_mmc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 	host->mrq = mrq;
 
 	if (mrq->data) {
-		ret = owl_mmc_prepare_data(host, mrq->data);
+		if (host->devid != ATS3605_SD) {
+			ret = owl_mmc_prepare_data(host, mrq->data);
+		} else {
+			ret = acts_mmc_prepare_data(host, mrq->data);
+		}
+
 		if (ret != 0) {
 			pr_err("SD DMA transfer: prepare data error\n");
 			mrq->data->error = ret;
@@ -1196,30 +1394,35 @@ static void owl_mmc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 			return;
 		} else {
 			init_completion(&host->dma_complete);
-			dmaengine_submit(host->desc);
-			dma_async_issue_pending(host->dma);
+			if (host->devid != ATS3605_SD) {
+				dmaengine_submit(host->desc);
+				dma_async_issue_pending(host->dma);
+			}
 		}
 	}
 
 	ret = owl_mmc_send_command(host, mrq->cmd, mrq->data);
 
 	if (ret == DATA_CMD) {
+		if (host->devid != ATS3605_SD) {
+			if (!wait_for_completion_timeout(&host->sdc_complete, 10 * HZ)) {
+				pr_err
+				    ("!!!host%d:wait date transfer ts intrupt timeout\n",
+				     host->id);
+			}
 
-		if (!wait_for_completion_timeout(&host->sdc_complete, 10 * HZ)) {
-			pr_err
-			    ("!!!host%d:wait date transfer ts intrupt timeout\n",
-			     host->id);
-		}
-
-		if (owl_check_trs_date_status(host, mrq)) {
-			pr_err("!!!host%d err:owl_check_trs_date_status\n",
-			       host->id);
-			owl_dump_reg(host);
-			pr_err("Entry SD/MMC module error reset\n");
-			dmaengine_terminate_all(host->dma);
-			owl_mmc_err_reset(host);
-			pr_err("Exit SD/MMC module error reset\n");
-			goto finish;
+			if (owl_check_trs_date_status(host, mrq)) {
+				pr_err("!!!host%d err:owl_check_trs_date_status\n",
+				       host->id);
+				owl_dump_reg(host);
+				pr_err("Entry SD/MMC module error reset\n");
+				if (host->dma) {
+					dmaengine_terminate_all(host->dma);
+				}
+				owl_mmc_err_reset(host);
+				pr_err("Exit SD/MMC module error reset\n");
+				goto finish;
+			}
 		}
 
 		if (!wait_for_completion_timeout(&host->dma_complete, 5 * HZ)) {
@@ -1229,7 +1432,9 @@ static void owl_mmc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 			mrq->cmd->error = -ETIMEDOUT;
 			owl_dump_reg(host);
 			pr_err("Entry SD/MMC module error reset\n");
-			dmaengine_terminate_all(host->dma);
+			if (host->dma) {
+				dmaengine_terminate_all(host->dma);
+			}
 			owl_mmc_err_reset(host);
 			pr_err("Exit SD/MMC module error reset\n");
 			goto finish;
@@ -1260,14 +1465,12 @@ static void owl_dump_reg(struct owl_mmc_host *host)
 {
 	owl_dump_mfp(host);
 	owl_dump_sdc(host);
-	owl_dump_dmac(host);
 }
 
 /* check status reg  is ok */
 static int owl_check_trs_date_status(struct owl_mmc_host *host,
 				     struct mmc_request *mrq)
 {
-
 	struct mmc_data *data = mrq->data;
 	struct mmc_command *cmd = mrq->cmd;
 	u32 status = readl(HOST_STATE(host));
@@ -1381,7 +1584,6 @@ static int owl_mmc_signal_voltage_switch(struct mmc_host *mmc,
 					 struct mmc_ios *ios)
 {
 	struct owl_mmc_host *host = mmc_priv(mmc);
-
 	int ret = 0;
 
 	if (host->id == SDC0_SLOT) {
@@ -1404,11 +1606,9 @@ static int owl_mmc_signal_voltage_switch(struct mmc_host *mmc,
 
 			mdelay(5);
 			pr_debug("%s: end swith host to 3.3v \n", __FUNCTION__);
-
 		} else if (ios->signal_voltage == MMC_SIGNAL_VOLTAGE_180) {
 			pr_debug("%s: start swith 3.3v -> 1.8V \n",
 				 __FUNCTION__);
-
 			if (S900_SD == host->devid) {
 				writel(readl(host->sps_base + SPS_LDO_CTL) |
 				       SD0_V18_EN,
@@ -1465,7 +1665,6 @@ static int owl_mmc_get_ro(struct mmc_host *mmc)
 	}
 
 	pr_info("%s: Card read-only status %d\n", __func__, read_only);
-
 	return read_only;
 }
 
@@ -1614,7 +1813,6 @@ int owl_mmc_get_power(struct owl_mmc_host *host, struct device_node *np)
 			printk("%s:%d\n", __FUNCTION__, __LINE__);
 			WARN_ON(1);
 		}
-
 	}
 
 	return 0;
@@ -1687,7 +1885,6 @@ static int owl_alloc_nand_resource(struct owl_mmc_host *host,
 	host->nand_powergate = POWER_GATE_OFF;
 
 	return 0;
-
 }
 
 static int owl_alloc_sys_resource(struct owl_mmc_host *host,
@@ -1703,7 +1900,11 @@ static int owl_alloc_sys_resource(struct owl_mmc_host *host,
 	} else if (host->devid == S700_SD) {
 		mfpid = 1;
 		cmuid = 2;
+	} else if (host->devid == ATS3605_SD) {
+		mfpid = 1;
+		cmuid = 2;
 	}
+
 	res = platform_get_resource(pdev, IORESOURCE_MEM, mfpid);
 	if (!res) {
 		pr_err("err:%s:%d\n", __FUNCTION__, __LINE__);
@@ -1751,7 +1952,6 @@ static int owl_alloc_sys_resource(struct owl_mmc_host *host,
 	}
 
 	return 0;
-
 }
 
 static int __init owl_mmc_probe(struct platform_device *pdev)
@@ -1879,37 +2079,44 @@ static int __init owl_mmc_probe(struct platform_device *pdev)
 		}
 	}
 
-	pdev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
-	pdev->dev.dma_mask = &pdev->dev.coherent_dma_mask;
-	/* Request DMA channel */
+	if (host->devid != ATS3605_SD) {
+		pdev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
+		pdev->dev.dma_mask = &pdev->dev.coherent_dma_mask;
+		/* Request DMA channel */
 
-	host->dma = dma_request_slave_channel(&pdev->dev, "mmc");
+		host->dma = dma_request_slave_channel(&pdev->dev, "mmc");
 
-	if (!host->dma) {
+		if (!host->dma) {
+			dev_err(&pdev->dev, "Failed to request DMA channel\n");
+			ret = -1;
+			goto out_free_sdc_irq;
+		}
 
-		dev_err(&pdev->dev, "Failed to request DMA channel\n");
-		ret = -1;
-		goto out_free_sdc_irq;
+		dev_info(&pdev->dev, "using %s for DMA transfers\n",
+			 dma_chan_name(host->dma));
 
+		host->dma_conf.src_addr = HOST_DAT_DMA(host);
+		host->dma_conf.dst_addr = HOST_DAT_DMA(host);
+		host->dma_conf.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+		host->dma_conf.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
+		host->dma_conf.device_fc = false;
+	}else {
+		host->dma = NULL;
 	}
-
-	dev_info(&pdev->dev, "using %s for DMA transfers\n",
-		 dma_chan_name(host->dma));
-
-	host->dma_conf.src_addr = HOST_DAT_DMA(host);
-	host->dma_conf.dst_addr = HOST_DAT_DMA(host);
-	host->dma_conf.src_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-	host->dma_conf.dst_addr_width = DMA_SLAVE_BUSWIDTH_4_BYTES;
-	host->dma_conf.device_fc = false;
 
 	mmc->ops = &owl_mmc_ops;
 
 	mmc->f_min = 100000;
+	if (host->devid != ATS3605_SD) {
 #ifdef 	CONFIG_MMC_OWL_CLK_NANDPLL
-	mmc->f_max = 50000000;
+		mmc->f_max = 50000000;
 #else
-	mmc->f_max = 52000000;
+		mmc->f_max = 52000000;
 #endif
+	} else {
+		mmc->f_max = 50000000;
+	}
+
 	mmc->max_seg_size = 256 * 512 * 2;
 	mmc->max_segs = 128 * 2;
 	mmc->max_req_size = 512 * 256 * 2;
@@ -1922,12 +2129,12 @@ static int __init owl_mmc_probe(struct platform_device *pdev)
 
 	mmc->caps2 = (MMC_CAP2_BOOTPART_NOACC | MMC_CAP2_DETECT_ON_ERR);
 
-	if (of_find_property(dn, "one_bit_width", NULL))
-
+	if (of_find_property(dn, "one_bit_width", NULL)) {
 		mmc->caps &= ~MMC_CAP_4_BIT_DATA;
+	}
 
-	if (mmc_card_expected_mem(host->type_expected)) {
-
+	/* sdcard */
+	if (mmc_card_expected_mem(host->type_expected) && (host->devid != ATS3605_SD)) {
 		mmc->f_max = 100000000;
 		mmc->caps |= MMC_CAP_ERASE;
 
@@ -1939,11 +2146,10 @@ static int __init owl_mmc_probe(struct platform_device *pdev)
 		mmc->caps |= MMC_CAP_MAX_CURRENT_800;
 		/*emmc and sd card support earse (discard,trim,sediscard) */
 		mmc->caps |= MMC_CAP_ERASE;
-
 	}
 
 	/*sdio 3.0 support */
-	if (mmc_card_expected_wifi(host->type_expected)) {
+	if (mmc_card_expected_wifi(host->type_expected) && (host->devid != ATS3605_SD)) {
 		if (DETECT_CARD_LOW_VOLTAGE == owl_of_get_wifi_card_volate_mode(dn)) {
 			/* sdio 1.8v support speed */
 			mmc->f_max = 100000000;
@@ -1954,7 +2160,9 @@ static int __init owl_mmc_probe(struct platform_device *pdev)
 			mmc->f_max = 50000000;
 		}
 	}
-	if (mmc_card_expected_emmc(host->type_expected)) {
+
+	/* emmc */
+	if (mmc_card_expected_emmc(host->type_expected) && (host->devid != ATS3605_SD)) {
 		mmc->caps |=
 		    MMC_CAP_1_8V_DDR | MMC_CAP_UHS_DDR50 | MMC_CAP_8_BIT_DATA;
 		/*emmc and sd card support earse (discard,trim,sediscard) */
@@ -2113,6 +2321,10 @@ static int __init owl_mmc_probe(struct platform_device *pdev)
 		goto out_free_dma;
 	}
 
+	if (host->devid == ATS3605_SD) {
+		acts_mmc_request_dma_sync_addr(host);
+		tasklet_init(&host->data_task, owl_mmc_tasklet_data, (unsigned long)host);
+	}
 	mmc_add_host(host->mmc);
 	
 	if (host->card_detect_mode == GPIO_DETECT_CARD)
@@ -2211,6 +2423,10 @@ static int owl_mmc_remove(struct platform_device *pdev)
 			clk_put(host->clk);
 		}
 
+		if (host->devid == ATS3605_SD) {
+			acts_mmc_free_dma_sync_addr(host);
+			tasklet_kill(&host->data_task);
+		}
 		mmc_free_host(host->mmc);
 		platform_set_drvdata(pdev, NULL);
 	}
@@ -2220,7 +2436,6 @@ static int owl_mmc_remove(struct platform_device *pdev)
 
 static void owl_suspend_wait_data_finish(struct owl_mmc_host *host, int timeout)
 {
-
 	while ((readl(HOST_CTL(host)) & SD_CTL_TS) && (--timeout)) {
 		udelay(1);
 	}
@@ -2232,13 +2447,11 @@ static void owl_suspend_wait_data_finish(struct owl_mmc_host *host, int timeout)
 		printk("SDC%d mmc card finish data then enter suspend\n",
 		       host->id);
 	}
-
 }
 
 #ifdef CONFIG_PM
 static int owl_mmc_suspend(struct device *dev)
 {
-
 	int ret = 0;
 	struct platform_device *pdev = to_platform_device(dev);
 	struct owl_mmc_host *host = platform_get_drvdata(pdev);
@@ -2299,6 +2512,7 @@ static int owl_mmc_resume(struct device *dev)
 static const struct of_device_id owl_mmc_dt_match[] = {
 	{.compatible = "actions,s900-mmc" , .data = (void *)S900_SD , },
 	{.compatible = "actions,s700-mmc" , .data = (void *)S700_SD , },
+	{.compatible = "actions,ats3605-mmc" , .data = (void *)ATS3605_SD , },
 	{}
 };
 
@@ -2311,12 +2525,11 @@ static struct platform_driver owl_mmc_driver = {
 	.probe = owl_mmc_probe,
 	.remove = owl_mmc_remove,
 	.driver = {
-		   .name = "s900-mmc",
+		   .name = "owl-mmc",
 		   .owner = THIS_MODULE,
 		   .of_match_table = owl_mmc_dt_match,
 		   .pm = &mmc_pm,
 		   },
-
 };
 
 static int __init owl_mmc_init(void)

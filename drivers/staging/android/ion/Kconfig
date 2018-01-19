@@ -38,4 +38,9 @@ config ION_OWL
 	depends on ARCH_OWL && ION
 	help
 	  Choose this option if you wish to use ion on an Actions OWL SoC.
+config ION_ATS3605
+	tristate "Ion for Actions ATS3605 SoC"
+	depends on ARCH_OWL && ION
+	help
+	  Choose this option if you wish to use ion on an Actions ATS3605 SoC.
 

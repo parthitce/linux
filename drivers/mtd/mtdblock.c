@@ -374,7 +374,7 @@ static void mtdblock_remove_dev(struct mtd_blktrans_dev *dev)
 static struct mtd_blktrans_ops mtdblock_tr = {
 	.name		= "mtdblock",
 	.major		= 31,
-	.part_bits	= 0,
+	.part_bits	= 4,
 	.blksize 	= 512,
 	.open		= mtdblock_open,
 	.flush		= mtdblock_flush,

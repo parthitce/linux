@@ -78,7 +78,7 @@ static ssize_t atc260x_adc_show( struct device *dev, struct device_attribute *at
 {
 	return sprintf(buf, "%d\n",atc260x_adc_val);
 }
-static DEVICE_ATTR(debug_adckey, 0664, atc260x_adc_show, NULL);
+static DEVICE_ATTR(debug_adckey, S_IRUGO, atc260x_adc_show, NULL);
 
 static inline unsigned int atc260x_adckeypad_convert(unsigned int adc_val,
 	struct atc260x_adckeypad_dev *atc260x_adckeypad)
@@ -92,6 +92,9 @@ static inline unsigned int atc260x_adckeypad_convert(unsigned int adc_val,
 			break;
 		}
 	}
+	if ( key_val != KEY_RESERVED)
+		dev_dbg(atc260x_adckeypad->dev, "key_code=%d adc_val=%d\n",
+				atc260x_adckeypad->key_val, adc_val);
 	return key_val;
 }
 
@@ -188,14 +191,20 @@ static void atc260x_adckeypad_poll(struct input_polled_dev *dev)
 	struct input_dev *input_dev = dev->input;
 	int ret;
 	unsigned int index;
+	/*first poll return, for kernel boot fast*/
+	if(atc260x_adckeypad->filter_index  >= atc260x_adckeypad->filter_dep) {
+		atc260x_adckeypad->filter_index = 0;
+		return;
+	}
 	ret = atc260x_adckeypad_scan(atc260x_adckeypad->atc260x, dev);
 	if (ret < 0)
 		return;
 	index = atc260x_adckeypad->filter_index;
 	atc260x_adckeypad->adc_buffer[index] = ret;
+	index++;
 	atc260x_adckeypad->filter_index =
 		(index < atc260x_adckeypad->filter_dep) ?
-			index + 1 : 0;
+			index : 0;
 
 	ret = atc260x_adckeypad_filter(dev);
 	if (ret >= 0) {
@@ -276,7 +285,7 @@ static int atc260x_adckeypad_probe(struct platform_device *pdev)
 	if (ret)
 		goto of_property_read_err;
 
-	atc260x_adckeypad->filter_index = 0;
+	atc260x_adckeypad->filter_index = 100; // for boot fast, first poll return
 	atc260x_adckeypad->old_key_val = KEY_VAL_INIT;
 	/*
 	 * get configure info from xml

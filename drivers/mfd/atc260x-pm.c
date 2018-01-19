@@ -25,7 +25,7 @@
 #include <linux/suspend.h>
 #include <linux/rtc.h>
 #include <linux/of.h>
-
+#include <linux/reboot.h>
 #include <asm/suspend.h>
 #include <linux/owl_pm.h>
 #include <linux/mfd/atc260x/atc260x.h>
@@ -618,7 +618,7 @@ static int _atc260x_pm_prepare_suspend(void)
 /* only prepare the env, not disable S1 immediately */
 static int _atc260x_pm_enter_suspend(void)
 {
-#if 0
+
 	struct atc260x_pm_dev *atc260x_pm;
 	struct atc260x_dev *atc260x;
 	void (*p_cpu_resume) (void);
@@ -666,7 +666,7 @@ static int _atc260x_pm_enter_suspend(void)
 	}
 #ifdef CONFIG_64BIT
 	ret = atc260x_pstore_set(atc260x,
-				 ATC260X_PSTORE_TAG_RESUME_ADDR_H,
+				 ATC260X_PSTORE_TAG_RESUME_ADDR,
 				 resume_phy_address >> 32);
 	if (ret) {
 		dev_err(atc260x_pm->dev, "%s() %u err\n", __func__, __LINE__);
@@ -702,7 +702,7 @@ static int _atc260x_pm_enter_suspend(void)
 	atc260x_pm->active_wakeup_srcs = 0;
 
 	dev_info(atc260x_pm->dev, "%s() exit\n", __func__);
-#endif
+
 	return 0;
 }
 
@@ -939,7 +939,7 @@ static int _atc260x_pm_reboot(uint tgt)
 	int ret;
 
 	dev_info(atc260x_pm->dev, "%s() enter, tgt=%u\n", __func__, tgt);
-
+	
 	flag_adfu = flag_recovery = flag_dis_mchrg = 0;
 	switch (tgt) {
 	case OWL_PMIC_REBOOT_TGT_NORMAL:
@@ -957,7 +957,18 @@ static int _atc260x_pm_reboot(uint tgt)
 		flag_recovery = flag_dis_mchrg = 1;
 		flag_adfu = 0;
 		break;
+	case OWL_PMIC_REBOOT_TGT_BOOTLOADER:
+		flag_recovery = 2;
+		flag_dis_mchrg = 0;
+		flag_adfu = 0;
+		break;
+	case OWL_PMIC_REBOOT_TGT_FASTBOOT:
+		flag_recovery = 3;
+		flag_dis_mchrg = 0;
+		flag_adfu = 0;
+		break;
 	}
+
 	ret =
 	    atc260x_pstore_set(atc260x, ATC260X_PSTORE_TAG_REBOOT_ADFU,
 			       flag_adfu);
@@ -1248,6 +1259,75 @@ static ssize_t atc260x_s3tos4_timeout_store(struct kobject *kobj,
 	return bytes;
 }
 
+static ssize_t atc260x_alarm_time_attr_shown(struct kobject *kobj,
+					      struct kobj_attribute *attr,
+					      char *buf)
+{
+
+	return sprintf(buf, "please set alarmtime\n");
+}
+
+static ssize_t atc260x_alarm_time_attr_store(struct kobject *kobj,
+					      struct kobj_attribute *attr,
+					      const char *buf, size_t count)
+{
+	unsigned long alarm_time = 0;
+	struct atc260x_pm_dev *atc260x_pm;
+	struct atc260x_pm_alarm_save old_alarm;
+	int ret, ret1, ret2;
+
+	pr_info("%s %d:\n", __FUNCTION__, __LINE__);
+	atc260x_pm = _get_curr_atc260x_pm_obj();
+	ret = strict_strtoul(buf, 0, &alarm_time);
+	if (ret < 0)
+		return ret;
+
+	/* set alarm */
+	ret = _atc260x_pm_setup_rtc_alarm(atc260x_pm, alarm_time , alarm_time+3, &old_alarm);
+	if (ret) {
+		dev_err(atc260x_pm->dev, "%s() setup alarm err, ret=%d\n",
+			__func__, ret);
+		return ret;
+	}
+
+	/* backup old alarm data to pstore */
+	ret = atc260x_pstore_set(atc260x_pm->atc260x,
+				 ATC260X_PSTORE_TAG_RTC_MSALM, old_alarm.msalm);
+	ret1 = atc260x_pstore_set(atc260x_pm->atc260x,
+				  ATC260X_PSTORE_TAG_RTC_HALM, old_alarm.halm);
+	ret2 = atc260x_pstore_set(atc260x_pm->atc260x,
+				  ATC260X_PSTORE_TAG_RTC_YMDALM,
+				  old_alarm.ymdalm);
+	if (ret || ret1 || ret2) {
+		dev_err(atc260x_pm->dev, "%s() faile to save old alarm\n",
+			__func__);
+		return -EIO;
+	}
+	pr_info("%s %d: alarm time=%ld\n", __FUNCTION__, __LINE__, alarm_time);
+
+	return count;
+}
+
+static ssize_t atc260x_reboot_attr_shown(struct kobject *kobj,
+					      struct kobj_attribute *attr,
+					      char *buf)
+{
+	return sprintf(buf, "reboot arg\n");
+}
+
+static ssize_t atc260x_reboot_attr_store(struct kobject *kobj,
+					      struct kobj_attribute *attr,
+					      const char *buf, size_t count)
+{
+	char sbuf[20];
+	pr_info("%s %d: %s, %ld\n", __FUNCTION__, __LINE__, buf, count);
+	strncpy(sbuf, buf, 19);
+	sbuf[19] = 0;
+	sbuf[strlen(sbuf)-1] = 0;
+	kernel_restart(sbuf);
+	return count;
+}
+
 #define ATC260X_PM_ATTR(_name, _mode, _show, _store, _index)    \
 	{ .attr = __ATTR(_name, _mode, _show, _store),  \
 	  .index = _index }
@@ -1283,6 +1363,12 @@ WAKEUP_ATTR(wken_sgpio, 12);
 PM_ATTR(wakeup_srcs, S_IRUGO | S_IWUSR, atc260x_wakeup_srcs_attr_shown,
 	atc260x_wakeup_srcs_attr_store);
 
+PM_ATTR(alarm_time, S_IRUGO | S_IWUSR, atc260x_alarm_time_attr_shown,
+	atc260x_alarm_time_attr_store);
+PM_ATTR(reboot, S_IRUGO | S_IWUSR, atc260x_reboot_attr_shown,
+	atc260x_reboot_attr_store);
+
+
 PM_ATTR(s2tos3_timeout, S_IRUGO | S_IWUSR, atc260x_s2tos3_timeout_shown,
 	atc260x_s2tos3_timeout_store);
 PM_ATTR(s3tos4_timeout, S_IRUGO | S_IWUSR, atc260x_s3tos4_timeout_shown,
@@ -1307,6 +1393,8 @@ static struct attribute *atc260x_pm_attrs[] = {
 
 	PM_ATTR_PTR(s2tos3_timeout),
 	PM_ATTR_PTR(s3tos4_timeout),
+	PM_ATTR_PTR(alarm_time),
+	PM_ATTR_PTR(reboot),
 
 	NULL,
 };
@@ -1399,8 +1487,8 @@ static int atc260x_pm_setup_wall_vbus_wakup_function(struct atc260x_pm_dev
 			__func__);
 		return -ENODEV;
 	}
-	of_power_node = of_get_child_by_name(of_parent_node, "atc260x-power");
-	if (of_parent_node == NULL) {
+	of_power_node = of_get_child_by_name(of_parent_node, "atc260x-charger");
+	if (of_power_node == NULL) {
 		dev_err(atc260x_pm->dev, "%s() can not find power of_nade\n",
 			__func__);
 		return -ENODEV;

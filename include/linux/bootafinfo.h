@@ -37,6 +37,11 @@ struct cpu0_opp_table_arry {
 	int table_size;
 	struct cpu0_opp_table table[CPU0_VOLT_TABLE_MAX];
 };
+#define BOOT_MODE_NORMAL    0
+#define BOOT_MODE_UPGRADE   1
+#define BOOT_MODE_CHARGER   2
+#define BOOT_MODE_RECOVERY  3
+
 
 extern int owl_get_boot_mode(void);
 extern int owl_get_boardinfo(char *buf);

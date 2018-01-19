@@ -9,7 +9,6 @@
 
 int g_wifi_type ;
 extern int use_wifi_bt_vddio;
-extern struct regulator *pwifiregulator_vddio;
 
 static void (*wifi_hook) (void) ;
 static struct completion wlan_complete;
@@ -57,6 +56,7 @@ static void owl_wlan_exit(struct wlan_plat_data *pdata)
 
 static int owl_wlan_probe(struct platform_device *pdev)
 {
+	int ret;
 	struct wlan_plat_data *pdata =
 	    (struct wlan_plat_data *)(pdev->dev.platform_data);
 
@@ -65,11 +65,6 @@ static int owl_wlan_probe(struct platform_device *pdev)
 		return -ENXIO;
 	}
 
-  if (use_wifi_bt_vddio == 1)
-	{
-		regulator_enable(pwifiregulator_vddio);
-		mdelay(100);
-	}
 	owl_wlan_set_power(pdata, 1, 0);
 
 	if (g_wifi_type != WIFI_TYPE_BCMDHD) {
@@ -86,10 +81,6 @@ static int owl_wlan_remove(struct platform_device *pdev)
 	struct wlan_plat_data *pdata =
 	    (struct wlan_plat_data *)(pdev->dev.platform_data);
 
-  if (use_wifi_bt_vddio == 1)
-	{
-		regulator_disable(pwifiregulator_vddio);
-	}
 	owl_wlan_set_power(pdata, 0, 0);
 
 	if (g_wifi_type != WIFI_TYPE_BCMDHD) {
@@ -102,6 +93,7 @@ static int owl_wlan_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#if 0
 static int owl_wlan_shutdown(struct platform_device *pdev)
 {
 	struct wlan_plat_data *pdata =
@@ -113,11 +105,6 @@ static int owl_wlan_shutdown(struct platform_device *pdev)
 		wifi_hook();
 
 	owl_wlan_set_power(pdata, 0, 0);
-	
-	if (use_wifi_bt_vddio == 1)
-	{
-		regulator_disable(pwifiregulator_vddio);
-	}
 
 	if (g_wifi_type != WIFI_TYPE_BCMDHD) {
 		printk("wlan card detection to remove SDIO card!");
@@ -127,26 +114,20 @@ static int owl_wlan_shutdown(struct platform_device *pdev)
 	complete(&wlan_complete);
 	return 0;
 }
+#endif
 
 static int owl_wlan_suspend(struct platform_device *pdev, pm_message_t state)
 {
-    //pr_info("##> %s, use_wifi_bt_vddio:%d\n", __func__, use_wifi_bt_vddio);
-    if (use_wifi_bt_vddio == 1)
-	  {
-				regulator_disable(pwifiregulator_vddio);
-	  }
-	  return 0;
+	int ret;
+	pr_info("##> %s, use_wifi_bt_vddio:%d\n", __func__, use_wifi_bt_vddio);
+	return 0;
 }
 
 static int owl_wlan_resume(struct platform_device *pdev)
 {
-    //pr_info("##> %s, use_wifi_bt_vddio:%d\n", __func__, use_wifi_bt_vddio);
-	  if (use_wifi_bt_vddio == 1)
-    {
-				regulator_enable(pwifiregulator_vddio); 	
-				mdelay(100);
-	  }
-	  return 0;
+	int ret;
+	pr_info("##> %s, use_wifi_bt_vddio:%d\n", __func__, use_wifi_bt_vddio);
+	return 0;
 }
 
 static struct platform_driver wlan_driver = {

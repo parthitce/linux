@@ -46,6 +46,11 @@ struct ic_data {
 };
 
 /* ic information of s700 */
+static const struct ic_data  ic_3605 = {
+	.ic_type = IC_PLATFM_3605,
+};
+
+/* ic information of s700 */
 static const struct ic_data  ic_s700 = {
 	.ic_type = IC_PLATFM_S700,
 };
@@ -552,6 +557,7 @@ static const struct snd_soc_component_driver s900_component = {
 
 /* modify compatible to match diff IC */
 static const struct of_device_id owl_i2s_of_match[] = {
+	{.compatible = "actions,ats3605-audio-i2s", .data = &ic_3605,},
 	{.compatible = "actions,s700-audio-i2s", .data = &ic_s700,},
 	{.compatible = "actions,s900-audio-i2s", .data = &ic_s900,},
 	{},
@@ -578,6 +584,9 @@ static int s900_dai_probe(struct platform_device *pdev)
 	ic = id->data;
 	ic_type_used = ic->ic_type;
 
+	if (ic_type_used == IC_PLATFM_3605) {
+		printk(KERN_INFO"audio: IC type is 3605!\n");
+	}
 	if (ic_type_used == IC_PLATFM_S700) {
 		printk(KERN_INFO"audio: IC type is S700!\n");
 	}

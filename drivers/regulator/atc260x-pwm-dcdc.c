@@ -85,6 +85,7 @@ u32 vdd_cpu_voltage_get(struct atc260x_dev *atc260x, u32 max_value, u32 min_valu
 	value_temp =  value_temp/5;
 	return value_temp;
 }
+#if 0
 static  void act_writel_pwm(u32 val, u32 reg)
 {
 
@@ -205,6 +206,7 @@ static int ext_pwm_config_table_adjust(struct ext_pwm_dcdc_dev *dcdc)
 
 	return 0;
 }
+#endif
 static int ext_pwm_dcdc_reconfig_pwm(struct ext_pwm_dcdc_dev *dcdc,
 				     uint voltage_index)
 {

@@ -33,10 +33,12 @@
 #include <linux/of_address.h>
 #include <linux/of_device.h>
 #include <linux/pinctrl/consumer.h>
+#include <asm-generic/gpio.h>
 
 enum owl_gpio_id {
 	S900_GPIO,
 	S700_GPIO,
+	ATS3605_GPIO,
 };
 
 #define GPIO_PER_BANK				(32)
@@ -50,12 +52,40 @@ enum owl_gpio_id {
 #define		GPIO_CTLR_SAMPLE_CLK_24M		(0x1 << 2)
 
 
+/*ATS3605 CTL*/
+#define GPIOX_ATS3605_CTL_EDGE(id)    	(1<<(id+24))
+  /*0=32k,1=24M*/
+#define GPIOX_ATS3605_CTL_CLK(id)    	(1<<(id+20))
+#define GPIOX_ATS3605_CTL_OTHER(id)    	(0xf<<(id*4))
+#define GPIOX_ATS3605_CTL_PEND(id)    	(0x1<<(id*4))
+#define GPIOX_ATS3605_CTL_ENABLE(id)    	(0x2<<(id*4))
+#define GPIOX_ATS3605_CTL_TYPE(id)    	(0x3<<(id*4+2))
+#define GPIOX_ATS3605_CTL_TVAL(id, val)  (val<<(id*4+2))
+
+#define GPIO_ATS3605_CTL_AMASK  (   GPIOX_ATS3605_CTL_EDGE(0) \
+								|GPIOX_ATS3605_CTL_CLK(0) \
+								|GPIOX_ATS3605_CTL_OTHER(0)  )
+
+#define GPIO_ATS3605_CTL_BMASK  (   GPIOX_ATS3605_CTL_EDGE(1) \
+								|GPIOX_ATS3605_CTL_CLK(1)  \
+								|GPIOX_ATS3605_CTL_OTHER(1)  )
+
+#define GPIO_ATS3605_CTL_CMASK  (   GPIOX_ATS3605_CTL_EDGE(2) \
+								|GPIOX_ATS3605_CTL_CLK(2) \
+								|GPIOX_ATS3605_CTL_OTHER(2)  )
+
+#define GPIO_ATS3605_CTL_DMASK  (   GPIOX_ATS3605_CTL_EDGE(3) \
+								|GPIOX_ATS3605_CTL_CLK(3) \
+								|GPIOX_ATS3605_CTL_OTHER(3)  )
+#define GPIO_ATS3605_NUM_BANK   4
+
+
 /* TYPE */
 #define GPIO_INT_TYPE_MASK			(0x3)
 #define GPIO_INT_TYPE_HIGH			(0x0)
 #define GPIO_INT_TYPE_LOW			(0x1)
-#define GPIO_INT_TYPE_RISING			(0x2)
-#define GPIO_INT_TYPE_FALLING			(0x3)
+#define GPIO_INT_TYPE_RISING		(0x2)
+#define GPIO_INT_TYPE_FALLING		(0x3)
 
 /* pending mask for share intc_ctlr */
 #define GPIO_CTLR_PENDING_MASK		(0x42108421)
@@ -91,6 +121,12 @@ struct owl_gpio_bank {
 	spinlock_t		lock;
 };
 
+
+static const unsigned int  ats3605_ctlr_mask[GPIO_ATS3605_NUM_BANK] = {
+				GPIO_ATS3605_CTL_AMASK, GPIO_ATS3605_CTL_BMASK,
+				GPIO_ATS3605_CTL_CMASK,GPIO_ATS3605_CTL_DMASK };
+static struct owl_gpio_bank *ats3605_gbank[GPIO_ATS3605_NUM_BANK];
+
 /* lock for shared register between banks,  e.g. share_intc_ctlr in s700 */
 static DEFINE_SPINLOCK(gpio_share_lock);
 
@@ -102,6 +138,29 @@ static inline int is_s900_gpio(struct owl_gpio_bank *bank)
 static inline int is_s700_gpio(struct owl_gpio_bank *bank)
 {
 	return bank->devid == S700_GPIO;
+}
+static inline int is_ats3605_gpio(struct owl_gpio_bank *bank)
+{
+	return bank->devid == ATS3605_GPIO;
+}
+/*for ats3605 irq handler use, because all gpio use one irq*/
+static struct owl_gpio_bank * ats3605_get_bank( int id)
+{
+	if(id < GPIO_ATS3605_NUM_BANK && ats3605_gbank[id]) {
+		if (id == ats3605_gbank[id]->id)
+			return  ats3605_gbank[id];
+	}
+	return NULL;
+}
+/*for ats3605 irq handler use, because all gpio use one irq*/
+static void  ats3605_set_bank(struct owl_gpio_bank *bank)
+{
+	if ((!is_ats3605_gpio(bank)) ||  bank->id < 0)
+		return ;
+
+	if(bank->id < GPIO_ATS3605_NUM_BANK)
+		ats3605_gbank[bank->id] = bank;
+
 }
 
 static inline struct owl_gpio_bank *to_owl_bank(struct gpio_chip *chip)
@@ -121,6 +180,11 @@ static unsigned int read_intc_ctlr(struct owl_gpio_bank *bank)
 		val = readl_relaxed(bank->base + bank->regs->intc_ctlr);
 
 	return val;
+}
+
+static unsigned int ats3605_read_intc_ctlr(struct owl_gpio_bank *bank)
+{
+	return  readl_relaxed(bank->base + bank->regs->intc_ctlr);
 }
 
 static void write_intc_ctlr(struct owl_gpio_bank *bank, unsigned int ctlr)
@@ -146,6 +210,19 @@ static void write_intc_ctlr(struct owl_gpio_bank *bank, unsigned int ctlr)
 		writel_relaxed(ctlr, bank->base + bank->regs->intc_ctlr);
 }
 
+static void ats3605_write_intc_ctlr(struct owl_gpio_bank *bank, unsigned int ctlr)
+{
+	unsigned int val;
+	unsigned long flags;
+
+	spin_lock_irqsave(&gpio_share_lock, flags);
+	val = readl_relaxed(bank->base + bank->regs->intc_ctlr);
+	/* don't clear other bank pending mask */
+	val &= ~ats3605_ctlr_mask[bank->id];
+	val |= (ctlr & ats3605_ctlr_mask[bank->id] );
+	writel_relaxed(val, bank->base + bank->regs->intc_ctlr);
+	spin_unlock_irqrestore(&gpio_share_lock, flags);
+}
 
 static int owl_gpio_request(struct gpio_chip *chip, unsigned offset)
 {
@@ -280,9 +357,15 @@ static void owl_gpio_irq_mask(struct irq_data *d)
 	writel(val, bank->base + regs->intc_mask);
 
 	if (val == 0) {
-		val = read_intc_ctlr(bank);
-		val &= ~BIT(GPIO_CTLR_ENABLE);
-		write_intc_ctlr(bank, val);
+		if ( is_ats3605_gpio(bank) ) {
+			val = ats3605_read_intc_ctlr(bank);
+			val &= ~GPIOX_ATS3605_CTL_ENABLE(bank->id);
+			ats3605_write_intc_ctlr(bank, val);
+		} else {
+			val = read_intc_ctlr(bank);
+			val &= ~BIT(GPIO_CTLR_ENABLE);
+			write_intc_ctlr(bank, val);
+		}
 	}
 
 	spin_unlock_irqrestore(&bank->lock, flags);
@@ -297,10 +380,15 @@ static void owl_gpio_irq_unmask(struct irq_data *d)
 	unsigned int val;
 
 	spin_lock_irqsave(&bank->lock, flags);
-
-	val = read_intc_ctlr(bank);
-	val |= GPIO_CTLR_ENABLE | GPIO_CTLR_SAMPLE_CLK_24M;
-	write_intc_ctlr(bank, val);
+	if ( is_ats3605_gpio(bank) ) {
+		val = ats3605_read_intc_ctlr(bank);
+		val |= GPIOX_ATS3605_CTL_ENABLE(bank->id) | GPIOX_ATS3605_CTL_CLK(bank->id);
+		ats3605_write_intc_ctlr(bank, val);
+	} else {
+		val = read_intc_ctlr(bank);
+		val |= GPIO_CTLR_ENABLE | GPIO_CTLR_SAMPLE_CLK_24M;
+		write_intc_ctlr(bank, val);
+	}
 
 	val = readl(bank->base + regs->intc_mask);
 	val |= GPIO_BIT(gpio);
@@ -322,8 +410,13 @@ static void owl_gpio_irq_ack(struct irq_data *d)
 	writel(GPIO_BIT(gpio), bank->base + bank->regs->intc_pd);
 
 	/* clear bank pending */
-	val = read_intc_ctlr(bank);
-	write_intc_ctlr(bank, val);
+	if ( is_ats3605_gpio(bank) ) {
+		val = ats3605_read_intc_ctlr(bank);
+		ats3605_write_intc_ctlr(bank, val);
+	} else {
+		val = read_intc_ctlr(bank);
+		write_intc_ctlr(bank, val);
+	}
 
 	spin_unlock_irqrestore(&bank->lock, flags);
 }
@@ -363,12 +456,18 @@ static int owl_gpio_irq_set_type(struct irq_data *d, unsigned int flow_type)
 			__func__, gpio, flow_type);
 	return -1;
 	}
-
-	offset = gpio < 16 ? 4 : 0;
-	val = readl(bank->base + regs->intc_type + offset);
-	val &= ~(0x3 << ((gpio % 16) * 2));
-	val |= type << ((gpio % 16) * 2);
-	writel(val, bank->base + regs->intc_type + offset);
+	if ( is_ats3605_gpio(bank) ) {
+		val = ats3605_read_intc_ctlr(bank);
+		val &= ~GPIOX_ATS3605_CTL_TYPE(bank->id);
+		val |= GPIOX_ATS3605_CTL_TVAL(bank->id, type);
+		ats3605_write_intc_ctlr(bank, val);
+	} else {
+		offset = gpio < 16 ? 4 : 0;
+		val = readl(bank->base + regs->intc_type + offset);
+		val &= ~(0x3 << ((gpio % 16) * 2));
+		val |= type << ((gpio % 16) * 2);
+		writel(val, bank->base + regs->intc_type + offset);
+	}
 
 	spin_unlock_irqrestore(&bank->lock, flags);
 
@@ -381,17 +480,10 @@ static int owl_gpio_irq_set_type(struct irq_data *d, unsigned int flow_type)
  * which have been set as summary IRQ lines and which are triggered,
  * and to call their interrupt handlers.
  */
-static void owl_gpio_irq_handler(unsigned int irq, struct irq_desc *desc)
+ static void owl_gpio_irq_bank(struct owl_gpio_bank *bank)
 {
-	struct irq_chip *chip = irq_desc_get_chip(desc);
-	struct owl_gpio_bank *bank;
 	unsigned int child_irq, i;
 	unsigned long flags, pending;
-
-	bank = irq_desc_get_handler_data(desc);
-
-	chained_irq_enter(chip, desc);
-
 	/* get unmasked irq pending */
 	spin_lock_irqsave(&bank->lock, flags);
 	pending = readl(bank->base + bank->regs->intc_pd) &
@@ -401,6 +493,35 @@ static void owl_gpio_irq_handler(unsigned int irq, struct irq_desc *desc)
 	for_each_set_bit(i, &pending, 32) {
 		child_irq = irq_find_mapping(bank->irq_domain, i);
 		generic_handle_irq(child_irq);
+	}
+}
+static void owl_gpio_irq_handler(unsigned int irq, struct irq_desc *desc)
+{
+	struct irq_chip *chip = irq_desc_get_chip(desc);
+	struct owl_gpio_bank *bank;
+
+	bank = irq_desc_get_handler_data(desc);
+
+	chained_irq_enter(chip, desc);
+
+	if ( is_ats3605_gpio(bank) ) {
+		unsigned long gpiop;
+		int  k;
+		gpiop = ats3605_read_intc_ctlr(bank);
+		for (k = 0; k < GPIO_ATS3605_NUM_BANK; k++) {
+			if(! (gpiop & GPIOX_ATS3605_CTL_PEND(k)) )
+				continue;
+			bank = ats3605_get_bank(k);
+			if ( bank == NULL ) {
+				pr_err("[GPIO] %s: bank %d not register, ctl=0x%lx\n",
+					__func__, k, gpiop);
+				continue;
+			}
+			owl_gpio_irq_bank(bank);
+		}
+
+	} else {
+		owl_gpio_irq_bank(bank);
 	}
 
 	chained_irq_exit(chip, desc);
@@ -470,9 +591,50 @@ static int owl_gpio_irq_setup(struct owl_gpio_bank *bank)
 	irq = bank->irq;
 	irq_set_chained_handler(irq, owl_gpio_irq_handler);
 	irq_set_handler_data(irq, bank);
+	ats3605_set_bank(bank);
 
 	return 0;
 }
+
+int owl_gpio_check_dir_by_pinctrl(unsigned int gpio)
+{
+	struct owl_gpio_bank *bank;
+	const struct gpio_regs *regs;
+	u32 val, offset;
+	struct gpio_chip *chip = gpio_to_chip(gpio);
+
+	if (chip == NULL )
+		return 0;
+	bank = to_owl_bank(chip);
+	regs = bank->regs;
+
+	offset = gpio & (GPIO_PER_BANK-1);
+	val = readl(bank->base + regs->inen);
+	if ( val & GPIO_BIT(offset) ) {
+		pr_err("[GPIO] %s: GPIO%c%d, is used for input, inen=0x%x\n",
+			__func__,  'A' + bank->id,  offset,  val);
+		return -1;
+	}
+
+	val = readl(bank->base + regs->outen);
+	if ( val & GPIO_BIT(offset) ) {
+		pr_err("[GPIO] %s: GPIO%c%d, is used for output, outen=0x%x\n",
+			__func__,  'A' + bank->id,  offset,  val);
+		return -1;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(owl_gpio_check_dir_by_pinctrl);
+
+
+static const struct owl_gpio_bank_data ats3605_banks_data[4] = {
+	/*      outen   inen     dat   intc_pd  intc_mask intc_type intc_ctlr */
+	{ 32, {  0x0,    0x4,    0x8,    0x208,   0x20c,   0,   0x204 } },
+	{ 32, {  0xc,    0x10,   0x14,   0x210,   0x214,   0,   0x204 } },
+	{ 32, {  0x18,   0x1c,   0x20,   0x218,   0x21c,   0,   0x204 } },
+	{ 12, {  0x24,   0x28,   0x2c,   0x220,   0x224,   0,   0x204 } },
+};
 
 static const struct owl_gpio_bank_data s700_banks_data[5] = {
 	/*      outen   inen     dat   intc_pd  intc_mask intc_type intc_ctlr */
@@ -496,6 +658,7 @@ static const struct owl_gpio_bank_data s900_banks_data[6] = {
 static const struct of_device_id owl_gpio_dt_ids[] = {
 	{ .compatible = "actions,s900-gpio", .data = (void *)S900_GPIO, },
 	{ .compatible = "actions,s700-gpio", .data = (void *)S700_GPIO, },
+	{ .compatible = "actions,ats3605-gpio", .data = (void *)ATS3605_GPIO, },
 	{ },
 };
 MODULE_DEVICE_TABLE(of, owl_gpio_dt_ids);
@@ -527,7 +690,10 @@ static int owl_gpio_probe(struct platform_device *pdev)
 	} else if (is_s700_gpio(bank)) {
 		BUG_ON(bank->id >= ARRAY_SIZE(s700_banks_data));
 		pdata = &s700_banks_data[bank->id];
-	} else {
+	}  else if (is_ats3605_gpio(bank)) {
+		BUG_ON(bank->id >= ARRAY_SIZE(ats3605_banks_data));
+		pdata = &ats3605_banks_data[bank->id];
+	}else {
 		return -ENOENT;
 	}
 

@@ -766,6 +766,7 @@ static int owl_spi_remove(struct platform_device *pdev)
 static const struct of_device_id owl_spi_dt_ids[] = {
 	{ .compatible = "actions,s900-spi" },
 	{ .compatible = "actions,s500-spi" },
+	{ .compatible = "actions,ats3605-spi" },
 };
 
 static struct platform_driver owl_spi_driver = {

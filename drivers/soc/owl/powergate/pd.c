@@ -32,7 +32,7 @@
 #define OWL_POWER_DOMAIN_TIMEOUT	5000	/* us */
 
 static void __iomem *sps_base;
-static DEFINE_SPINLOCK(sps_lock);
+DEFINE_SPINLOCK(sps_lock);
 
 static struct owl_pm_domain *genpd_to_owl_pm_domain(
 		struct generic_pm_domain *genpd)

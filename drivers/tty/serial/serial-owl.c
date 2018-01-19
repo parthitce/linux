@@ -43,6 +43,7 @@
 #include <linux/ctype.h>
 #include <linux/delay.h>
 #include <linux/time.h>
+#include <linux/of_device.h>
 
 #define DRIVER_NAME			"serial-owl"
 
@@ -125,11 +126,18 @@
 #define UART_STAT_TIP			(0x1 << 1)
 #define UART_STAT_RIP			(0x1 << 0)
 
+enum owl_uart_id {
+	S900_UART,
+	S700_UART,
+	ATS3605_UART,
+};
+
 struct owl_uart_port {
 	struct uart_port	port;
 	char			name[16];
 	struct clk		*clk;
 	struct reset_control	*rst;
+	enum owl_uart_id  devid;
 
 	struct dma_chan		*rx_dma_chan;
 	struct dma_chan		*tx_dma_chan;
@@ -1339,6 +1347,13 @@ static const struct dev_pm_ops owl_serial_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(owl_serial_suspend, owl_serial_resume)
 };
 
+static const struct of_device_id owl_serial_dt_ids[] = {
+	{ .compatible = "actions,s900-serial", .data = (void *)S900_UART, },
+	{ .compatible = "actions,s700-serial", .data = (void *)S700_UART,  },
+	{ .compatible = "actions,ats3605-serial", .data = (void *)ATS3605_UART,  },
+	{ }
+};
+
 static int owl_serial_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
@@ -1346,7 +1361,9 @@ static int owl_serial_probe(struct platform_device *pdev)
 	struct uart_port *port;
 	struct resource *res;
 	int id, ret;
-
+	const struct of_device_id *of_id =
+			of_match_device(owl_serial_dt_ids, &pdev->dev);
+	
 	aport = devm_kzalloc(&pdev->dev, sizeof(*aport), GFP_KERNEL);
 	if (!aport)
 		return -ENOMEM;
@@ -1360,7 +1377,7 @@ static int owl_serial_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to get alias id, errno %d\n", id);
 		return -ENODEV;
 	}
-
+	aport->devid = (enum owl_uart_id)of_id->data; 
 	dev_info(&pdev->dev, "detected port %d\n", id);
 
 	port = &aport->port;
@@ -1369,7 +1386,10 @@ static int owl_serial_probe(struct platform_device *pdev)
 	port->iotype = UPIO_MEM;
 	port->flags = UPF_BOOT_AUTOCONF;
 	port->ops = &owl_uart_pops;
-	port->fifosize = OWL_UART_FIFO_SIZE;
+	if (aport->devid == ATS3605_UART)
+		port->fifosize = 16;
+	else
+		port->fifosize = OWL_UART_FIFO_SIZE;
 	port->dev = &pdev->dev;
 
 	pdev->dev.coherent_dma_mask = DMA_BIT_MASK(32);
@@ -1434,11 +1454,7 @@ static int owl_serial_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct of_device_id owl_serial_dt_ids[] = {
-	{ .compatible = "actions,s900-serial" },
-	{ .compatible = "actions,s700-serial" },
-	{ }
-};
+
 
 MODULE_DEVICE_TABLE(of, owl_serial_dt_ids);
 

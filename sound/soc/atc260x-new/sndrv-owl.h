@@ -20,9 +20,14 @@
 #define PMU_NOT_USED	-1
 #define IC_NOT_USED		-1
 
-#define S900_AIF_I2S 0
-#define S900_AIF_HDMI 0
-#define S900_AIF_PCM 0
+#define S900_AIF_I2S        1
+#define S900_AIF_HDMI       2
+#define S900_AIF_SPDIF      3
+#define S900_AIF_PCM        4
+#define S900_AIF_I2S_TDM    5
+#define S900_AIF_SPI        6
+
+
 static int error_switch = 1;
 static int debug_switch = 1;
 
@@ -38,10 +43,12 @@ static int debug_switch = 1;
 #endif
 
 enum {
-	O_MODE_I2S,
-	O_MODE_HDMI,
-	O_MODE_SPDIF,
-	O_MODE_PCM,
+	O_MODE_I2S          = 0x1,
+	O_MODE_HDMI         = 0x2,
+	O_MODE_SPDIF        = 0x4,
+	O_MODE_PCM          = 0x8,
+	O_MODE_I2S_TDM      = 0x10,
+	O_MODE_SPI          = 0x20,
 };
 
 enum {
@@ -52,6 +59,7 @@ enum {
 
 /* add ic type of platform in S500/S700/S900 */
 enum {
+	IC_PLATFM_3605, 	 /* 3605 */
 	IC_PLATFM_S500,      /* S500 */
 	IC_PLATFM_S700,
 	IC_PLATFM_S900,
@@ -79,6 +87,7 @@ typedef struct {
 	unsigned int adc_plugin_threshold;
 	unsigned int adc_level;
 	unsigned int adc_num;
+	unsigned int record_source;
 } audio_hw_cfg_t;
 
 /*extern audio_hw_cfg_t audio_hw_cfg;*/
@@ -94,7 +103,10 @@ enum{
 I2S_SPDIF_NUM = 0,
 GPIO_MFP_NUM,
 HDMI_NUM,
+CMU_NUM,
+MFP_NUM,
 PCM_NUM,
+SPI_NUM,
 MAX_RES_NUM
 };
 

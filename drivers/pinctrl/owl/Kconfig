@@ -23,4 +23,12 @@ config PINCTRL_S700
 	help
 	  Say yes here to support the gpio/pin control module on
 	  Actions S700 SoC.
+
+config PINCTRL_ATS3605
+	bool "Actions ATS3605 pin controller driver"
+	depends on ARCH_OWL
+	select PINCTRL_OWL
+	help
+	  Say yes here to support the gpio/pin control module on
+	  Actions ATS3605 SoC.
 endif

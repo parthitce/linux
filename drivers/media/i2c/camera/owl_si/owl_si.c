@@ -47,6 +47,13 @@
 #include "module_diff.h"
 #include "../host_comm/owl_camera.c"
 
+
+//#define SI_BUFFER_COPYX
+
+dma_addr_t si_tvin_buffer;
+void __iomem *si_tvin_buffer_vaddr;
+
+
 static inline int
 module_camera_clock_init(struct device *dev, struct camera_dev *cdev)
 {
@@ -71,6 +78,14 @@ module_camera_clock_init(struct device *dev, struct camera_dev *cdev)
 		       cdev->sensor_clk_parent[HOST_MODULE_CHANNEL_0]);
 	clk_set_parent(cdev->ch_clk[HOST_MODULE_CHANNEL_1],
 		       cdev->sensor_clk_parent[HOST_MODULE_CHANNEL_1]);
+
+	#ifdef SI_BUFFER_COPY
+
+	si_tvin_buffer_vaddr = dma_alloc_coherent(dev, 720 * 480 *3/2,
+			&si_tvin_buffer, GFP_KERNEL);
+	pr_info("si_tvin_buffer addr 0x%p, si_tvin_buffer_vaddr 0x%p, si_tvin_buffer sizes %d\n", si_tvin_buffer, si_tvin_buffer_vaddr,
+			720 * 480);
+	#endif
 
 	return 0;
 }
@@ -201,7 +216,7 @@ module_set_frame_yuv420(phys_addr_t module_addr, struct soc_camera_device *icd)
 		reg_write(module_addr_v, GMODULEMAPADDR,
 			  SI_CH1_DS0_OUT_ADDRV, MODULE_BASE);
 	} else {
-
+#ifndef SI_RECEIVE_SINGLE_FIELD
 		if (cam_param->flags & SENSOR_FLAG_SI_TVIN) {
 			unsigned int reg_val;
 			reg_val = reg_read(GMODULEMAPADDR, TVIN_CR,
@@ -217,6 +232,7 @@ module_set_frame_yuv420(phys_addr_t module_addr, struct soc_camera_device *icd)
 				pr_debug("odd\n");
 			}
 		}
+#endif
 
 		reg_write(module_addr_y, GMODULEMAPADDR,
 			  SI_CH2_DS_OUT_ADDRY, MODULE_BASE);
@@ -248,30 +264,8 @@ module_set_frame_yvu422(phys_addr_t module_addr, struct soc_camera_device *icd)
 		reg_write(module_addr_uv, GMODULEMAPADDR,
 			  SI_CH1_DS0_OUT_ADDRU, MODULE_BASE);
 	} else {
-		reg_write(module_addr_y, GMODULEMAPADDR,
-			  SI_CH2_DS_OUT_ADDRY, MODULE_BASE);
-		reg_write(module_addr_uv, GMODULEMAPADDR,
-			  SI_CH2_DS_OUT_ADDRU, MODULE_BASE);
-	}
-}
 
-static inline void
-module_set_frame_nv12_nv21(phys_addr_t module_addr,
-			   struct soc_camera_device *icd)
-{
-	struct camera_param *cam_param = icd->host_priv;
-	phys_addr_t module_addr_y;
-	phys_addr_t module_addr_uv;
-
-	module_addr_y = ALIGN(module_addr, 2);
-	module_addr_uv = ALIGN(module_addr_y + icd->user_width *
-			       icd->user_height, 2);
-	if (HOST_MODULE_CHANNEL_0 == cam_param->channel) {
-		reg_write(module_addr_y, GMODULEMAPADDR,
-			  SI_CH1_DS0_OUT_ADDRY, MODULE_BASE);
-		reg_write(module_addr_uv, GMODULEMAPADDR,
-			  SI_CH1_DS0_OUT_ADDRU, MODULE_BASE);
-	} else {
+#ifndef SI_RECEIVE_SINGLE_FIELD
 
 		if (cam_param->flags & SENSOR_FLAG_SI_TVIN) {
 			unsigned int reg_val;
@@ -287,21 +281,223 @@ module_set_frame_nv12_nv21(phys_addr_t module_addr,
 				pr_debug("odd\n");
 			}
 		}
+#endif
+
+
 		reg_write(module_addr_y, GMODULEMAPADDR,
 			  SI_CH2_DS_OUT_ADDRY, MODULE_BASE);
 		reg_write(module_addr_uv, GMODULEMAPADDR,
 			  SI_CH2_DS_OUT_ADDRU, MODULE_BASE);
 	}
 }
+
+static inline void
+module_set_frame_nv12_nv21(phys_addr_t module_addr,
+			   struct soc_camera_device *icd)
+{
+	struct camera_param *cam_param = icd->host_priv;
+	phys_addr_t module_addr_y;
+	phys_addr_t module_addr_uv;
+
+	phys_addr_t temp_module_addr_y;
+	phys_addr_t temp_module_addr_uv;
+#ifdef SI_BUFFER_COPY
+	dma_addr_t temp_module_addr_y = ALIGN(si_tvin_buffer, 2);
+	dma_addr_t temp_module_addr_uv = ALIGN(temp_module_addr_y +
+						icd->user_width * icd->user_height, 2);
+#else
+	module_addr_y = ALIGN(module_addr, 2);
+	module_addr_uv = ALIGN(module_addr_y + icd->user_width *
+			       icd->user_height, 2);
+#endif
+	if (HOST_MODULE_CHANNEL_0 == cam_param->channel) {
+		reg_write(module_addr_y, GMODULEMAPADDR,
+			  SI_CH1_DS0_OUT_ADDRY, MODULE_BASE);
+		reg_write(module_addr_uv, GMODULEMAPADDR,
+			  SI_CH1_DS0_OUT_ADDRU, MODULE_BASE);
+	} else {
+
+#ifndef SI_RECEIVE_SINGLE_FIELD
+		if (cam_param->flags & SENSOR_FLAG_SI_TVIN) {
+			unsigned int reg_val;
+			reg_val = reg_read(GMODULEMAPADDR, TVIN_CR,
+					MODULE_BASE);
+			if (reg_val >> 16 == 1) {
+				/* even */
+				pr_debug("even\n");
+#ifdef SI_BUFFER_COPY
+				temp_module_addr_y += icd->user_width;
+				temp_module_addr_uv += icd->user_width;
+#else
+				module_addr_y += icd->user_width;
+				module_addr_uv += icd->user_width;
+#endif
+			} else {
+				/* odd */
+				pr_debug("odd\n");
+			}
+			//pr_info("03 module_addr_y =0x%p.\n",module_addr_y);
+			//pr_info("03 module_addr_uv =0x%p.\n",module_addr_uv);
+		}
+#endif
+		//pr_info("%s module_addr_y =0x%p.\n", __func__, module_addr_y);
+		//pr_info("%s module_addr_uv =0x%p.\n", __func__, module_addr_uv);
+
+#ifdef SI_BUFFER_COPY
+		reg_write(temp_module_addr_y, GMODULEMAPADDR,
+				SI_CH2_DS_OUT_ADDRY, MODULE_BASE);
+		reg_write(temp_module_addr_uv, GMODULEMAPADDR,
+				SI_CH2_DS_OUT_ADDRU, MODULE_BASE);
+#else
+		reg_write(module_addr_y, GMODULEMAPADDR,
+				SI_CH2_DS_OUT_ADDRY, MODULE_BASE);
+		reg_write(module_addr_uv, GMODULEMAPADDR,
+				SI_CH2_DS_OUT_ADDRU, MODULE_BASE);
+#endif
+	}
+}
+
+#ifdef SI_BUFFER_COPY
+static void si_tvin_buffer_copy(struct soc_camera_device *icd,
+				struct camera_param *cam_param)
+{
+	phys_addr_t module_addr;
+	struct videobuf_buffer *vb = cam_param->prev_frm;
+	struct videobuf_queue *vq = cam_param->priv;
+	void *vaddr;	
+	static is_first = 1;
+
+	if (NULL == vb) {
+		module_err("cannot get video buffer.\n");
+		return;
+	}
+
+	if (is_first) {
+		is_first = 0;
+	}
+
+
+	switch (vb->memory) {
+	case V4L2_MEMORY_MMAP:
+		module_addr = videobuf_to_dma_contig(vb);
+		break;
+	case V4L2_MEMORY_USERPTR:
+		module_addr = vb->baddr;
+		break;
+	default:
+		module_err("set_frame wrong memory type. %d,%p\n", vb->memory,
+			   (void *)vb->baddr);
+		return;
+	}
+	
+	vaddr = phys_to_virt(module_addr);
+	//pr_info("vaddr 0x%p\n", vaddr);
+	//pr_info("si_tvin_buffer_vaddr 0x%p, vq 0x%p\n", si_tvin_buffer_vaddr, vq);
+	
+	memcpy((void *)vaddr, (void *)si_tvin_buffer_vaddr, icd->user_width * icd->user_height * 3/2);
+}
+#endif
+
+
+static void si_tvin_data_num(void)
+{
+       unsigned int reg_val;
+       
+       reg_val = reg_read(GMODULEMAPADDR, SI_CH2_VTD_CTL, MODULE_BASE);
+       reg_val = REG_SET_VAL(reg_val, 0x1, 0, 0);
+       reg_write(reg_val, GMODULEMAPADDR, SI_CH2_VTD_CTL, MODULE_BASE);
+
+       reg_val = reg_read(GMODULEMAPADDR, SI_CH2_VTD_CTL, MODULE_BASE);
+       pr_info("lines per frame %d\n", (reg_val >> 16) & 0xfff);
+       pr_info("pixels per line %d\n", (reg_val >> 3) & 0x1fff);
+
+       reg_val = reg_read(GMODULEMAPADDR, SI_CH2_VTD_CTL, MODULE_BASE);
+       reg_val = REG_SET_VAL(reg_val, 0x0, 0, 0);
+       reg_write(reg_val, GMODULEMAPADDR, SI_CH2_VTD_CTL, MODULE_BASE);
+}
+
+static bool si_tvin_is_odd_field(void)
+{
+	unsigned int reg_val;
+	reg_val = reg_read(GMODULEMAPADDR, TVIN_CR,
+			MODULE_BASE);
+	if (reg_val >> 16 == 1){
+		/* even */
+		//pr_info("%s, even\n", __func__);
+		return false;
+	} else {
+		/* odd */
+		//pr_info("%s, odd\n", __func__);
+		return true;
+	}
+}
+
 void si_tvin_irq_work(struct soc_camera_device *icd, struct camera_param *cam_param)
 {
 	struct videobuf_buffer *vb;
-
 	static int recount = 0;
 	
-	pr_debug("%s, start %d\n", __func__, recount);
+#ifdef SI_RECEIVE_SINGLE_FIELD
+	//pr_info("%s, start %d, is odd field %d\n", __func__, recount, si_tvin_is_odd_field());
 
-	if (recount == 0) {
+	/* handl first fram */
+	if (is_first_frm) {
+		pr_info("%s, is_first_frm %d, cur_frm 0x%p\n", __func__, is_first_frm, cam_param->cur_frm);
+		set_frame(icd, cam_param->cur_frm);
+		cam_param->cur_frm->state = VIDEOBUF_ACTIVE;
+
+		is_first_frm = 0;
+		return;
+	}
+
+	/*send out a packet already recevied all data */
+	if (cam_param->prev_frm != NULL) {
+		vb = cam_param->prev_frm;
+		vb->state = VIDEOBUF_DONE;
+		do_gettimeofday(&vb->ts);
+		vb->field_count++;
+		wake_up(&vb->done);
+	}
+
+	if (!list_empty(&cam_param->capture)) {
+		cam_param->prev_frm = cam_param->cur_frm;
+		cam_param->cur_frm = list_entry(cam_param->capture.next,
+				struct videobuf_buffer, queue);
+		list_del_init(&cam_param->cur_frm->queue);
+		/*set_rect(icd); */
+		set_frame(icd, cam_param->cur_frm);
+		cam_param->cur_frm->state = VIDEOBUF_ACTIVE;
+		BUG_ON(cam_param->prev_frm == cam_param->cur_frm);
+	} else {
+		cam_param->prev_frm = NULL;
+		/*set_rect(icd); */
+		set_frame(icd, cam_param->cur_frm);
+	}
+
+#else
+	pr_info("%s, start %d\n", __func__, recount);
+
+	/* handl first fram */
+	if (is_first_frm) {
+		pr_info("%s, is_first_frm %d, cur_frm 0x%p\n", __func__, is_first_frm, cam_param->cur_frm);
+		set_frame(icd, cam_param->cur_frm);
+		cam_param->cur_frm->state = VIDEOBUF_ACTIVE;
+		if (recount == 0) {
+			recount = 1;
+			return;
+		}
+
+		recount = 0;
+		is_first_frm = 0;
+		return;
+	}
+	//si_tvin_data_num();
+	if (recount == 1 && si_tvin_is_odd_field()) {
+		pr_info("%s, the second half is not even field, abandoning it\n", __func__);
+		return;
+	}
+	
+	if (recount == 1) {
 		if (!list_empty(&cam_param->capture)) {
 			cam_param->prev_frm = cam_param->cur_frm;
 			cam_param->cur_frm = list_entry(cam_param->capture.next, struct videobuf_buffer, queue);
@@ -309,6 +505,7 @@ void si_tvin_irq_work(struct soc_camera_device *icd, struct camera_param *cam_pa
 		} else {
 			cam_param->prev_frm = NULL;
 			printk("%s, capture cur frm is NULL\n", __func__);
+			set_frame(icd, cam_param->cur_frm);
 			return;
 		}
 	}
@@ -327,10 +524,16 @@ void si_tvin_irq_work(struct soc_camera_device *icd, struct camera_param *cam_pa
 		vb->state = VIDEOBUF_DONE;
 		do_gettimeofday(&vb->ts);
 		vb->field_count++;
+
+		#ifdef SI_BUFFER_COPY
+			si_tvin_buffer_copy(icd, cam_param);
+		#endif
+
 		wake_up(&vb->done);
 	}
 	
 	recount = 0;
+#endif
 	return;
 }
 
@@ -498,10 +701,11 @@ module_set_output_fmt(struct soc_camera_device *icd, u32 fourcc)
 					  MODULE_BASE);
 		module_out_fmt &= ~MODULE_OUT_FMT_MASK;
 		
+		#ifndef SI_RECEIVE_SINGLE_FIELD
 		/* si tv in stride */
 		if (cam_param->flags & SENSOR_FLAG_SI_TVIN)
 			module_out_fmt |= icd->user_width << 16;
-
+		#endif
 		get_fmt(fourcc, &module_out_fmt);
 		reg_write(module_out_fmt, GMODULEMAPADDR, SI_CH2_DS_OUT_FMT,
 			  MODULE_BASE);

@@ -493,7 +493,11 @@ bool owl_panel_is_enabled(struct owl_panel *panel);
  * 0x0 means:
  *	all panels are off, backlight is off too.
  */
+ #ifdef CONFIG_VIDEO_OWL_DSS
 int owl_panel_status_get(void);
+#else
+int owl_panel_status_get(void){return 0;}
+ #endif
 
 int owl_panel_3d_mode_set(struct owl_panel *panel, enum owl_3d_mode mode);
 enum owl_3d_mode owl_panel_3d_mode_get(struct owl_panel *panel);
@@ -845,6 +849,14 @@ int owl_de_path_add_panel(struct owl_panel *panel);
 int owl_de_path_update_panel(struct owl_panel *panel);
 int owl_de_path_remove_panel(struct owl_panel *panel);
 
+/* Whether to skip mmu config in owl_de_path_apply
+ * mmu skipping is introduced to address some issues on android.
+ * Linux distribution, like debian, shoud disable mmu skipping.
+ *
+ * Call it before the first calling of owl_de_path_apply.
+ */
+void owl_de_path_set_mmuskip(struct owl_de_path *path, int n_skip);
+
 /*
  * video functions
  */
@@ -863,6 +875,11 @@ int owl_de_video_info_validate(struct owl_de_video *video,
  */
 int owl_de_mmu_init(struct device *dev);
 int owl_de_mmu_sg_table_to_da(struct sg_table *sg, __u64 stamp, u32 *da);
+/* mmu function that export to external drivers, like owldrm */
+bool owl_de_mmu_is_present(void);
+int owl_de_mmu_map_sg(struct sg_table *sgt, dma_addr_t *dma_handle);
+void owl_de_mmu_unmap_sg(dma_addr_t dma_handle);
+int owl_de_mmu_handle_to_addr(dma_addr_t dma_handle, dma_addr_t *dma_addr);
 
 
 /*===========================================================================

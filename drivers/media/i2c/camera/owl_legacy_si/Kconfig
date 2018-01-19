@@ -1,0 +1,13 @@
+#
+# Actions CPU camera legacy si driver and the camera sensors of Actions support 
+#
+# 
+
+config OWL_CAMERA_LEGACY_SI
+	tristate "Actions Legacy OWL Camera SI Driver"
+	depends on VIDEO_V4L2 && ARCH_OWL_ATS3605_SOC
+	help
+	  Legacy camera si driver only fix for ats3605 soc.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called owl camera.

@@ -266,7 +266,12 @@ int fat_get_cluster(struct inode *inode, int cluster, int *fclus, int *dclus)
 				       "%s: invalid cluster chain (i_pos %lld)",
 				       __func__,
 				       MSDOS_I(inode)->i_pos);
+			#ifndef CONFIG_FAT_ERR_NOTMOUNT_RO
 			nr = -EIO;
+			#else
+			fat_ent_write(inode, &fatent, FAT_ENT_EOF, 0);
+			fat_cache_add(inode, &cid);
+			#endif
 			goto out;
 		} else if (nr == FAT_ENT_EOF) {
 			fat_cache_add(inode, &cid);

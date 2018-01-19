@@ -6,10 +6,8 @@
 #include <linux/dma-direction.h>
 #include <linux/clk.h>
 
-
-
-#define FDI_EMMC_ID				0x14
-#define POWER_GATE_ON 		1
+#define FDI_EMMC_ID			0x14
+#define POWER_GATE_ON 			1
 #define POWER_GATE_OFF   		0
 
 #define OWL_UPGRADE			0
@@ -60,6 +58,7 @@ enum { DETECT_CARD_LOW_VOLTAGE,
 enum owl_sd_id {
 	S900_SD = 1,
 	S700_SD,
+	ATS3605_SD,
 };
 
 #define mmc_card_expected_mem(type)	((type) == MMC_CARD_MEMORY)
@@ -106,10 +105,10 @@ struct owl_mmc_host {
 	spinlock_t lock;
 	struct mutex pin_mutex;
 	PIN_STAT switch_pin_flag;	/*UART_PIN: uart mode and host0 cmd sd0 clk vail
-					 * SD_PIN: cmd clk sd0-sd3
-					 * ERR_PIN: init status*/
-	u8 id;			/* SD Controller number */
-	u32 module_id;		/* global module ID */
+								  * SD_PIN: cmd clk sd0-sd3
+								  * ERR_PIN: init status*/
+	u8 id;						/* SD Controller number */
+	u32 module_id;				/* global module ID */
 	void __iomem *iobase;
 	void __iomem *nand_io_base;
 	void __iomem *mfp_base;
@@ -119,12 +118,12 @@ struct owl_mmc_host {
 
 	bool nand_powergate;
 	u32 start;
-	u32 type_expected;	/* MEMORY Card or SDIO Card */
+	u32 type_expected;		/* MEMORY Card or SDIO Card */
 
 	int card_detect_mode;	/* which method used to detect card */
 	char pinctrname[14];
-	u32 detect;		/* irq line for mmc/sd card detect */
-	u32 detect_sirq;	/* Which SIRQx used to detect card */
+	u32 detect;				/* irq line for mmc/sd card detect */
+	u32 detect_sirq;		/* Which SIRQx used to detect card */
 	int detect_irq_registered;	/* card detect irq is registered */
 
 	u32 sdc_irq;		/* irq line for SDC transfer end */
@@ -132,18 +131,18 @@ struct owl_mmc_host {
 	struct completion sdc_complete;
 
 	u32 sdio_irq;		/* irq for SDIO wifi data transfer */
-	u32 eject;		/* card status */
+	u32 eject;			/* card status */
 
 	int power_state;	/* card status */
 	int bus_width;		/* data bus width */
 	int chip_select;
 	int timing;
-	u32 clock;		/* current clock frequency */
-	u32 clk_on;		/* card module clock status */
+	u32 clock;			/* current clock frequency */
+	u32 clk_on;			/* card module clock status */
 	u32 nandclk_on;		/* card module clock status */
 	struct clk *dev_clk;		/* devpll clock source */
 	struct clk *nandpll_clk;		/* devpll clock source */
-	struct clk *clk;	/* SDC clock source */
+	struct clk *clk;		/* SDC clock source */
 	struct clk *nandclk;	/* SDC clock source */
 	struct notifier_block nblock;	/* clkfreq notifier block */
 	struct regulator *reg;	/* supply regulator */
@@ -179,6 +178,15 @@ struct owl_mmc_host {
 	struct workqueue_struct *add_host_wq;
 	struct delayed_work dma_work;
 	struct delayed_work host_add_work;
+
+	/* For ats */
+	struct tasklet_struct data_task;
+	unsigned int sg_len;			/* size of scatter list */
+	struct scatterlist *sg;			/* I/O scatter list */
+	unsigned int current_sg;		/* next sg we are goning to handle */
+	dma_addr_t dma_address;
+	unsigned int dma_length;
+	unsigned int *dma_sync_addr;
 
 	struct mmc_con_delay wdelay;
 	struct mmc_con_delay rdelay;
@@ -257,6 +265,10 @@ struct owl_mmc_host {
 #define SD_BLK_NUM_OFFSET		0x0030
 #define SD_BUF_SIZE_OFFSET		0x0034
 
+/* For ats */
+#define SD_DMA_ADDR_OFFSET		0x0034
+#define SD_DMA_CTL_OFFSET		0x0038
+
 #define HOST_EN(h)				((h)->iobase + SD_EN_OFFSET)
 #define HOST_CTL(h)				((h)->iobase + SD_CTL_OFFSET)
 #define HOST_STATE(h)			((h)->iobase + SD_STATE_OFFSET)
@@ -272,6 +284,8 @@ struct owl_mmc_host {
 #define HOST_BLK_SIZE(h)		((h)->iobase + SD_BLK_SIZE_OFFSET)
 #define HOST_BLK_NUM(h)		((h)->iobase + SD_BLK_NUM_OFFSET)
 #define HOST_BUF_SIZE(h)		((h)->iobase + SD_BUF_SIZE_OFFSET)
+#define HOST_DMA_ADDR(h)        ((h)->iobase + SD_DMA_ADDR_OFFSET)
+#define HOST_DMA_CTL(h)         ((h)->iobase + SD_DMA_CTL_OFFSET)
 
 /*
  * Register Bit defines
@@ -398,5 +412,4 @@ struct owl_mmc_host {
 #define DUMP_PAD_PULLCTL2(mapbase)  		(mapbase+PAD_PULLCTL2)
 
 extern void owl_mmc_ctr_reset(struct owl_mmc_host *host);
-void owl_dma_debug_dump(void);
 #endif /* end of _OWL_MMC_H_ */

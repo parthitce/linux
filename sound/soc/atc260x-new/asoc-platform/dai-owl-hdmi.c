@@ -163,13 +163,15 @@ static struct device_attribute dai_attr[] = {
 
 static int hdmi_EnableWriteRamPacket(void)
 {
-	int i;
+	int i = 0;
 	set_hdmi_dai_reg_base(HDMI_NUM);
 	snd_hdmi_dai_writel(snd_hdmi_dai_readl(HDMI_OPCR) |
 		(0x1 << 31), HDMI_OPCR);
 	while ((snd_hdmi_dai_readl(HDMI_OPCR) & (0x1 << 31)) != 0) {
-		for (i = 0; i < 10; i++)
-			;
+		msleep(100);
+		if(i == 10)
+			break;
+		++i;
 	}
 	return 0;
 }

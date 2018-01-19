@@ -146,7 +146,7 @@ static inline void mmu_flush_entry(void)
 	}
 }
 
-static inline bool mmu_find_entry_by_stamp(struct owl_mmu_entry **found,
+static bool mmu_find_entry_by_stamp(struct owl_mmu_entry **found,
 					   __u64 stamp)
 {
 	bool is_found = false;
@@ -200,7 +200,7 @@ int owl_de_mmu_init(struct device *dev)
 	return 0;
 }
 
-int owl_de_mmu_sg_table_to_da(struct sg_table *sg, __u64 stamp, u32 *da)
+int owl_de_mmu_sg_table_to_da(struct sg_table *sg, u64 stamp, u32 *da)
 {
 	int i, j;
 	int ret = 0;
@@ -291,6 +291,41 @@ ok_exit:
 
 	return ret;
 }
+
+bool owl_de_mmu_is_present(void)
+{
+	return true;
+}
+EXPORT_SYMBOL(owl_de_mmu_is_present);
+
+/* use sgt address as stamp */
+int owl_de_mmu_map_sg(struct sg_table *sgt, dma_addr_t *dma_handle)
+{
+	*dma_handle = (dma_addr_t)sgt;
+	return 0;
+}
+EXPORT_SYMBOL(owl_de_mmu_map_sg);
+
+void owl_de_mmu_unmap_sg(dma_addr_t dma_handle)
+{
+	struct owl_mmu_entry *entry;
+	if (mmu_find_entry_by_stamp(&entry, dma_handle)) {
+		mmu_delete_entry(entry);
+		mmu_free_entry(entry);
+	}
+}
+EXPORT_SYMBOL(owl_de_mmu_unmap_sg);
+
+int owl_de_mmu_handle_to_addr(dma_addr_t dma_handle, dma_addr_t *dma_addr)
+{
+	u32 da;
+	int ret = owl_de_mmu_sg_table_to_da((struct sg_table *)dma_handle, (u64)dma_handle, &da);
+	if (!ret)
+		*dma_addr = da;
+
+	return ret;
+}
+EXPORT_SYMBOL(owl_de_mmu_handle_to_addr);
 
 module_param(test_force_flush, int, 0644);
 module_param(test_no_stamp, int, 0644);

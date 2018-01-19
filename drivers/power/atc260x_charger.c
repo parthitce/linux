@@ -866,7 +866,7 @@ static void atc260x_charger_current_restore(struct atc260x_charger *charger)
 	if (ret) {
 		pr_err("[%s]get temprature translated fail!!\n", __func__);
 	}
-	pr_info("[%s]:temprature:%d, cc:%d, bati:%d, batv:%d\n", \
+	pr_devel("[%s]:temprature:%d, cc:%d, bati:%d, batv:%d\n", \
 		__func__, temprature, cc, charger->bat_info.bat_cur/1000, \
 		charger->bat_info.bat_vol/1000);
 	if ((temprature < 70000) && (atomic_read(&irq_set_cc))) {
@@ -944,7 +944,9 @@ static int atc260x_charger_init_base(struct atc260x_charger *charger)
 	/*charger init */
 	ops->set_cv(atc260x, charger->items->bat_type);
 
-	charger->charger_cur_status = __atc260x_charger_check_online(charger);
+	//charger->charger_cur_status =  __atc260x_charger_check_online(charger);
+	/*init not check online, atc260x_charger_monitor can check, becuace for  boot fast*/
+	charger->charger_cur_status = NO_PLUGGED;
 	charger->charge_on = false;
 	charger->charger_pre_status = -1;
 	charger->usb_plugged_type = USB_NO_PLUGGED;

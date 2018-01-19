@@ -166,6 +166,7 @@ struct kfifo_data {
  * @ cfg_items : config items from dts file.
  * @ lock : prevent the concurrence for soc reading and soc writting.
  * @ firtst_product : whether if the first product.
+  * @ b_init_gauge : mv init_gauge from probe to gauge_update work queue,to boot fast
  * @ ch_resistor : battery impedence, dc resistor mainly, under charging.
  * @ disch_resistor : battery impedence, dc resistor mainly, under discharging.
  * @ curr_buf : save gathered battery current, charge/discharge.
@@ -199,6 +200,8 @@ struct atc260x_gauge_info {
 	int ch_resistor;
 	int disch_resistor;
 	bool dich_r_change;
+	bool b_init_gauge;
+
 
 	int curr_buf[SAMPLES_COUNT];
 	int vol_buf[SAMPLES_COUNT];
@@ -402,7 +405,7 @@ static int store_batt_info(struct atc260x_gauge_info *info)
 	fs = get_fs();
 	set_fs(KERNEL_DS);
 
-	filp = filp_open("/sdcard/cap_gauge_info.log", O_CREAT | O_RDWR, 0644);
+	filp = filp_open("/mnt/sdcard/cap_gauge_info.log", O_CREAT | O_RDWR, 0644);
 	if (IS_ERR(filp)) {
 		GAUGE_ERR("\n[cap_gauge] can't accessed sd card cap_gauge_info.log, exiting");
 		return 0;
@@ -1710,7 +1713,7 @@ static int soc_update_after_reboot(struct atc260x_gauge_info *info)
 		info->soc_now = soc_stored;
 	}
 	atc260x_pstore_get(info->atc260x, ATC260X_PSTORE_TAG_CAPACITY, &real_capacity);
-	GAUGE_ERR("[%s, %d], real_capacity:%d\n",__func__, __LINE__, real_capacity);
+	GAUGE_INFO("[%s, %d], real_capacity:%d\n",__func__, __LINE__, real_capacity);
 	if (real_capacity)
 		info->real_capacity = real_capacity;
 
@@ -1808,11 +1811,18 @@ static int atc260x_gauge_get_props(struct power_supply *psy,
 	return ret;
 }
 
+static int  init_gauge(struct atc260x_gauge_info *info);
 static void gauge_update(struct work_struct *work)
 {
 	int charge_status;
 	struct atc260x_gauge_info *info;
 	info = container_of(work, struct atc260x_gauge_info, work.work);
+
+	if (info->b_init_gauge) {
+		info->b_init_gauge = false;
+		GAUGE_INFO("init_gauge in gauge_update!\n");
+		init_gauge(info); // init in workqueue, for boot fast
+	}
 	charge_status = info->status;
 	atc2603c_gauge_update_charge_type(info);
 	/* if the status has been changed,we discard the kfifo data*/
@@ -2107,10 +2117,13 @@ static  int atc260x_gauge_probe(struct platform_device *pdev)
 	/*modified @2014-12-20*/
 	ocv_soc_table_init(info);
 
+	/* move to gauge_update init, for boot fast
 	if (init_gauge(info)) {
 		GAUGE_ERR("init_gauge failed!\n");
 		goto free_fifo;
 	}
+	*/
+	info->b_init_gauge = true;
 
 	/*Create a work queue for fuel gauge*/
 	info->wq =
