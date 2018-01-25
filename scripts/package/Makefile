@@ -86,6 +86,7 @@ quiet_cmd_builddeb = BUILDDEB
 	$$KBUILD_PKG_ROOTCMD $(CONFIG_SHELL) \
 		$(srctree)/scripts/package/builddeb
 
+bindeb-pkg : deb-pkg
 deb-pkg: FORCE
 	$(MAKE) KBUILD_SRC=
 	$(call cmd,builddeb)
