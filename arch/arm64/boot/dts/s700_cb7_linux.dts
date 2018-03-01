@@ -364,23 +364,23 @@
 				rsense = <20>;/*unit:mohm*/
 				bat_type = <1>;/*0:4.18v; 1:4.2v; 2:4.3v; 3:4.35v*/
 				bl_on_current_usb_pc = <200>;
-				bl_off_current_usb_pc = <400>;
-				bl_on_current_usb_adp = <200>;
+				bl_off_current_usb_pc = <500>;
+				bl_on_current_usb_adp = <400>;
 				bl_off_current_usb_adp = <800>;
 				bl_on_current_wall_adp = <400>;
 				bl_off_current_wall_adp = <1400>;
 				support_adaptor_type = <3>; /*1: DCIN  2: USB  3:DCIN+USB*/
 				ext_charger = <0>;
 				usb_adapter_as_ac = <1>;/*0:usb ada keep itself; 1:usb ada used as DCIN when usb plug and batv<3.3v during minicharge*/
-				usb_pc_ctl_mode = <1>; /*0:disable vbus ctl;1:current limited;2:voltage limited*/
+				usb_pc_ctl_mode = <2>; /*0:disable vbus ctl;1:current limited;2:voltage limited*/
 			};
 			atc2603c-battery{
 				compatible = "actions,atc2603c-battery";
-				capacity = < 4000 >;                              /*mAh, the full capacity of battery used*/
+				capacity = < 5300 >;                              /*mAh, the full capacity of battery used*/
 				taper_voltage = < 4180 >;                         /*mV,the one close to the full capacity*/
 				taper_current = <300>; 
 				min_over_chg_protect_voltage = < 4275 >;				/*mA,the one close to the full capacity*/
-				terminal_voltage = <3400>;                        /*mV,the lowest voltage of battery permitted*/
+				terminal_voltage = <3550>;                        /*mV,the lowest voltage of battery permitted*/
 				suspend_current = < 17000 >;                       /* uA,the current of suspend*/
 				shutdown_current = < 50 >;                        /* uA,the current of shutdown*/
 				print_switch = <0>;                               /*0:open the switch of printing information 1:the opposite*/
