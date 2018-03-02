@@ -32,7 +32,7 @@
 	compatible = "actions,s700";
 
 	chosen {
-		bootargs="console=ttyS5,115200 earlyprintk=serial-owl,0xe012a000 no_console_suspend";
+		bootargs="console=ttyS3,115200 earlyprintk=serial-owl,0xe0126000 no_console_suspend";
 	};
 
 	memory@00000000 {
