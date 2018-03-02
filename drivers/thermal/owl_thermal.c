@@ -981,7 +981,7 @@ int set_tmu_threshold(struct owl_tmu_platform_data *pdata)
 {
 #if 1
 	if (pdata->type == SOC_ARCH_OWL_S700) {
-		pdata->threshold = 95;
+		pdata->threshold = 105;
 		pdata->trigger_levels[0] = 0;	/* 95° */
 		pdata->trigger_levels[1] = 10;	/* 105° */
 		pdata->trigger_levels[2] = 15;	/* 110° */
