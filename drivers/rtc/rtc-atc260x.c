@@ -37,6 +37,8 @@
 #define RTC_CTL_VER1                (1 << 10)
 #define RTC_CTL_RST                 (1 << 11)
 #define RTC_CTL_LGS                 (1 << 11)
+#define RTC_CTL_LOSC_CP             (0x3 << 12)
+#define RTC_CTL_LGS                 (0x3 << 14)
 
 #define RTC_YMD_Y_SHIFT             (9)
 #define RTC_YMD_Y_MASK              (0x7f << RTC_YMD_Y_SHIFT)
@@ -608,6 +610,8 @@ static int atc260x_rtc_hw_init(struct atc260x_rtc_dev *atc260x_rtc)
 				       RTC_CTL_RTCE | RTC_CTL_CKSS0);
 		udelay(100);
 	}
+	atc260x_reg_wp_setbits(atc260x,atc260x_rtc->regbase + REG_RTC_CTL,
+		 RTC_CTL_ALIP, RTC_CTL_LOSC_CP, 0x2 << 12);      //0x0:12PF 0x1:15PF 0x2:18PF 0x3:21PF
 
 	return 0;
 }
