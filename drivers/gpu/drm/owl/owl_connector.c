@@ -20,8 +20,6 @@ struct owl_connector {
 void copy_mode_owl_to_drm(struct drm_display_mode *mode,
 		struct owl_videomode *owl_mode)
 {
-	memset(mode, 0, sizeof(*mode));
-
 	/* owl_mode->pixclock in ps */
 	mode->clock = (1000000000UL / owl_mode->pixclock);
 	mode->vrefresh = owl_mode->refresh;
@@ -86,6 +84,7 @@ static int owl_connector_get_modes(struct drm_connector *connector)
 		return 0;
 
 	num_modes = panel->funcs->get_modes(panel, owl_videomodes, num_modes);
+
 	for (i = 0; i < num_modes; i++) {
 		struct drm_display_mode *mode = drm_mode_create(connector->dev);
 

@@ -512,9 +512,9 @@ void owl_gem_describe(struct drm_gem_object *obj, struct seq_file *m)
 	if (obj->map_list.map)
 		off = (uint64_t)obj->map_list.hash.key;
 
-	seq_printf(m, "%08x: %2d (%2d) %08llx %08llx (%2d) %p",
+	seq_printf(m, "%08x: %2d (%2d) %08llx %pad (%2d) %p",
 			owl_obj->flags, obj->name, obj->refcount.refcount.counter,
-			off, (uint64_t)owl_obj->pin_addr, owl_obj->pin_count, owl_obj->vaddr);
+			off, &owl_obj->pin_addr, owl_obj->pin_count, owl_obj->vaddr);
 
 	seq_printf(m, " %zu\n", obj->size);
 

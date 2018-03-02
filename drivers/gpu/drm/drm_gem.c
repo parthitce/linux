@@ -75,11 +75,7 @@
  * the faked up offset will fit
  */
 
-/*
- * FIXME:
- * when user space is 32bit, the param off_t passed to mmap is limited to 32bits.
- */
-#if BITS_PER_LONG == 64 && !defined(CONFIG_COMPAT)
+#if BITS_PER_LONG == 64
 #define DRM_FILE_PAGE_OFFSET_START ((0xFFFFFFFFUL >> PAGE_SHIFT) + 1)
 #define DRM_FILE_PAGE_OFFSET_SIZE ((0xFFFFFFFFUL >> PAGE_SHIFT) * 16)
 #else
