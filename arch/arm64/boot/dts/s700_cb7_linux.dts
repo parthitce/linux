@@ -153,6 +153,25 @@
 	};
 
 
+         leds {
+                      compatible = "gpio-leds";
+          
+                  led@1 {
+                         label = "led1-GPIOB9";
+                         gpios = <&gpiob 9 0>;  /*Active High*/
+                         linux,default-trigger = "default-on";
+                         default-state = "ON";
+                 };
+
+                 led@2 {
+                         label = "led2-GPIOB8";
+                         gpios = <&gpiob 8 0>;  /*Active High*/
+                         linux,default-trigger = "heartbeat";
+                         default-state = "ON";
+                 };
+         };
+
+
 	ethernet_gpio_regulator: ethernet_gpio_regulator {
 		compatible = "regulator-fixed";
 		regulator-name = "ethernet_gpio_regulator";
