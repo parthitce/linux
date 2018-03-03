@@ -241,6 +241,12 @@
 		status = "okay";
 	};
 
+	  /* NOTE: it is only used for some specific boards, be careful! */
+        usb3_phy: usb3phy@0xe040cd00 {
+                fix_vbus_reset = <1>;
+                status = "okay";
+        };
+
 	owl_usb_config {
 		compatible = "actions,owl-usb-config";
 		usb_serialnumber_config = <2>; /* config serialnumber string format, 0: fixed serial no in ascii format; 1: fixed serial no in unicode format; 2:non-fixed serial no in unicode format*/

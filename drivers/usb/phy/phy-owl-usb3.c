@@ -438,6 +438,16 @@ bool usb3_need_set_device_noattached(void)
 }
 EXPORT_SYMBOL_GPL(usb3_need_set_device_noattached);
 
+static int fix_vbus_reset;
+bool usb_need_fix_vbus_reset(void)
+{
+       if (fix_vbus_reset == 1)
+               return true;
+
+       return false;
+}
+EXPORT_SYMBOL_GPL(usb_need_fix_vbus_reset);
+
 static const struct of_device_id owl_usbphy_dt_match[];
 static int owl_usb3phy_probe(struct platform_device *pdev)
 {
@@ -474,6 +484,14 @@ static int owl_usb3phy_probe(struct platform_device *pdev)
 		sphy->phy_type = be32_to_cpup(phy_type);
 		pr_info("%s phy_type: %d\n", __func__, sphy->phy_type);
 	}
+
+        phy_type = of_get_property(node, "fix_vbus_reset", NULL);
+        if (!phy_type)
+                pr_info("%s no config fix_vbus_reset.\n", __func__);
+        else {
+                fix_vbus_reset = be32_to_cpup(phy_type);
+                pr_info("%s fix_vbus_reset: %d\n", __func__, fix_vbus_reset);
+        }
 
 	sphy->regs		= phy_base;
 	sphy->phy.dev		= sphy->dev;

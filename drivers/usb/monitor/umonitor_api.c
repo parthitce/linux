@@ -1149,6 +1149,19 @@ static ssize_t mon_config_store(struct kobject *kobj, struct kobj_attribute *att
 		strcpy(pconfig->usb_con_msg, instr);
 		monitor_handle_plug_in_out_msg((char *)instr);
 		pr_info("\n write usb_con_msg %s\n", instr);
+	
+               /*
+                * In some cases, such as USB-to-SATA chip is integrated in the
+                * board, it may need to reset VBUS to make it work properly.
+                * NOTICE: 400ms is needed.
+                * FIXME: This is not a good solution really.
+                */
+               if (usb_need_fix_vbus_reset() && !strncmp((char *)instr, "USB_A_IN", 8)) {
+                       umonitor_vbus_power_onoff(0);
+                       /* FIXME: the value seems fine, need to optimize */
+                       msleep(400);
+                       umonitor_vbus_power_onoff(1);
+               }
 	}
 #endif
 #endif

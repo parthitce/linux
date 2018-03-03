@@ -56,7 +56,7 @@ void mon_dwc3_set_mode(usb_hal_monitor_t *pdev, int mode)
 
 static int usb_monitor_vbus_power(usb_hal_monitor_t *pdev, int is_on)
 {
-	MONITOR_PRINTK("usb_monitor_vbus_power %04x\n", is_on);
+	pr_info("usb_monitor_vbus_power %04x\n", is_on);
 	if (pdev->config->power_switch_gpio_no < 0)
 		return -1;
 	if (is_on) {

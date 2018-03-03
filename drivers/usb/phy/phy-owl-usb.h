@@ -51,6 +51,6 @@ extern bool usb3_support_runtime_pm(void);
 extern bool usb3_need_double_check_inactive(void);
 extern bool xhci_need_phy_config(void);
 extern bool usb3_need_set_device_noattached(void);
-
+extern bool usb_need_fix_vbus_reset(void);
 #endif /* __PHY_OWL_USB_H */
 
