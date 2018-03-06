@@ -62,6 +62,14 @@
 		sd_vcc = "switch1";
 		status = "okay";
 	};
+
+
+	serial0: uart@e0120000 {
+               dmas = <&dma DMA_DRQ_UART0_TX>, <&dma DMA_DRQ_UART0_RX>;
+                dma-names = "tx", "rx";
+                status = "okay";
+        };
+
 	//FOR BT
 	serial2: uart@e0124000 {
 		dmas = <&dma DMA_DRQ_UART2_TX>, <&dma DMA_DRQ_UART2_RX>;
@@ -74,7 +82,9 @@
 		status = "okay";
 	};
 	serial5: uart@e012a000 {
-		status = "okay";
+                dmas = <&dma DMA_DRQ_UART5_TX>, <&dma DMA_DRQ_UART5_RX>;
+                dma-names = "tx", "rx";
+                         status = "okay";
 	};
 
 	i2c1: i2c@e0174000 {
@@ -366,7 +376,7 @@
 				pinctrl-names = "default";
 				pinctrl-0 = <&i2s0_state_default>;
 				//earphone_detect_gpios = <&gpio 21 0>; /*0: high, 1: low GPIOA21 0*/
-				speaker_en_gpios = <&gpiod 30 0>; /*GPIOD(30) 0: high, 1: low*/
+				//speaker_en_gpios = <&gpiod 30 0>; /*GPIOD(30) 0: high, 1: low*/
 				earphone_output_mode = <1>; /*0: direct mode, 1: undirect mode*/
 				mic_num = <1>; /*just suport 1, 2*/
 				mic0_gain = < 0x7 0x7 >; /*<Lchannel,Rchannel> [0x0~0xF]*/

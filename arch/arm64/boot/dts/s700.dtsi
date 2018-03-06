@@ -28,6 +28,7 @@
 	#size-cells = <2>;
 
 	aliases {
+		serial0 = &serial0;
 		serial2 = &serial2;
 		serial3 = &serial3;
 		serial5 = &serial5;
@@ -241,6 +242,18 @@
 		#interrupt-cells = <1>;
 	};
 
+        serial0: uart@e0120000 {
+                compatible = "actions,s700-serial";
+                reg = <0 0xe0120000 0 0x1000>;
+                interrupts = <GIC_SPI 29 IRQ_TYPE_LEVEL_HIGH>;
+                clocks = <&clock CLK_UART0>;
+                clock-names = "uart";
+                resets = <&reset RESET_UART0>;
+                pinctrl-names = "default";
+                pinctrl-0 = <&serial0_state_default>;
+        };
+
+
 	serial2: uart@e0124000 {
 		compatible = "actions,s700-serial";
 		reg = <0 0xe0124000 0 0x1000>;
@@ -268,8 +281,8 @@
 		clocks = <&clock CLK_UART5>;
 		clock-names = "uart";
 		resets = <&reset RESET_UART5>;
-		//pinctrl-names = "default";
-		//pinctrl-0 = <&serial5_state_default>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&serial5_state_default>;
 		status = "disabled";
 	};
 

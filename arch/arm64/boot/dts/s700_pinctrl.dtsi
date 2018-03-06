@@ -77,7 +77,7 @@
 
 		serial5_state_default: serial5_default{
 			serial_5{
-				actions,groups = "mfp2_19_17","mfp2_16_14";
+				actions,groups = "mfp2_21","mfp2_20";
 				actions,function = "uart5";
 			};
 		};
