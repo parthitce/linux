@@ -756,7 +756,7 @@ static int owl_serial_dma_init_rx(struct owl_uart_port *aport)
 	/* init for RX */
 	aport->rx_dma_chan = dma_request_slave_channel(dev, "rx");
 	if (!aport->rx_dma_chan) {
-		dev_info(dev, "cannot get the RX DMA channel!\n");
+		dev_dbg(dev, "cannot get the RX DMA channel!\n");
 		return -ENODEV;
 	}
 
@@ -797,7 +797,7 @@ static int owl_serial_dma_init_tx(struct owl_uart_port *aport)
 	/* init for TX */
 	aport->tx_dma_chan = dma_request_slave_channel(dev, "tx");
 	if (!aport->tx_dma_chan) {
-		dev_info(dev, "cannot get the TX DMA channel!\n");
+		dev_dbg(dev, "cannot get the TX DMA channel!\n");
 		return -ENODEV;
 	}
 
