@@ -36,11 +36,39 @@
 /*
  * some useful definition for awlful scaler
  */
+#define GET_ML_ID_NO_SCALER(ml_id)				\
+({								\
+	int i;							\
+	struct owl_de_video *video;				\
+	for (i = 0; i < 4; i++)	{				\
+		video = &de_s700_device.videos[i * 4];		\
+		if (!video->capacities.supported_scaler) {	\
+			ml_id = i;				\
+			break;					\
+		}						\
+	}							\
+								\
+})
 
+#define GET_ML_ID_HAS_SCALER(ml_id)				\
+({								\
+	int i;							\
+	struct owl_de_video *video;				\
+	for (i = 0; i < 4; i++)	{				\
+		video = &de_s700_device.videos[i * 4];		\
+		if (video->capacities.supported_scaler) {	\
+			ml_id = i;				\
+			break;					\
+		}						\
+	}							\
+})
+
+#define ML_ID_HAS_SCALER		(0)
 #define ML_ID_HAS_NO_SCALER		(2)
 
 static int				ml_id_for_scaler0;
 static int				ml_id_for_scaler1;
+
 
 static struct owl_de_device		de_s700_device;
 
@@ -85,7 +113,12 @@ static void de_s700_assign_scaler1(int ml_id, bool enable)
 {
 	int i;
 	uint32_t val;
+ 	int	 ml_id_has_scaler;
+ 	int	 ml_id_has_no_scaler;
 
+ 	GET_ML_ID_NO_SCALER(ml_id_has_no_scaler);
+ 	GET_ML_ID_HAS_SCALER(ml_id_has_scaler);
+	
 	if (!enable) {
 		/* disable scaler 1 */
 		val = de_readl(DE_SCALER_CFG(1));
@@ -95,9 +128,8 @@ static void de_s700_assign_scaler1(int ml_id, bool enable)
 
 		/* set capacities to ML_ID_HAS_NO_SCALER */
 		for (i = 0; i < 4; i++)
-			CAPACITIES_COPY(4 * ml_id + i, 4 * ML_ID_HAS_NO_SCALER + i);
+			CAPACITIES_COPY(4 * ml_id + i, 4 * ml_id_has_no_scaler + i);
 
-		ml_id_for_scaler1 = -1;
 	} else {
 		/* assign scaler 1 to ml_id and enable it */
 		val = de_readl(DE_SCALER_CFG(1));
@@ -110,11 +142,46 @@ static void de_s700_assign_scaler1(int ml_id, bool enable)
 
 		/* set capacities to ml_id_for_scaler0 */
 		for (i = 0; i < 4; i++)
-			CAPACITIES_COPY(4 * ml_id + i, 4 * ml_id_for_scaler0 + i);
-
-		ml_id_for_scaler1 = ml_id;
+			CAPACITIES_COPY(4 * ml_id + i, 4 * ml_id_has_scaler + i);
 	}
 }
+
+static void de_s700_assign_scaler0(int ml_id, bool enable)
+{
+	int i;
+	uint32_t val;
+ 	int	 ml_id_has_scaler;
+ 	int	 ml_id_has_no_scaler;
+
+ 	GET_ML_ID_NO_SCALER(ml_id_has_no_scaler);
+ 	GET_ML_ID_HAS_SCALER(ml_id_has_scaler);
+
+	if (!enable) {
+		/* disable scaler 0 */
+		val = de_readl(DE_SCALER_CFG(0));
+		val = REG_SET_VAL(val, 0, DE_SCALER_CFG_ENABLE_BIT,
+				  DE_SCALER_CFG_ENABLE_BIT);
+		de_writel(val, DE_SCALER_CFG(0));
+
+		/* set capacities to ML_ID_HAS_NO_SCALER */
+		for (i = 0; i < 4; i++)
+			CAPACITIES_COPY(4 * ml_id + i, 4 * ml_id_has_no_scaler + i);
+	} else {
+		/* assign scaler 0 to ml_id and enable it */
+		val = de_readl(DE_SCALER_CFG(0));
+		val = REG_SET_VAL(val, 1, DE_SCALER_CFG_ENABLE_BIT,
+				  DE_SCALER_CFG_ENABLE_BIT);
+		val = REG_SET_VAL(val, ml_id,
+				  DE_SCALER_CFG_SEL_END_BIT,
+				  DE_SCALER_CFG_SEL_BEGIN_BIT);
+		de_writel(val, DE_SCALER_CFG(0));
+
+		/* set capacities to ml_id_for_scaler0 */
+		for (i = 0; i < 4; i++)
+			CAPACITIES_COPY(4 * ml_id + i, 4 * ml_id_has_scaler + i);
+	}
+}
+
 
 /*===================================================================
  *			S700 DE path
@@ -1234,6 +1301,7 @@ static struct owl_de_video_ops de_s700_video_ops = {
 		.scaling_width	= {80, 80},			\
 		.scaling_height	= {80, 80},			\
 	},							\
+	.supported_scaler 	= true,				\
 }
 
 #define DE_S700_CAPACITIES_NO_YUV {				\
@@ -1256,6 +1324,7 @@ static struct owl_de_video_ops de_s700_video_ops = {
 		.scaling_width	= {80, 80},			\
 		.scaling_height	= {80, 80},			\
 	},							\
+	.supported_scaler 	= true,				\
 }
 
 #define DE_S700_CAPACITIES_NO_SCALER {				\
@@ -1278,6 +1347,7 @@ static struct owl_de_video_ops de_s700_video_ops = {
 		.scaling_width	= {10, 10},			\
 		.scaling_height	= {10, 10},			\
 	},							\
+	.supported_scaler 	= false,				\
 }
 
 #define DE_S700_CAPACITIES_NO_YUV_SCALER {			\
@@ -1300,6 +1370,7 @@ static struct owl_de_video_ops de_s700_video_ops = {
 		.scaling_width	= {10, 10},			\
 		.scaling_height	= {10, 10},			\
 	},							\
+	.supported_scaler 	= false,				\
 }
 
 /* need 2 video layers at most in boot */
@@ -1433,6 +1504,7 @@ static struct owl_de_video de_s700_videos[] = {
 static int de_s700_device_power_on(struct owl_de_device *de)
 {
 	uint32_t val;
+	int ret = 0, tmp;
 
 	struct de_s700_pdata *pdata = de->pdata;
 
@@ -1466,6 +1538,29 @@ static int de_s700_device_power_on(struct owl_de_device *de)
 	iounmap(dmm_reg3);
 	iounmap(dmm_reg4);
 
+	/* parse 'video_id_for_scaler0' property from DTS */
+	ret = of_property_read_u32(de->pdev->dev.of_node,
+			"video_id_for_scaler0", &ml_id_for_scaler0);
+	if (ret < 0)
+		ml_id_for_scaler0 = 0;
+
+	/* parse 'video_id_for_scaler1' property from DTS */
+	ret = of_property_read_u32(de->pdev->dev.of_node,
+			"video_id_for_scaler1", &ml_id_for_scaler1);
+	if (ret < 0)
+		ml_id_for_scaler1 = 3;
+	
+	de_s700_assign_scaler0(ml_id_for_scaler0, true);
+	/* 
+	 * scaler 0 is assigned to video0 by default,
+	 * unless we configured in dts another ml_id 
+	 */
+	if (ml_id_for_scaler0 != 0)
+		de_s700_assign_scaler0(0, false);
+
+	de_s700_assign_scaler1(ml_id_for_scaler1, true);
+		
+	#if 0
 	/* scaler 0 is assigned to video0 at boot */
 	ml_id_for_scaler0 = 0;
 	val = de_readl(DE_SCALER_CFG(0));
@@ -1475,11 +1570,12 @@ static int de_s700_device_power_on(struct owl_de_device *de)
 			  DE_SCALER_CFG_SEL_END_BIT,
 			  DE_SCALER_CFG_SEL_BEGIN_BIT);
 	de_writel(val, DE_SCALER_CFG(0));
-
+	
 	if (owl_de_is_ott())
 		de_s700_assign_scaler1(1, true);
 	else
 		de_s700_assign_scaler1(3, true);
+	#endif
 
 	return 0;
 }

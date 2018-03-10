@@ -1093,6 +1093,16 @@ int owl_de_video_info_validate(struct owl_de_video *video,
 }
 EXPORT_SYMBOL(owl_de_video_info_validate);
 
+bool owl_de_video_has_scaler(struct owl_de_video *video)
+{
+	pr_debug("video %d\n", video->id);
+	
+	return video->capacities.supported_scaler;
+}
+EXPORT_SYMBOL(owl_de_video_has_scaler);
+
+
+
 /*=============================================================================
   DE irq handler
  *===========================================================================*/

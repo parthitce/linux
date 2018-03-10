@@ -698,6 +698,8 @@ struct owl_de_video_capacities {
 
 	const struct owl_de_video_crop_limits rgb_limits;
 	const struct owl_de_video_crop_limits yuv_limits;
+
+	const bool			supported_scaler;
 };
 
 struct owl_de_video {
@@ -862,6 +864,7 @@ void owl_de_path_set_mmuskip(struct owl_de_path *path, int n_skip);
  */
 struct owl_de_video *owl_de_video_get_by_id(int id);
 struct owl_de_video *owl_de_video_get_by_index(int index);
+bool owl_de_video_has_scaler(struct owl_de_video *video);
 
 void owl_de_video_get_info(struct owl_de_video *video,
 			   struct owl_de_video_info *info);
