@@ -138,11 +138,17 @@ static const struct atc260x_pstore_fmt sc_atc2603a_pstore_fmt_tbl[] = {
 					    .src_bp = {28, 24, 16, 0},
 					    },
 	[ATC260X_PSTORE_TAG_CAPACITY] = {
-		.name = "CAPACITY",
-		.regs   = {0, },
-		.reg_bm = {0, },
-		.src_bp = {0, },
-	},
+						.name = "CAPACITY",
+						.regs   = {0, },
+						.reg_bm = {0, },
+						.src_bp = {0, },
+						},
+	[ATC260X_PSTORE_TAG_ENTER_CHARGER] = {
+						.name = "ENTER_CHARGER",
+						.regs   = {0, },
+						.reg_bm = {0, },
+						.src_bp = {0, },
+						},
 };
 
 static const struct atc260x_pstore_fmt sc_atc2603c_pstore_fmt_tbl[] = {
@@ -264,6 +270,12 @@ static const struct atc260x_pstore_fmt sc_atc2603c_pstore_fmt_tbl[] = {
 					    .name = "CAPACITY",
 					    .regs = { ATC2603C_PMU_FW_USE3,},
 					    .reg_bm = {(0xffffU << 0),},
+					    .src_bp = {0,},
+					    },
+	[ATC260X_PSTORE_TAG_ENTER_CHARGER] = {
+					    .name = "ENTER_CHARGER",
+					    .regs = { ATC2603C_PMU_FW_USE2,},
+					    .reg_bm = {(0x1U << 0),},
 					    .src_bp = {0,},
 					    },
 };
@@ -393,11 +405,17 @@ static const struct atc260x_pstore_fmt sc_atc2609a_pstore_fmt_tbl[] = {
 					    .src_bp = {16, 0},
 					    },
 	[ATC260X_PSTORE_TAG_CAPACITY] = {
-		.name = "CAPACITY",
-		.regs   = {0, },
-		.reg_bm = {0, },
-		.src_bp = {0, },
+						.name = "CAPACITY",
+						.regs   = {0, },
+						.reg_bm = {0, },
+						.src_bp = {0, },
 	},
+	[ATC260X_PSTORE_TAG_ENTER_CHARGER] = {
+						.name = "ENTER_CHARGER",
+						.regs   = {0, },
+						.reg_bm = {0, },
+						.src_bp = {0, },
+						},
 };
 
 static const struct atc260x_pstore_fmt *const

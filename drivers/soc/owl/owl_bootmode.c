@@ -185,3 +185,35 @@ unsigned char owl_get_wifi_vendor_id(void)
 }
 EXPORT_SYMBOL(owl_get_wifi_vendor_id);
 
+
+#include <linux/mfd/atc260x/atc260x.h>
+static unsigned int g_chr_flag = 0;
+static int chrmode_proc_show(struct seq_file *m, void *v)
+{
+	seq_printf(m, "%d\n", g_chr_flag); 
+	return 0;
+}
+
+static int chrmode_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, chrmode_proc_show, NULL);
+}
+
+static const struct file_operations chrmode_proc_fops = {
+	.open		= chrmode_proc_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
+static int __init proc_serialno_init(void)
+{
+
+	atc260x_ex_pstore_get(ATC260X_PSTORE_TAG_ENTER_CHARGER, &g_chr_flag);
+	printk("g_chr_flag=%d\n", g_chr_flag);
+	atc260x_ex_pstore_set(ATC260X_PSTORE_TAG_ENTER_CHARGER, 0);
+	proc_create("charger", 0, NULL, &chrmode_proc_fops);
+	return 0;
+}
+
+module_init(proc_serialno_init);

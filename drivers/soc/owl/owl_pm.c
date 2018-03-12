@@ -37,6 +37,7 @@
 #include <linux/module.h>
 #include <linux/of_address.h>
 #include <linux/of_platform.h>
+#include <linux/mfd/atc260x/atc260x.h>
 
 static void __iomem *pm_reg_base;
 static DEFINE_SPINLOCK(pm_reg_lock);
@@ -380,9 +381,16 @@ static void owl_pm_power_off(int enter_charge)
 	wakeup_src = OWL_PMIC_WAKEUP_SRC_RESET |
 	    OWL_PMIC_WAKEUP_SRC_ONOFF_LONG | OWL_PMIC_WAKEUP_SRC_IR;
 
-	if (enter_charge)
+	atc260x_ex_pstore_set(ATC260X_PSTORE_TAG_ENTER_CHARGER, 0);
+	if (enter_charge) {
 		wakeup_src |= OWL_PMIC_WAKEUP_SRC_WALL_IN |
 		    OWL_PMIC_WAKEUP_SRC_VBUS_IN;
+		if (power_supply_is_system_supplied()) {
+			// adatpter insert
+			printk("adapter insert, set charger flag\n");
+			atc260x_ex_pstore_set(ATC260X_PSTORE_TAG_ENTER_CHARGER, 1);
+		}
+	}
 
 	/* Power off system */
 	pr_info("[PM] %s: Powering off (wakesrc: 0x%x)\n",

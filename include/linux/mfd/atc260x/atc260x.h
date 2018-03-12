@@ -206,6 +206,7 @@ enum {
 	ATC260X_PSTORE_TAG_GAUGE_CLMT_RESET,    /* 电量计用, coulomb_meter复位标记 (1bit) */
 	ATC260X_PSTORE_TAG_RESUME_ADDR,         /* S2 resume address (32bit) */
 	ATC260X_PSTORE_TAG_CAPACITY,            /* battery's real capacity */
+	ATC260X_PSTORE_TAG_ENTER_CHARGER,        /* 重启进charger,主要给linux系统（ubuntu、debian)进充电模式使用 */
 	ATC260X_PSTORE_TAG_NUM
 };
 
