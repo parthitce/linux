@@ -8,7 +8,7 @@ dtb-$(CONFIG_ARCH_OWL) += s900_evb.dtb s900_evb_cts.dtb \
 			 gt7_ebox_m8s.dtb gt7_upgrade.dtb s700_evb.dtb gt7_qcb.dtb gt7_ebox_m8s_cts.dtb \
 			 gt7_ebox_cts.dtb v700_gb7_wxga.dtb v700_gb7_nibiru.dtb v700_cxvr.dtb v700_cxvr_sd.dtb \
 			 v700_qcb_mipi.dtb v700_qcb_lvds.dtb s700_cb7.dtb s700_qcb_mipi.dtb s700_qcb_lvds.dtb \
-			 s700_cb7_sd.dtb s700_cb7_linux.dtb
+			 s700_cb7_sd.dtb s700_cb7_linux.dtb s700_cubieaio_linux.dtb 
 			 
 
 dtb-$(CONFIG_ARCH_VEXPRESS) += rtsm_ve-aemv8a.dtb foundation-v8.dtb \
