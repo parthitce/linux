@@ -58,7 +58,7 @@
 	mmc2: mmc@e0210000 {
 		card-type = "memory";  /* only: "memory", "wifi", or "emmc" */
 		card-detect-mode = "gpio";  /* only:"gpio", or "command" */
-		cd-gpios = <&gpiod 24 0>; /*hr280ac GPIOD24 */
+		cd-gpios = <&gpioc 23 0>; /*hr280ac GPIOC23 */
 		sd_vcc = "switch1";
 		status = "okay";
 	};
@@ -198,46 +198,46 @@
 		compatible = "actions,s700-ethernet";/*actions,s700-ethernet*/
 		random-mac-address = "okay";
 		//local-mac-address = [ 00 18 fe 66 66 66 ];
-		phy-mode = "rmii";
+		phy-mode = "rgmii";
 		phy-handle = <&phy0>;
 		phy-power-en = "ethernet_gpio_regulator";
-		phy-reset-gpios = <&gpioc 24 0>; 	// GPIOC20 active  1:low  0:high
+		phy-reset-gpios = <&gpioc 24 0>; 	// GPIOC24 active  1:low  0:high
 
 		phy-addr = "1";
 		address-bits = <48>;
 		max-frame-size = <1518>;
 		status = "okay";
 		phy0: ethernet-phy@0 {
-			compatible = "RTL8201F,rtl8201f";/*rtl8211-1000M*/
+			compatible = "RTL8211E,rtl8211e";/*rtl8211-1000M*/
 			reg = <0>;
 		};
 	};
 
 	
-	//hdmi@e02c0000 {
-	//	hdcp_onoff = <0>;
-	//	channel_invert = <0>;
-	//	bit_invert = <0>;
-	//
-	//	panel@ghp {
-	//		compatible = "actions,panel-ghp";
-	//
-	//		is_primary = <1>;
-	//
-	//		/* draw_width = <1920>; */
-	//		/* draw_height = <1080>; */
-	//
-	//		videomode-0 = <&default_mode>;
-	//
-	//		/* default mode used when EDID read error */
-	//		default_mode:videomode {
-	//			refresh_rate = <60>;
-	//			xres = <1280>;
-	//			yres = <720>;
-	//		};
-	//
-	//	};
-	//};
+	hdmi@e02c0000 {
+		hdcp_onoff = <0>;
+		channel_invert = <0>;
+		bit_invert = <0>;
+	
+		panel@ghp {
+			compatible = "actions,panel-ghp";
+	
+			is_primary = <1>;
+	
+			/* draw_width = <1920>; */
+			/* draw_height = <1080>; */
+	
+			videomode-0 = <&default_mode>;
+	
+			/* default mode used when EDID read error */
+			default_mode:videomode {
+				refresh_rate = <60>;
+				xres = <1280>;
+				yres = <720>;
+			};
+	
+		};
+	};
 
 	monitor {
 		compatible = "actions,s700-usbmonitor";
