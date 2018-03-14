@@ -748,6 +748,9 @@ static const struct usb_device_id option_ids[] = {
 	{ USB_DEVICE(QUANTA_VENDOR_ID, QUANTA_PRODUCT_GLX) },
 	{ USB_DEVICE(QUANTA_VENDOR_ID, QUANTA_PRODUCT_GKE) },
 	{ USB_DEVICE(QUANTA_VENDOR_ID, QUANTA_PRODUCT_GLE) },
+        { USB_DEVICE(0x05C6, 0x9090) }, //For UC15
+        { USB_DEVICE(0x05C6, 0x9215) }, //For EC20
+	{ USB_DEVICE(0x2C7C, 0x0125) },  //for EC20 r2.0
 	{ USB_DEVICE(QUANTA_VENDOR_ID, 0xea42),
 		.driver_info = (kernel_ulong_t)&net_intf4_blacklist },
 	{ USB_DEVICE_AND_INTERFACE_INFO(HUAWEI_VENDOR_ID, 0x1c05, USB_CLASS_COMM, 0x02, 0xff) },
@@ -2112,6 +2115,16 @@ static int option_attach(struct usb_serial *serial)
 	const struct usb_device_id *id;
 	struct usb_wwan_intf_private *data;
 	struct option_private *priv;
+
+	//Quectel UC20's interface 4 can be used as USB Network device
+        if (serial->dev->descriptor.idVendor == cpu_to_le16(0x05C6) && serial->dev->descriptor.idProduct == cpu_to_le16(0x9003) && serial->interface->cur_altsetting->desc.bInterfaceNumber >= 4)
+	        return -ENODEV;
+	//Quectel EC20's interface 4 can be used as USB Network device
+	if (serial->dev->descriptor.idVendor == cpu_to_le16(0x05C6) && serial->dev->descriptor.idProduct == cpu_to_le16(0x9215) && serial->interface->cur_altsetting->desc.bInterfaceNumber >= 4)
+	        return -ENODEV;
+	//Quectel EC21&EC25&EC20 R2.0's interface 4 can be used as USB Network device
+	if (serial->dev->descriptor.idVendor == cpu_to_le16(0x2C7C) && serial->interface->cur_altsetting->desc.bInterfaceNumber >= 4)
+	        return -ENODEV;
 
 	data = kzalloc(sizeof(struct usb_wwan_intf_private), GFP_KERNEL);
 	if (!data)
