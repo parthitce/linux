@@ -5,7 +5,7 @@
 / {
 	lcd: lcd@e02a0000 {
 
-
+		status = "okay";
 		pinctrl-names = "default";
 		pinctrl-0 = <&lcd0_state_default>;
 
@@ -60,7 +60,7 @@
 
 			/* 800x1280p60 */
 			mode0: videomode {
-				refresh_rate = <60>;
+				refresh_rate = <51>;
 
 				xres = <1024>;
 				yres = <600>;
@@ -68,15 +68,15 @@
 				 * pclk_rate = 66M
 				 * pixel_clock = picoseconds / pclk_rate
 				 */
-				pixel_clock = <20000>;
+				pixel_clock = <19607>;
 
-				hsw = <20>;
-				hbp = <138>;
-				hfp = <162>;
+				hsw = <2>;
+				hbp = <157>;
+				hfp = <157>;
 
-				vsw = <3>;
-				vbp = <22>;
-				vfp = <10>;
+				vsw = <5>;
+				vbp = <23>;
+				vfp = <12>;
 
 				/* 0: FB_VMODE_NONINTERLACED, 1:FB_VMODE_INTERLACED */
 				vmode = <0>;

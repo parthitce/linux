@@ -146,42 +146,22 @@
 	backlight {
 		compatible = "actions,owl-pwm-backlight";
 
-		/* GPIOD28, active high */
-		en-gpios = <&gpiod 28 1>;
+		/* GPIOA24, active high */
+		en-gpios = <&gpioa 24 0>;
 
 		/*1.pwm num; 2. period in ns; */
 		/*3.plarity, 0: high active, 1: low active*/
-		pwms = <&pwm 0 50000 1>;
+		pwms = <&pwm 0 100000 1>;
 
 		total_steps = <1024>;
-		min_brightness = <100>;
-		max_brightness = <1000>;
-		dft_brightness = <500>;
+		min_brightness = <214>;
+		max_brightness = <1024>;
+		dft_brightness = <900>;
 
-		delay_bf_pwm = <0>; /*in ms*/
-		delay_af_pwm = <20>; /*in ms*/
-	};
-
-
-         leds {
-                      compatible = "gpio-leds";
-          
-                  led@1 {
-                         label = "led1-GPIOB9";
-                         gpios = <&gpiob 9 0>;  /*Active High*/
-                         linux,default-trigger = "default-on";
-                         default-state = "ON";
-                 };
-
-                 led@2 {
-                         label = "led2-GPIOB8";
-                         gpios = <&gpiob 8 0>;  /*Active High*/
-                         linux,default-trigger = "heartbeat";
-                         default-state = "ON";
-                 };
-         };
-
-
+		delay_bf_pwm = <200>; /*in ms*/
+		delay_af_pwm = <10>; /*in ms*/
+	};	
+	
 	ethernet_gpio_regulator: ethernet_gpio_regulator {
 		compatible = "regulator-fixed";
 		regulator-name = "ethernet_gpio_regulator";
