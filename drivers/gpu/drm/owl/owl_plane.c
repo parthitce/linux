@@ -335,9 +335,13 @@ int owl_plane_dpms(struct drm_plane *plane, int mode)
 
 static void owl_plane_install_properties(struct drm_plane *plane, struct drm_mode_object *obj)
 {
+	struct owl_plane *owl_plane = to_owl_plane(plane);
+	struct owl_drm_overlay *overlay = owl_plane->overlay;
 	struct owl_drm_private *priv = plane->dev->dev_private;
 	struct drm_property *prop;
+	int cap_scaling = 0;
 
+	/* zpos property */
 	prop = priv->plane_property[PLANE_PROP_ZPOS];
 	if (!prop) {
 		prop = drm_property_create_range(plane->dev, 0, "zpos", 0, priv->num_planes - 1);
@@ -347,7 +351,22 @@ static void owl_plane_install_properties(struct drm_plane *plane, struct drm_mod
 		priv->plane_property[PLANE_PROP_ZPOS] = prop;
 	}
 
-	drm_object_attach_property(obj, prop, 0);
+	drm_object_attach_property(obj, prop, overlay->zpos);
+
+	/* scaling property */
+	prop = priv->plane_property[PLANE_PROP_SCALING];
+	if (!prop) {
+		prop = drm_property_create_range(plane->dev, DRM_MODE_PROP_IMMUTABLE, "scaling", 0, 1);
+		if (!prop)
+			return;
+
+		priv->plane_property[PLANE_PROP_SCALING] = prop;
+	}
+
+	overlay->funcs->query(overlay, OVERLAY_CAP_SCALING, &cap_scaling);
+	DBG("overlay %d: cap_scaling %d", overlay->zpos, cap_scaling);
+
+	drm_object_attach_property(obj, prop, cap_scaling);
 }
 
 static int owl_plane_set_property(struct drm_plane *plane,

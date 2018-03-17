@@ -187,7 +187,7 @@ static int drm_overlay_to_dss_videoinfo(struct dispc_manager *mgr,
 
 /* delay the power enble actions until some videos are on */
 int dispc_panel_enable(struct owl_drm_panel *panel)
-{	
+{
 	struct dispc_manager *mgr = panel_to_mgr(panel);
 
 	DBG("panel=%p", panel);
@@ -362,7 +362,7 @@ static int dispc_video_apply(struct owl_drm_overlay *overlay, struct owl_overlay
 		owl_panel_enable(mgr->owl_panel);
 
 	/* Do not wait for vsync */
-	/* 
+	/*
 	 * owl_de_path_wait_for_go(owl_path);
 	 */
 
@@ -420,12 +420,29 @@ static int dispc_video_detach(struct owl_drm_overlay *overlay, struct owl_drm_pa
 	return 0;
 }
 
+static int dispc_video_query(struct owl_drm_overlay *overlay, int what, int *value)
+{
+	DBG("overlay=%p, what=%d", overlay, what);
+	switch (what) {
+	case OVERLAY_CAP_SCALING:
+		*value = owl_de_video_has_scaler(overlay->private);
+		break;
+	default:
+		/* overlay may not have attached to any panel */
+		ERR("invalid query %d", what);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static const struct owl_drm_overlay_funcs owldrm_overlay_funcs = {
 	.apply   = dispc_video_apply,
 	.enable  = dispc_video_enable,
 	.disable = dispc_video_disable,
 	.attach  = dispc_video_attach,
-	.detach  = dispc_video_detach,	
+	.detach  = dispc_video_detach,
+	.query   = dispc_video_query,
 };
 
 static struct owl_drm_overlay *owldrm_overlays;
@@ -482,7 +499,7 @@ struct dispc_manager *dispc_manager_init(struct device *dev, int type)
 	if (!mgr->owl_path || !mgr->owl_path->current_panel) {
 		DEV_ERR(dev, "fail to get path (type=0x%x)", type);
 		ret = -ENODEV;
-		goto fail_free;				
+		goto fail_free;
 	}
 
 	/* get panel */
@@ -507,9 +524,9 @@ struct dispc_manager *dispc_manager_init(struct device *dev, int type)
 		mgr->owl_videos[i] = owl_de_video_get_by_index(i);
 #endif
 		if (!mgr->owl_videos[i]) {
-			DEV_ERR(dev, "fail to get video %d", i);	
+			DEV_ERR(dev, "fail to get video %d", i);
 			ret = -ENODEV;
-			goto fail_free;	
+			goto fail_free;
 		}
 	}
 
@@ -523,5 +540,5 @@ struct dispc_manager *dispc_manager_init(struct device *dev, int type)
 fail_free:
 	devm_kfree(dev, mgr);
 fail:
-	return ERR_PTR(ret);	
+	return ERR_PTR(ret);
 }

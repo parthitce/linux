@@ -46,7 +46,7 @@ static int hdmi_load(struct drm_device *drm, struct owl_drm_subdrv *subdrv)
 static void hdmi_unload(struct drm_device *drm, struct owl_drm_subdrv *subdrv)
 {
 	dispc_subdrv_remove_overlays(drm, subdrv);
-	dispc_subdrv_remove_panels(drm, subdrv);	
+	dispc_subdrv_remove_panels(drm, subdrv);
 }
 
 static int hdmi_probe(struct platform_device *pdev)

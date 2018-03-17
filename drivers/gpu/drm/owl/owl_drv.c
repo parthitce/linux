@@ -113,7 +113,7 @@ static int owl_modeset_init(struct drm_device *dev)
 		priv->crtcs[priv->num_crtcs++] = crtc;
 	}
 
-	DBG("registered %d planes, %d crtcs, %d encoders and %d connectors",
+	ERR("registered %d planes, %d crtcs, %d encoders and %d connectors",
 		priv->num_planes, priv->num_crtcs, priv->num_encoders,
 		priv->num_connectors);
 
@@ -151,7 +151,7 @@ static int owl_drm_load(struct drm_device *dev, unsigned long flags)
 
 	priv->wq = alloc_ordered_workqueue("owldrm", 0);
 	if (!priv->wq)
-		return -ENOMEM;		
+		return -ENOMEM;
 
 	dev->dev_private = (void *)priv;
 
@@ -197,7 +197,7 @@ static int owl_drm_unload(struct drm_device *dev)
 	drm_vblank_cleanup(dev);
 
 	owl_fbdev_free(dev);
-	owl_modeset_free(dev);	
+	owl_modeset_free(dev);
 	owl_gem_deinit(dev);
 
 	flush_workqueue(priv->wq);
@@ -324,7 +324,7 @@ static struct drm_driver owldrm_driver = {
 	.disable_vblank     = owl_irq_disable_vblank,
 #else
 	.enable_vblank		= owl_crtc_enable_vblank,
-	.disable_vblank		= owl_crtc_disable_vblank,	
+	.disable_vblank		= owl_crtc_disable_vblank,
 #endif
 #ifdef CONFIG_DEBUG_FS
 	.debugfs_init       = owl_debugfs_init,

@@ -44,6 +44,7 @@ struct owl_drm_overlay;
 /* plane property */
 enum owl_plane_property {
 	PLANE_PROP_ZPOS,
+	PLANE_PROP_SCALING,
 	PLANE_PROP_MAX_NUM,
 };
 
@@ -51,6 +52,11 @@ enum owl_plane_property {
 enum owl_crtc_property {
 	CRTC_PROP_MODE,
 	CRTC_PROP_MAX_NUM,
+};
+
+/* overlay capability */
+enum owl_overlay_capability {
+	OVERLAY_CAP_SCALING,
 };
 
 /*
@@ -102,6 +108,7 @@ struct owl_overlay_info {
  * @disable: disable overlay output
  * @attach: attach to a given panel
  * @detach: detach to a given panel
+ * @query: query the capability/property
  */
 struct owl_drm_overlay_funcs {
 	/* apply drm overlay info to registers. */
@@ -109,18 +116,20 @@ struct owl_drm_overlay_funcs {
 	/* enable hardware specific overlay. */
 	int (*enable)(struct owl_drm_overlay *overlay);
 	/* disable hardware specific overlay. */
-	int (*disable)(struct owl_drm_overlay *overlay);	
+	int (*disable)(struct owl_drm_overlay *overlay);
 	/* attach to a given panel. */
 	int (*attach)(struct owl_drm_overlay *overlay, struct owl_drm_panel *panel);
 	/* detach to a given panel. */
-	int (*detach)(struct owl_drm_overlay *overlay, struct owl_drm_panel *panel);	
+	int (*detach)(struct owl_drm_overlay *overlay, struct owl_drm_panel *panel);
+	/* query the capability/property */
+	int (*query)(struct owl_drm_overlay *overlay, int what, int *value);
 };
 
 /**
  * struct owl_drm_overlay - OWL DRM overlay object
  * @drm: DRM device owning the overlay
- * @plane: DRM plane that the overlay is bound to 
- * @panel: OWL DRM panel that the overlay is attached to 
+ * @plane: DRM plane that the overlay is bound to
+ * @panel: OWL DRM panel that the overlay is attached to
  * @zpos: overlay zpos
  * @private: owl-display private data
  * @funcs: operations that can be performed on the overlay
@@ -248,7 +257,7 @@ struct owl_drm_subdrv {
 	struct owl_drm_panel *panel;
 
 	/* OWL_DISPLAY_TYPE_x */
-	int display_type; 
+	int display_type;
 
 	/* subdrv ops */
 	int (*load)(struct drm_device *drm, struct owl_drm_subdrv *subdrv);
@@ -484,7 +493,7 @@ void owl_subdrv_unregister(struct owl_drm_subdrv *subdrv);
 /* called in func subdrv->load() */
 int owl_subdrv_register_panel(struct owl_drm_subdrv *subdrv,
 		struct owl_drm_panel *panel);
-int owl_subdrv_register_overlay(struct owl_drm_subdrv *subdrv, 
+int owl_subdrv_register_overlay(struct owl_drm_subdrv *subdrv,
 		struct owl_drm_overlay *overlay);
 
 /* called in func subdrv->unload() */
