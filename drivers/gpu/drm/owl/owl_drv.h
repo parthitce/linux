@@ -35,6 +35,7 @@
 #define DBG_KMS(fmt, ...) DRM_DEBUG_KMS(fmt"\n", ##__VA_ARGS__)
 
 #define DEV_DBG(dev, fmt, ...)  dev_dbg(dev,  "[%s] " fmt"\n",  __func__, ##__VA_ARGS__)
+#define DEV_INFO(dev, fmt, ...) dev_info(dev, "[%s] " fmt"\n",  __func__, ##__VA_ARGS__)
 #define DEV_WARN(dev, fmt, ...) dev_warn(dev, "[%s] " fmt"\n",  __func__, ##__VA_ARGS__)
 #define DEV_ERR(dev, fmt, ...)  dev_err(dev,  "[%s] " fmt"\n",  __func__, ##__VA_ARGS__)
 

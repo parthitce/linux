@@ -89,8 +89,10 @@ static int owl_modeset_init(struct drm_device *dev)
 
 	/* planes are sorted by zpos from lowest to highest by default */
 	for (i = 0; i < num_planes; i++) {
-		struct drm_plane *plane;
+		/* private planes are primary plane and cursor plane attached to specific crtc */
 		bool private_plane = (i < num_crtcs) || (i >= (num_planes - num_crtcs));
+		struct drm_plane *plane;
+
 		plane = owl_plane_init(dev, private_plane);
 		if (IS_ERR(plane)) {
 			ret = PTR_ERR(plane);
@@ -102,8 +104,11 @@ static int owl_modeset_init(struct drm_device *dev)
 	}
 
 	for (i = 0; i < num_crtcs; i++) {
+		struct drm_plane *primary = priv->planes[i];
+		struct drm_plane *cursor = priv->planes[num_planes - 1 - i];
 		struct drm_crtc *crtc;
-		crtc = owl_crtc_init(dev, priv->planes[i], priv->planes[num_planes - 1 - i], i);
+
+		crtc = owl_crtc_init(dev, primary, cursor, i);
 		if (IS_ERR(crtc)) {
 			ret = PTR_ERR(crtc);
 			goto fail;
@@ -111,9 +116,12 @@ static int owl_modeset_init(struct drm_device *dev)
 
 		BUG_ON(priv->num_crtcs >= ARRAY_SIZE(priv->crtcs));
 		priv->crtcs[priv->num_crtcs++] = crtc;
+
+		DBG("crtc(%u): primary_plane=%u, cursor_plane=%u",
+			crtc->base.id, primary->base.id, cursor->base.id);
 	}
 
-	ERR("registered %d planes, %d crtcs, %d encoders and %d connectors",
+	DBG("registered %d planes, %d crtcs, %d encoders and %d connectors",
 		priv->num_planes, priv->num_crtcs, priv->num_encoders,
 		priv->num_connectors);
 

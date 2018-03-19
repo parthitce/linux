@@ -61,6 +61,9 @@ static int hdmi_probe(struct platform_device *pdev)
 		return PTR_ERR(mgr);
 	}
 
+	/* enable hotplug detection */
+	owl_panel_hpd_enable(mgr->owl_panel, true);
+
 	/* initial subdrv */
 	subdrv = &mgr->subdrv;
 	subdrv->display_type = OWL_DISPLAY_TYPE_HDMI;
