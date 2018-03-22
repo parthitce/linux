@@ -109,6 +109,20 @@ struct de_s700_pdata {
 	       &de_s700_device.videos[(from)].capacities,	\
 	       sizeof(struct owl_de_video_capacities))
 
+#define CAPACITIES_SWAP(to, from)				\
+({								\
+	struct owl_de_video video;				\
+	memcpy(&video.capacities,				\
+	       &de_s700_device.videos[(to)].capacities,		\
+	       sizeof(struct owl_de_video_capacities));		\
+	memcpy(&de_s700_device.videos[(to)].capacities,		\
+	       &de_s700_device.videos[(from)].capacities,	\
+	       sizeof(struct owl_de_video_capacities));		\
+	memcpy(&de_s700_device.videos[(from)].capacities,	\
+	       &video.capacities,				\
+	       sizeof(struct owl_de_video_capacities));		\
+})
+
 static void de_s700_assign_scaler1(int ml_id, bool enable)
 {
 	int i;
@@ -1504,7 +1518,7 @@ static struct owl_de_video de_s700_videos[] = {
 static int de_s700_device_power_on(struct owl_de_device *de)
 {
 	uint32_t val;
-	int ret = 0, tmp;
+	int ret = 0, tmp, i;
 
 	struct de_s700_pdata *pdata = de->pdata;
 
@@ -1550,13 +1564,24 @@ static int de_s700_device_power_on(struct owl_de_device *de)
 	if (ret < 0)
 		ml_id_for_scaler1 = 3;
 	
-	de_s700_assign_scaler0(ml_id_for_scaler0, true);
 	/* 
 	 * scaler 0 is assigned to video0 by default,
 	 * unless we configured in dts another ml_id 
 	 */
-	if (ml_id_for_scaler0 != 0)
-		de_s700_assign_scaler0(0, false);
+	if (ml_id_for_scaler0 != 0) {
+		int ml_id = 0;
+		for (i = 0; i < 4; i++)
+			CAPACITIES_SWAP(4 * ml_id + i, 4 * ml_id_for_scaler0 + i);
+	}
+
+	val = de_readl(DE_SCALER_CFG(0));
+	val = REG_SET_VAL(val, 1, DE_SCALER_CFG_ENABLE_BIT,
+			  DE_SCALER_CFG_ENABLE_BIT);
+	val = REG_SET_VAL(val, ml_id_for_scaler0,
+			  DE_SCALER_CFG_SEL_END_BIT,
+			  DE_SCALER_CFG_SEL_BEGIN_BIT);
+	de_writel(val, DE_SCALER_CFG(0));
+
 
 	de_s700_assign_scaler1(ml_id_for_scaler1, true);
 		

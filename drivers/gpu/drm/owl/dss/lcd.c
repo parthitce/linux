@@ -10,16 +10,10 @@
 
 #include "dispc.h"
 
-#define LCD_DRIVER_NAME  "owl-drm-lcd"
-
-static bool lcd_panel_detect(struct owl_drm_panel *panel)
-{
-	return true;
-}
+#define DRIVER_NAME  "owldrm-lcd"
 
 static struct owl_drm_panel_funcs lcd_panel_funcs = {
-	.detect        = lcd_panel_detect,
-
+	.detect        = dispc_panel_detect,
 	.prepare       = dispc_panel_prepare,
 	.enable        = dispc_panel_enable,
 	.disable       = dispc_panel_disable,
@@ -78,33 +72,12 @@ static int lcd_remove(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM_SLEEP
-static int lcd_suspend(struct device *dev)
-{
-	DEV_DBG(dev, "");
-	return 0;
-}
-
-static int lcd_resume(struct device *dev)
-{
-	DEV_DBG(dev, "");
-	return 0;
-}
-#endif
-
-static const struct dev_pm_ops lcd_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(lcd_suspend, lcd_resume)
-};
-
 static struct platform_driver lcd_platform_driver = {
 	.probe  = lcd_probe,
 	.remove	= lcd_remove,
 	.driver	= {
-		.name  = LCD_DRIVER_NAME,
+		.name  = DRIVER_NAME,
 		.owner = THIS_MODULE,
-#ifdef CONFIG_PM
-		.pm	= &lcd_pm_ops,
-#endif
 	},
 };
 
@@ -118,7 +91,7 @@ int owl_lcd_register(void)
 	if (ret)
 		goto fail;
 
-	lcd_platform_pdev = platform_device_register_simple(LCD_DRIVER_NAME, -1, NULL, 0);
+	lcd_platform_pdev = platform_device_register_simple(DRIVER_NAME, -1, NULL, 0);
 	if (IS_ERR(lcd_platform_pdev)) {
 		ret = PTR_ERR(lcd_platform_pdev);
 		goto fail_unregister_driver;

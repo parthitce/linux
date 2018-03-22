@@ -450,6 +450,8 @@ struct owl_panel *owl_panel_get_next_panel(struct owl_panel *from);
 
 void owl_panel_get_default_mode(struct owl_panel *panel,
 				struct owl_videomode *mode);
+int owl_panel_set_default_mode(struct owl_panel *panel,
+				struct owl_videomode *mode);
 void owl_panel_get_mode(struct owl_panel *panel, struct owl_videomode *mode);
 int owl_panel_set_mode(struct owl_panel *panel, struct owl_videomode *mode);
 void owl_panel_set_mode_list(struct owl_panel *panel,

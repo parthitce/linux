@@ -66,35 +66,35 @@ static int drm_overlay_to_dss_videoinfo(struct dispc_manager *mgr,
 	owl_panel_get_draw_size(owl_panel, &draw_width, &draw_height);
 	owl_panel_get_disp_area(owl_panel, &disp_x, &disp_y, &disp_width, &disp_height);
 
-	DBG("disp size(%dx%d), draw size(%dx%d)",
-			disp_width, disp_height, draw_width, draw_height);
-	DBG("disp area(%d,%d %dx%d)",
-			disp_x, disp_y, disp_width, disp_height);
-
-	DBG("crop: (l,t,r,b) --> display: (l,t,r,b)");
-	DBG("%d,%d~%d,%d --> %d,%d~%d,%d",
-			overlay->src_x, overlay->src_y,
-			overlay->src_width, overlay->src_height,
-			overlay->crtc_x, overlay->crtc_y,
-			overlay->crtc_x + overlay->crtc_width,
-			overlay->crtc_y + overlay->crtc_height);
+	DSS_DBG(mgr, "disp area(%d,%d %dx%d); draw area(0,0 %dx%d)",
+			disp_x, disp_y, disp_width, disp_height, draw_width, draw_height);
 
 	info->xoff = overlay->src_x;
 	info->yoff = overlay->src_y;
 	info->width = overlay->src_width;
 	info->height = overlay->src_height;
 
-	info->pos_x = overlay->crtc_x;
-	info->pos_y = overlay->crtc_y;
-	info->out_width = overlay->crtc_width;
-	info->out_height = overlay->crtc_height;
+	if (overlay->mode_width != owl_panel->mode.xres) {
+		info->pos_x = DIV_ROUND_CLOSEST(overlay->crtc_x * owl_panel->mode.xres, overlay->mode_width);
+		info->out_width = DIV_ROUND_CLOSEST(overlay->crtc_width * owl_panel->mode.xres, overlay->mode_width);
+	} else {
+		info->pos_x = overlay->crtc_x;
+		info->out_width = overlay->crtc_width;
+	}
 
-	if (info->width != info->out_width || info->height != info->out_height)
-		info->is_original_scaled = true;
-	else
-		info->is_original_scaled = false;
+	if (overlay->mode_height != owl_panel->mode.yres) {
+		info->pos_y = DIV_ROUND_CLOSEST(overlay->crtc_y * owl_panel->mode.yres, overlay->mode_height);
+		info->out_height = DIV_ROUND_CLOSEST(overlay->crtc_height * owl_panel->mode.yres, overlay->mode_height);
+	} else {
+		info->pos_y = overlay->crtc_y;
+		info->out_height = overlay->crtc_height;
+	}
 
-	DBG("is_original_scaled %d", info->is_original_scaled);
+	info->is_original_scaled = (info->width != info->out_width || info->height != info->out_height);
+
+	DBG("crop: (%d,%d, %dx%d) --> display: (%d,%d, %dx%d)",
+		info->xoff, info->yoff, info->width, info->height,
+		info->pos_x, info->pos_y, info->out_width, info->out_height);
 
 	/*
 	 * caculate real position without scaling
@@ -106,7 +106,7 @@ static int drm_overlay_to_dss_videoinfo(struct dispc_manager *mgr,
 	info->real_pos_y = (info->real_pos_y < 0 ? 0 : info->real_pos_y);
 
 	DBG("original area-->");
-	DBG("(pos_x,pos_y/real_pos_x,real_pos_y WidthxHeight)");
+	DBG("(xoff,yoff, WidthxHeight) --> (pos_x,pos_y/real_pos_x,real_pos_y WidthxHeight)");
 	DBG("(%d,%d %dx%d) --> (%d,%d/%d,%d %dx%d)",
 			info->xoff, info->yoff, info->width, info->height,
 			info->pos_x, info->pos_y, info->real_pos_x, info->real_pos_y,
@@ -128,16 +128,14 @@ static int drm_overlay_to_dss_videoinfo(struct dispc_manager *mgr,
 	 *	(pos_x - 0) / draw_width = (pso_x_new - disp_x) / disp_width
 	 *	(pos_y - 0) / draw_height = (pso_y_new - disp_y) / disp_height
 	 */
-#define DIV_ROUND(x, y) (((x) + ((y) / 2)) / y)
-	info->pos_x = DIV_ROUND(info->pos_x * disp_width, draw_width) + disp_x;
-	info->pos_y = DIV_ROUND(info->pos_y * disp_height, draw_height) + disp_y;
+	info->pos_x = DIV_ROUND_CLOSEST(info->pos_x * disp_width, draw_width) + disp_x;
+	info->pos_y = DIV_ROUND_CLOSEST(info->pos_y * disp_height, draw_height) + disp_y;
 
-	info->out_width = DIV_ROUND(info->out_width * disp_width, draw_width);
-	info->out_height = DIV_ROUND(info->out_height * disp_height, draw_height);
-#undef DIV_ROUND
+	info->out_width = DIV_ROUND_CLOSEST(info->out_width * disp_width, draw_width);
+	info->out_height = DIV_ROUND_CLOSEST(info->out_height * disp_height, draw_height);
 
 	DBG("area after adjusting-->");
-	DBG("(pos_x,pos_y/real_pos_x,real_pos_y WidthxHeight)");
+	DBG("(xoff,yoff, WidthxHeight) --> (pos_x,pos_y/real_pos_x,real_pos_y WidthxHeight)");
 	DBG("(%d,%d %dx%d) --> (%d,%d/%d,%d %dx%d)",
 			info->xoff, info->yoff, info->width, info->height,
 			info->pos_x, info->pos_y, info->real_pos_x, info->real_pos_y,
@@ -148,8 +146,6 @@ static int drm_overlay_to_dss_videoinfo(struct dispc_manager *mgr,
 	/* FIXME: OWL_BLENDING_PREMULT, OWL_BLENDING_COVERAGE, OWL_BLENDING_NONE ? */
 	info->blending = OWL_BLENDING_PREMULT;
 	info->alpha = 255;
-
-	DBG("blend %d, alpha %d", info->blending, info->alpha);
 
 	info->rotation = 0;
 	info->mmu_enable = owl_de_mmu_is_present();
@@ -163,7 +159,7 @@ static int drm_overlay_to_dss_videoinfo(struct dispc_manager *mgr,
 
 		if (info->mmu_enable) {
 			if (owl_de_mmu_handle_to_addr(overlay->dma_addr[plane], &addr)) {
-				DEV_ERR(mgr->subdrv.dev, "owl_de_mmu_handle_to_addr failed (hnd=%p)",
+				DSS_ERR(mgr, "owl_de_mmu_handle_to_addr failed (hnd=%p)",
 						(void*)overlay->dma_addr[plane]);
 				return -EFAULT;
 			}
@@ -173,8 +169,8 @@ static int drm_overlay_to_dss_videoinfo(struct dispc_manager *mgr,
 		}
 
 		DBG("plane %d, Pitch %d, Offset %d, Addr %ld",
-				plane, info->pitch[plane], info->offset[plane],
-				info->addr[plane]);
+			plane, info->pitch[plane], info->offset[plane],
+			info->addr[plane]);
 	}
 
 	/* choose any values as you like */
@@ -185,12 +181,25 @@ static int drm_overlay_to_dss_videoinfo(struct dispc_manager *mgr,
 	return 0;
 }
 
+bool dispc_panel_detect(struct owl_drm_panel *panel)
+{
+	struct dispc_manager *mgr = panel_to_mgr(panel);
+	bool connected = true;
+
+	if (mgr->type == OWL_DRM_DISPLAY_EXTERNAL)
+		connected = owl_panel_hpd_is_connected(mgr->owl_panel);
+
+	DSS_DBG(mgr, "connected %d", connected);
+
+	return connected;
+}
+
 /* delay the power enble actions until some videos are on */
 int dispc_panel_enable(struct owl_drm_panel *panel)
 {
 	struct dispc_manager *mgr = panel_to_mgr(panel);
 
-	DBG("panel=%p", panel);
+	DSS_DBG(mgr, "panel=%p", panel);
 
 	mutex_lock(&mgr->mutex);
 
@@ -208,7 +217,7 @@ int dispc_panel_disable(struct owl_drm_panel *panel)
 {
 	struct dispc_manager *mgr = panel_to_mgr(panel);
 
-	DBG("panel=%p", panel);
+	DSS_DBG(mgr, "panel=%p", panel);
 
 	mutex_lock(&mgr->mutex);
 
@@ -224,13 +233,15 @@ int dispc_panel_disable(struct owl_drm_panel *panel)
 
 int dispc_panel_prepare(struct owl_drm_panel *panel)
 {
-	DBG("panel=%p", panel);
+	struct dispc_manager *mgr = panel_to_mgr(panel);
+	DSS_DBG(mgr, "panel=%p", panel);
 	return 0;
 }
 
 int dispc_panel_unprepare(struct owl_drm_panel *panel)
 {
-	DBG("panel=%p", panel);
+	struct dispc_manager *mgr = panel_to_mgr(panel);
+	DSS_DBG(mgr, "panel=%p", panel);
 	return 0;
 }
 
@@ -241,6 +252,7 @@ int dispc_panel_get_modes(struct owl_drm_panel *panel,
 	struct owl_panel *owl_panel = mgr->owl_panel;
 	int count = owl_panel->n_modes ? owl_panel->n_modes : 1;
 
+	/* try to get the number of supported modes */
 	if (!modes || !num_modes)
 		return count;
 
@@ -256,21 +268,59 @@ int dispc_panel_get_modes(struct owl_drm_panel *panel,
 
 bool dispc_panel_validate_mode(struct owl_drm_panel *panel, struct owl_videomode *mode)
 {
-	DBG("do nothing, fixme");
-	return true;
+	struct dispc_manager *mgr = panel_to_mgr(panel);
+	struct owl_panel *owl_panel = mgr->owl_panel;
+	struct owl_videomode *mode_list;
+	int count, i;
+
+	if (owl_panel->n_modes) { /* possibly multi-resolution panel */
+		mode_list = owl_panel->mode_list;
+		count = owl_panel->n_modes;
+	} else {                  /* possibly fix resolution panel */
+		mode_list = &owl_panel->mode;
+		count = 1;
+	}
+
+	for (i = 0; i < count; i++) {
+		struct owl_videomode *m = &mode_list[i];
+		/* FIXME: Should validate the timing too ? */
+		if (mode->xres == m->xres &&
+			mode->yres == m->yres &&
+			(!mode->refresh || mode->refresh == m->refresh)) {
+			return true;
+		}
+	}
+
+	return false;
 }
 
 int dispc_panel_set_mode(struct owl_drm_panel *panel, struct owl_videomode *mode)
 {
 	struct dispc_manager *mgr = panel_to_mgr(panel);
-	return owl_panel_set_mode(mgr->owl_panel, mode);
+	struct owl_panel *owl_panel = mgr->owl_panel;
+	struct owl_videomode default_mode;
+	int ret = 0;
+
+	DSS_DBG(mgr, "panel=%p, mode: xres=%d, yres=%d, refresh=%d",
+			panel, mode->xres, mode->yres, mode->refresh);
+#if 0
+	owl_panel_hpd_enable(owl_panel, false);
+	owl_panel_get_default_mode(owl_panel, &default_mode);
+	default_mode.xres = mode->xres;
+	default_mode.yres = mode->yres;
+	default_mode.refresh = mode->refresh;
+	ret = owl_panel_set_default_mode(owl_panel, mode);
+	owl_panel_hpd_enable(owl_panel, true);
+#endif
+
+	return ret;
 }
 
 int dispc_panel_enable_vblank(struct owl_drm_panel *panel)
 {
 	struct dispc_manager *mgr = panel_to_mgr(panel);
 
-	DBG("panel=%p", panel);
+	DSS_DBG(mgr, "panel=%p", panel);
 	return owl_de_path_enable_vsync(mgr->owl_path);
 }
 
@@ -278,7 +328,7 @@ void dispc_panel_disable_vblank(struct owl_drm_panel *panel)
 {
 	struct dispc_manager *mgr = panel_to_mgr(panel);
 
-	DBG("panel=%p", panel);
+	DSS_DBG(mgr, "panel=%p", panel);
 	owl_de_path_disable_vsync(mgr->owl_path);
 }
 
@@ -287,7 +337,7 @@ void dispc_panel_vsync_cb(struct owl_panel *owl_panel, void *data, u32 value)
 	struct dispc_manager *mgr = data;
 	struct owl_drm_panel *panel = mgr->subdrv.panel;
 
-	if (panel->callbacks.vsync)
+	if (panel && panel->callbacks.vsync)
 		panel->callbacks.vsync(panel);
 }
 
@@ -296,7 +346,7 @@ void dispc_panel_hotplug_cb(struct owl_panel *owl_panel, void *data, u32 value)
 	struct dispc_manager *mgr = data;
 	struct owl_drm_panel *panel = mgr->subdrv.panel;
 
-	if (panel->callbacks.hotplug)
+	if (panel && panel->callbacks.hotplug)
 		panel->callbacks.hotplug(panel);
 }
 
@@ -332,19 +382,19 @@ static int dispc_video_apply(struct owl_drm_overlay *overlay, struct owl_overlay
 	struct owl_de_video_info owl_info;
 	int ret = 0;
 
-	DBG("overlay=%p, zpos=%d", overlay, overlay->zpos);
+	DSS_DBG(mgr, "overlay=%p, zpos=%d", overlay, overlay->zpos);
 
 	owl_de_video_get_info(owl_video, &owl_info);
 
 	ret = drm_overlay_to_dss_videoinfo(mgr, info, &owl_info);
 	if (ret < 0) {
-		DEV_ERR(overlay->panel->dev, "overlay info to video info error");
+		DSS_ERR(mgr, "overlay info to video info error");
 		return -EINVAL;
 	}
 
 	ret = owl_de_video_info_validate(owl_video, &owl_info);
 	if (ret < 0) {
-		DEV_ERR(overlay->panel->dev, "video info validate (err=%d)", ret);
+		DSS_ERR(mgr, "video info validate (err=%d)", ret);
 		return -EINVAL;
 	}
 
@@ -373,7 +423,8 @@ static int dispc_video_apply(struct owl_drm_overlay *overlay, struct owl_overlay
 
 static int dispc_video_enable(struct owl_drm_overlay *overlay)
 {
-	DBG("overlay=%p, zpos=%d", overlay, overlay->zpos);
+	struct dispc_manager *mgr = overlay_to_mgr(overlay);
+	DSS_DBG(mgr, "overlay=%p, zpos=%d", overlay, overlay->zpos);
 	return 0;
 }
 
@@ -383,7 +434,7 @@ static int dispc_video_disable(struct owl_drm_overlay *overlay)
 	struct owl_de_path *owl_path = mgr->owl_path;
 	struct owl_de_video *owl_video = overlay->private;
 
-	DBG("overlay=%p, zpos=%d", overlay, overlay->zpos);
+	DSS_DBG(mgr, "overlay=%p, zpos=%d", overlay, overlay->zpos);
 
 	mutex_lock(&mgr->mutex);
 
@@ -403,11 +454,11 @@ static int dispc_video_attach(struct owl_drm_overlay *overlay, struct owl_drm_pa
 {
 	struct dispc_manager *mgr = panel_to_mgr(panel);
 
-	DBG("panel=%p, overlay=%p, zpos=%d", panel, overlay, overlay->zpos);
+	DSS_DBG(mgr, "panel=%p, overlay=%p, zpos=%d", panel, overlay, overlay->zpos);
 
 	if (overlay->zpos >= mgr->num_videos ||
 		overlay->private != mgr->owl_videos[overlay->zpos]) {
-		DEV_ERR(panel->dev, "Not support overlay dynamic zpos yet");
+		DSS_ERR(mgr, "Not support overlay dynamic zpos yet");
 		return -EINVAL;
 	}
 
@@ -416,13 +467,15 @@ static int dispc_video_attach(struct owl_drm_overlay *overlay, struct owl_drm_pa
 
 static int dispc_video_detach(struct owl_drm_overlay *overlay, struct owl_drm_panel *panel)
 {
-	DBG("panel=%p, overlay=%p, zpos=%d", panel, overlay, overlay->zpos);
+	struct dispc_manager *mgr = panel_to_mgr(panel);
+	DSS_DBG(mgr, "panel=%p, overlay=%p, zpos=%d", panel, overlay, overlay->zpos);
 	return 0;
 }
 
 static int dispc_video_query(struct owl_drm_overlay *overlay, int what, int *value)
 {
-	DBG("overlay=%p, what=%d", overlay, what);
+	DBG("overlay(%d)=%p, what=%d", overlay->zpos, overlay, what);
+
 	switch (what) {
 	case OVERLAY_CAP_SCALING:
 		*value = owl_de_video_has_scaler(overlay->private);
@@ -483,10 +536,34 @@ void dispc_subdrv_remove_overlays(struct drm_device *drm, struct owl_drm_subdrv 
 		owl_subdrv_unregister_overlay(subdrv, &owldrm_overlays[i]);
 }
 
-struct dispc_manager *dispc_manager_init(struct device *dev, int type)
+static struct dispc_manager *dispc_mgrs[OWL_DRM_NUM_DISPLAY_TYPES];
+
+struct dispc_manager *dispc_manager_get(int type)
+{
+	return dispc_mgrs[type];
+}
+
+struct dispc_manager *dispc_manager_init(struct device *dev, int display_type)
 {
 	struct dispc_manager *mgr = NULL;
-	int i, ret = 0;
+	int type, i, ret = 0;
+
+	switch (display_type) {
+	case OWL_DISPLAY_TYPE_LCD:
+		type = OWL_DRM_DISPLAY_PRIMARY;
+		break;
+	case OWL_DISPLAY_TYPE_HDMI:
+		type = OWL_DRM_DISPLAY_EXTERNAL;
+		break;
+	default:
+		DEV_ERR(dev, "unsupported display type=0x%x)", display_type);
+		return ERR_PTR(-EINVAL);
+	};
+
+	if (dispc_mgrs[type]) {
+		DEV_ERR(dev, "drm display type 0x%x already initialized)", type);
+		return ERR_PTR(-EINVAL);
+	}
 
 	mgr = devm_kzalloc(dev, sizeof(*mgr), GFP_KERNEL);
 	if (!mgr) {
@@ -495,9 +572,9 @@ struct dispc_manager *dispc_manager_init(struct device *dev, int type)
 	}
 
 	/* get path */
-	mgr->owl_path = owl_de_path_get_by_type(type);
+	mgr->owl_path = owl_de_path_get_by_type(display_type);
 	if (!mgr->owl_path || !mgr->owl_path->current_panel) {
-		DEV_ERR(dev, "fail to get path (type=0x%x)", type);
+		DEV_ERR(dev, "fail to get path (display type=0x%x)", display_type);
 		ret = -ENODEV;
 		goto fail_free;
 	}
@@ -534,6 +611,9 @@ struct dispc_manager *dispc_manager_init(struct device *dev, int type)
 	owl_de_path_set_mmuskip(mgr->owl_path, 0);
 
 	mutex_init(&mgr->mutex);
+
+	mgr->type = type;
+	dispc_mgrs[type] = mgr;
 
 	dev_set_drvdata(dev, mgr);
 	return mgr;

@@ -16,23 +16,43 @@
 
 #define MAX_VIDEOS (MAX_PLANES)
 
+#define DSS_DBG(mgr, fmt, ...) DBG("%s: " fmt, mgr->owl_panel->desc.name, ##__VA_ARGS__)
+#define DSS_ERR(mgr, fmt, ...) ERR("%s: " fmt, mgr->owl_panel->desc.name, ##__VA_ARGS__)
+
 #define subdrv_to_mgr(drv) container_of(drv, struct dispc_manager, subdrv)
 #define panel_to_mgr(panel) dev_get_drvdata(panel->dev)
 #define overlay_to_mgr(ovl) panel_to_mgr(ovl->panel)
 
-struct dispc_manager {
-	struct owl_drm_subdrv subdrv;
-	struct mutex mutex;
+enum {
+	OWL_DRM_DISPLAY_Unknown  = -1,
+	OWL_DRM_DISPLAY_PRIMARY  = 0, /* LVDS */
+	OWL_DRM_DISPLAY_EXTERNAL = 1, /* HDMI, CVBS */
 
-	/* owl private */
+	OWL_DRM_NUM_DISPLAY_TYPES,
+};
+
+struct dispc_manager {
+	/* OWL_DRM_DISPLAY_x */
+	int type;
+
+	/* public data registered to drm */
+	struct owl_drm_subdrv subdrv;
+
+	/* private owl-dss resource */
 	struct owl_panel    *owl_panel;
 	struct owl_de_path  *owl_path;
 	struct owl_de_video *owl_videos[MAX_VIDEOS];
 	int num_videos;
+
+	struct mutex mutex;
 };
 
-struct dispc_manager *dispc_manager_init(struct device *dev, int type);
+/* @display_type: OWL_DISPLAY_TYPE_x */
+struct dispc_manager *dispc_manager_init(struct device *dev, int display_type);
+/* @type: OWL_DRM_DISPLAY_x */
+struct dispc_manager *dispc_manager_get(int type);
 
+bool dispc_panel_detect(struct owl_drm_panel *panel);
 int dispc_panel_enable(struct owl_drm_panel *panel);
 int dispc_panel_disable(struct owl_drm_panel *panel);
 int dispc_panel_prepare(struct owl_drm_panel *panel);

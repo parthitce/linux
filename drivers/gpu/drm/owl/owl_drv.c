@@ -77,7 +77,7 @@ static int owl_modeset_init(struct drm_device *dev)
 	{
 		struct owl_drm_panel_callback_funcs callback = {
 			.vsync = owl_crtc_handle_vblank,
-			.hotplug = owl_crtc_handle_vblank,
+			.hotplug = owl_crtc_handle_hotplug,
 		};
 
 		owl_dssdev_register_callback(priv->dssdev, &callback);

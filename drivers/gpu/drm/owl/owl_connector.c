@@ -128,13 +128,13 @@ static int owl_connector_mode_valid(struct drm_connector *connector,
 	}
 
 	DBG_KMS("connector=%u, mode %s: "
-		"%d:\"%s\" %d %d %d %d %d %d %d %d %d %d 0x%x 0x%x",
-		connector->base.id, (ret == MODE_OK) ? "valid" : "invalid",
-		mode->base.id, mode->name, mode->vrefresh, mode->clock,
-		mode->hdisplay, mode->hsync_start,
-		mode->hsync_end, mode->htotal,
-		mode->vdisplay, mode->vsync_start,
-		mode->vsync_end, mode->vtotal, mode->type, mode->flags);
+			"%d:\"%s\" %d %d %d %d %d %d %d %d %d %d 0x%x 0x%x",
+			connector->base.id, (ret == MODE_OK) ? "valid" : "invalid",
+			mode->base.id, mode->name, mode->vrefresh, mode->clock,
+			mode->hdisplay, mode->hsync_start,
+			mode->hsync_end, mode->htotal,
+			mode->vdisplay, mode->vsync_start,
+			mode->vsync_end, mode->vtotal, mode->type, mode->flags);
 
 	return ret;
 }
@@ -226,14 +226,23 @@ int owl_connector_update(struct drm_connector *connector, struct drm_display_mod
 	struct owl_videomode owl_mode;
 	int ret = -EINVAL;
 
-	ret = owl_connector_mode_valid(connector, mode);
-	if (ret != MODE_OK) {
-		ERR("could not set mode: %d", ret);
-		return ret;		
+	if (!panel->funcs->set_mode) {
+		DBG("connector(%d) not support set_mode", connector->base.id);
+		return -ENOTTY;
 	}
 
-	if (panel->funcs->set_mode)
-		ret = panel->funcs->set_mode(panel, &owl_mode);
+	copy_mode_drm_to_owl(&owl_mode, mode);
+
+	if (panel->funcs->validate_mode &&
+		!panel->funcs->validate_mode(panel, &owl_mode))
+		goto fail;
+
+	ret = panel->funcs->set_mode(panel, &owl_mode);
+fail:
+	if (ret) {
+		ERR("fail to set_mode: %dx%d, refresh %d",
+			owl_mode.xres, owl_mode.yres, owl_mode.refresh);
+	}
 
 	return ret;
 }

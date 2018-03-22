@@ -408,6 +408,17 @@ void owl_panel_get_default_mode(struct owl_panel *panel,
 }
 EXPORT_SYMBOL(owl_panel_get_default_mode);
 
+int owl_panel_set_default_mode(struct owl_panel *panel,
+				struct owl_videomode *mode)
+{
+	memcpy(&panel->default_mode, mode, sizeof(struct owl_videomode));
+
+	/* clear 'need_edid' flag once someone write '/default_mode' file */
+	panel->desc.need_edid = false;
+	return 0;
+}
+EXPORT_SYMBOL(owl_panel_set_default_mode);
+
 void owl_panel_get_mode(struct owl_panel *panel, struct owl_videomode *mode)
 {
 	memcpy(mode, &panel->mode, sizeof(struct owl_videomode));

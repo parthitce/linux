@@ -25,3 +25,10 @@ config DRM_OWL_HDMI
 	depends on DRM_OWL
 	help
 	  Choose this option if you want to use Owl HDMI for DRM.
+
+config DRM_OWL_HDMI_FAKE_LCD_MODE
+	bool "Owl DRM HDMI Fake The LCD Mode Support"
+	depends on DRM_OWL_LCD && DRM_OWL_HDMI
+	help
+	  Choose this option if you want HDMI fake the lcd resolution(mode) support.
+	  It may be helpful in Xorg dual screen extension.
