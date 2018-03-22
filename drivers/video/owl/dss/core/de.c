@@ -800,8 +800,10 @@ void owl_de_path_wait_for_go(struct owl_de_path *path)
 		frame_period_ns = 1000 * 1000 * 30;
 	else
 		frame_period_ns = 1000 * 1000 * 1000 / frame_period_ns;
-
-	if (owl_de_is_s700() && path->id == 0) {
+#ifdef CONFIG_ADF
+	if (owl_de_is_s700() && path->id == 0) 
+#endif
+	{
 		/*
 		 * alwful trick for S700 HDMI & CVBS, because HDMI and CVBS
 		 * share the same path, the same IRQ bit, we can only wait
@@ -818,12 +820,12 @@ void owl_de_path_wait_for_go(struct owl_de_path *path)
 	if (owl_de_is_s900() || PANEL_IS_PRIMARY(panel)) {
 		__de_path_enable_vsync(path, true);
 		/* do not wait vsync for linux X display TODO */
-		#if 0
+#ifdef CONFIG_ADF
 		ret = wait_event_hrtimeout(path->vsync_wq,
 				(path->ops->is_vb_valid(path) ||
 				 !path->ops->is_fcr_set(path)),
 				ns_to_ktime(frame_period_ns));
-		#endif
+#endif
 		__de_path_enable_vsync(path, false);
 
 		if (ret == 0) {

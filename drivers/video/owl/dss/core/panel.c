@@ -305,7 +305,10 @@ void owl_panel_unregister(struct owl_panel *panel)
 	owl_ctrl_remove_panel(panel);
 	put_device(panel->dev);
 
+	mutex_lock(&g_panel_list_lock);
+	list_del(&panel->list);
 	g_panel_nums--;
+	mutex_unlock(&g_panel_list_lock);
 }
 EXPORT_SYMBOL(owl_panel_unregister);
 
@@ -323,19 +326,19 @@ bool owl_panel_get_pri_panel_resolution(int *width, int *height)
     panel = NULL;
     path = NULL;
     owl_panel_for_each(panel) {
-        if (PANEL_IS_PRIMARY(panel)) {
+        if (PANEL_IS_PRIMARY(panel) || owl_panel_get_panel_num() == 1) {
             path = panel->path;
             pr_debug("primay display width %d , height %d\n", path->info.width, path->info.height);
 
-	    if (panel->draw_width == 0 || panel->draw_height == 0) {
-		    *width = path->info.width;
-		    *height = path->info.height;
-	    } else {
-		    *width = panel->draw_width;
-		    *height = panel->draw_height;
-	    }
-            
-	    /* S700, HDMI 4k scaling need limit draw size */
+            if (panel->draw_width == 0 || panel->draw_height == 0) {
+                *width = path->info.width;
+                *height = path->info.height;
+            } else {
+                *width = panel->draw_width;
+                *height = panel->draw_height;
+            }
+
+            /* S700, HDMI 4k scaling need limit draw size */
             if (owl_de_is_s700()) {
                 if (*width >= 3840)
                     *width /= 2;
@@ -1163,7 +1166,8 @@ static ssize_t panel_is_primary_show(struct device *dev,
 {
 	struct owl_panel *panel = dev_get_drvdata(dev);
 
-	return snprintf(buf, PAGE_SIZE, "%d\n", panel->desc.is_primary);
+	return snprintf(buf, PAGE_SIZE, "%d\n",
+		PANEL_IS_PRIMARY(panel) || (owl_panel_get_panel_num() == 1));
 }
 
 static ssize_t panel_need_edid_show(struct device *dev,

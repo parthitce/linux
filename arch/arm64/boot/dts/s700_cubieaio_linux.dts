@@ -208,7 +208,7 @@
 		panel@ghp {
 			compatible = "actions,panel-ghp";
 	
-			is_primary = <1>;
+			is_primary = <0>;
 	
 			/* draw_width = <1920>; */
 			/* draw_height = <1080>; */
