@@ -90,9 +90,10 @@
 	};
 
 	i2c1: i2c@e0174000 {
-		clock-frequency = <400000>;
 		status = "okay";
-
+                i2c_num = <1>;
+                clock-frequency = <400000>;
+                pinctrl-names = "default";
 		mpu6500@68 {
 			compatible = "owl-gyrosensor";
 			interrupt-parent = <&gpioa>;
@@ -125,6 +126,9 @@
 
 	i2c2: i2c@e0178000 {
 		status = "okay";
+                i2c_num = <2>;
+                clock-frequency = <400000>;
+                pinctrl-names = "default";
 	};
 
 

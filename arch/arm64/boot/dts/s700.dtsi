@@ -307,8 +307,8 @@
 		#size-cells = <0>;
 		clocks = <&clock CLK_I2C1>;
 		clock-names = "i2c1";
-		//pinctrl-names = "default";
-		//pinctrl-0 = <&pinctrl_i2c1_default>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_i2c1_default>;
 		status = "disabled";
 	};
 

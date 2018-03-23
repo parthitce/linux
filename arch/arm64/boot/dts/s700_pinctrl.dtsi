@@ -100,6 +100,22 @@
 				actions,pull = <2>;
 			};
 		};
+		pinctrl_i2c1_default: i2c1_default {/* i2c1 use default pin*/
+                        i2c1_default_mfp {
+                                actions,groups = "i2c1_dummy";
+                                actions,function = "i2c1";
+                        };
+ 
+                        i2c1_default_paddrv {
+                                actions,groups = "paddrv2_22_21";
+                                actions,paddrv = <0>;/*level 1*/
+                        };
+ 
+                        i2c1_default_pull_up {
+                                actions,pins = "P_I2C1_SCLK","P_I2C1_SDATA";
+                                actions,pull = <2>; /*pull up*/
+                        };
+                };
 		pinctrl_i2c2_default: i2c2_default {/* i2c2 use default pin*/
 			i2c2_default_mfp {
 				actions,groups = "i2c2_dummy";
