@@ -24,8 +24,8 @@
 
 #define HAVE_DRM_IRQ
 
-#define MAX_PLANES	   4
-#define MAX_CRTCS	   2
+#define MAX_PLANES     4
+#define MAX_CRTCS      2
 #define MAX_ENCODERS   2
 #define MAX_CONNECTORS 2
 

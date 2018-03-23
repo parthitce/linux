@@ -13,7 +13,13 @@
 #define DRIVER_NAME  "owldrm-hdmi"
 
 #ifdef CONFIG_DRM_OWL_HDMI_FAKE_LCD_MODE
+/* fake lcd mode:
+ * fake_stat == 0 : fake_mode is uninitialized
+ * fake_stat < 0  : fake_mode is really fake
+ * fake_stat > 0  : fake_mode is corresponding to some real mode
+ */
 static struct owl_videomode fake_mode;
+static int fake_stat = 0;
 
 static int hdmi_init_fakemode(void)
 {
@@ -21,7 +27,12 @@ static int hdmi_init_fakemode(void)
 	if (!mgr)
 		return -ENOENT;
 
+	/* duplicate lcd mode */
 	memcpy(&fake_mode, &mgr->owl_panel->mode, sizeof(fake_mode));
+
+	/* initialized as fake */
+	fake_stat = -1;
+
 	return 0;
 }
 
@@ -30,13 +41,15 @@ static int hdmi_get_modes(struct owl_drm_panel *panel,
 {
 	int count = dispc_panel_get_modes(panel, modes, num_modes);
 
-	if (!count || !fake_mode.xres || !fake_mode.yres)
+	/* fake_mode uninitialized or real */
+	if (!count || fake_stat >= 0)
 		return count;
 
 	/* try to get the number of supported modes */
 	if (!modes || !num_modes)
 		return count + 1;
 
+	/* duplicate the fake_mode */
 	if (count < num_modes) {
 		memcpy(&modes[count], &fake_mode, sizeof(fake_mode));
 		return count + 1;
@@ -47,58 +60,57 @@ static int hdmi_get_modes(struct owl_drm_panel *panel,
 
 static bool hdmi_validate_mode(struct owl_drm_panel *panel, struct owl_videomode *mode)
 {
-	if (dispc_panel_validate_mode(panel, mode))
+	/* only xres and yres are valid when fake_mode is really fake */
+	if (fake_stat < 0 && fake_mode.xres == mode->xres && fake_mode.yres == mode->yres)
 		return true;
 
-	/* only xres and yres are valid in fake mode */
-	if (fake_mode.xres && fake_mode.xres == mode->xres  &&
-		fake_mode.yres && fake_mode.yres == mode->yres)
-		return true;
-
-	return false;
+	return dispc_panel_validate_mode(panel, mode);
 }
 
 static int hdmi_set_mode(struct owl_drm_panel *panel, struct owl_videomode *mode)
 {
-	struct dispc_manager *mgr = panel_to_mgr(panel);
-	struct owl_videomode *vmodes;
-	int ret, cnt, best = 0, weight = INT_MAX;
+	/* just skip modeset when fake_mode is really fake, since display engine
+	 * will scale it to match the current mode
+	 */
+	if (fake_stat < 0 && fake_mode.xres == mode->xres && fake_mode.yres == mode->yres)
+		return 0;
 
-	/* 1) if not the fake mode, just set it */
-	if (mode->xres != fake_mode.xres || mode->yres != fake_mode.yres)
-		return dispc_panel_set_mode(panel, mode);
+	return dispc_panel_set_mode(panel, mode);
+}
 
-	/* 2) list the supported modes by panel */
-	cnt = dispc_panel_get_modes(panel, NULL, 0);
-	if (!cnt)
-		return -ENOTTY;
+static void hdmi_hotplug_cb(struct owl_panel *owl_panel, void *data, u32 value)
+{
+	struct dispc_manager *mgr = data;
+	struct owl_videomode *modes;
+	int num;
 
-	vmodes = kcalloc(cnt, sizeof(*vmodes), GFP_KERNEL);
-	if (!vmodes)
-		return -ENOMEM;
+	/* panel disconnected, or fake_mode uninitialized */
+	if (!value || !fake_stat)
+		goto out;
 
-	cnt = dispc_panel_get_modes(panel, vmodes, cnt);
-
-	/* 3) find the best mode */
-	while (--cnt >= 0) {
-		int w = abs(vmodes[cnt].xres - mode->xres) * abs(vmodes[cnt].yres - mode->yres);
-		if (w < weight) {
-			weight = w;
-			best = cnt;
-		}
-
-		if (w == 0)
-			break;
+	/* get the mode list */
+	if (owl_panel->n_modes) {
+		modes = owl_panel->mode_list;
+		num = owl_panel->n_modes;
+	} else {
+		modes = &owl_panel->mode;
+		num = 1;
 	}
 
-	DSS_DBG(mgr, "match fake-mode=%dx%d -> real-mode=%dx%d",
-			fake_mode.xres, fake_mode.yres, vmodes[best].xres, vmodes[best].yres);
+	/* find whether there is a corresponding real mode, if exist, copy it */
+	while (--num >= 0) {
+		if (fake_mode.xres == modes[num].xres &&
+			fake_mode.yres == modes[num].yres) {
+			memcpy(&fake_mode, &modes[num], sizeof(fake_mode));
+			fake_stat = 1;
+			break;
+		}
+	}
 
-	/* 4) set the matched mode */
-	ret = dispc_panel_set_mode(panel, &vmodes[best]);
-
-	kfree(vmodes);
-	return ret;
+	DSS_DBG(mgr, "fake_mode(stat=%d): xres=%d, yres=%d, refresh=%d",
+			fake_stat, fake_mode.xres, fake_mode.yres, fake_mode.refresh);
+out:
+	dispc_panel_hotplug_cb(owl_panel, data, value);
 }
 #endif /* CONFIG_DRM_OWL_HDMI_FAKE_LCD_MODE */
 
@@ -156,16 +168,21 @@ static int hdmi_probe(struct platform_device *pdev)
 	subdrv->unload = hdmi_unload;
 	owl_subdrv_register(subdrv);
 
-	/* registers vsync and hotplug call back */
-	owl_panel_vsync_cb_set(mgr->owl_panel, dispc_panel_vsync_cb, mgr);
-	owl_panel_hotplug_cb_set(mgr->owl_panel, dispc_panel_hotplug_cb, mgr);
-
-	/* hotplug detection */
-	owl_panel_hpd_enable(mgr->owl_panel, false);
-
 #ifdef CONFIG_DRM_OWL_HDMI_FAKE_LCD_MODE
 	hdmi_init_fakemode();
 #endif
+
+	/* registers vsync and hotplug call back */
+	owl_panel_vsync_cb_set(mgr->owl_panel, dispc_panel_vsync_cb, mgr);
+
+#ifdef CONFIG_DRM_OWL_HDMI_FAKE_LCD_MODE
+	owl_panel_hotplug_cb_set(mgr->owl_panel, hdmi_hotplug_cb, mgr);
+#else
+	owl_panel_hotplug_cb_set(mgr->owl_panel, dispc_panel_hotplug_cb, mgr);
+#endif
+
+	/* hotplug detection */
+	owl_panel_hpd_enable(mgr->owl_panel, true);
 
 	return 0;
 }
