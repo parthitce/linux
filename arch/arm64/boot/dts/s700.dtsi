@@ -42,6 +42,7 @@
 		gpio2=&gpioc;
 		gpio3=&gpiod;
 		gpio4=&gpioe;
+		spi0 = &spi0;
 		mmc0 = &mmc0;
 		mmc1 = &mmc1;
 		mmc2 = &mmc2;
@@ -241,6 +242,15 @@
 		interrupt-controller;
 		#interrupt-cells = <1>;
 	};
+	
+	   spi0: spi@e0300000 {
+                compatible = "actions,s700-spi";
+                reg = <0 0xe0300000 0 0x1000>;
+                interrupts = <GIC_SPI 19 IRQ_TYPE_LEVEL_HIGH>;
+                clocks = <&clock CLK_SPI0>;
+                clock-names = "spi0";
+                status = "disabled";
+        };
 
         serial0: uart@e0120000 {
                 compatible = "actions,s700-serial";

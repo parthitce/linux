@@ -27,7 +27,7 @@
 
 		spi0_state_default: spi0_default {
 			spi0_mfp {
-				actions,groups = "mfp1_2_0","mfp1_4_3";
+				actions,groups = "mfp1_20_19","mfp1_18_17","mfp1_9_7","mfp2_26_24";
 				actions,function = "spi0";
 			};
 			spi0_paddrv {

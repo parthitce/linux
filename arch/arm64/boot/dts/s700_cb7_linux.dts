@@ -615,6 +615,18 @@
 			reg = <0x60>;
 		};
 	};	
+	
+	
+       spi0: spi@e0300000 {
+                status = "okay";
+                pinctrl-names = "default";
+                pinctrl-0 = <&spi0_state_default>;
+                spidev@0 {
+                        compatible ="rohm,dh2228fv";
+                        reg = <0x0>;
+                        spi-max-frequency = <500000>;
+                };
+        };
 //	isp0: isp@0xe0268000 {
 //		mirror_flip = <3>;  /* bit-0:rear camera; bit-1:front camera; 0: no flip,no mirror; 1: no flip,horizontal mirror; 2:vertical flip,no mirror; 3: vertical flip,horizontal mirror */
 //

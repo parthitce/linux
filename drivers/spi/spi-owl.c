@@ -729,7 +729,7 @@ static int owl_spi_probe(struct platform_device *pdev)
 	master->transfer_one_message = owl_spi_transfer_one_message;
 	master->bus_num = pdev->id;
 	master->mode_bits = SPI_CPOL | SPI_CPHA | SPI_CS_HIGH;
-	master->flags = SPI_MASTER_HALF_DUPLEX;
+	master->flags = 0;
 	master->bits_per_word_mask = BIT(32 - 1) | BIT(16 - 1) | BIT(8 - 1);
 	master->dev.of_node = np;
 
@@ -765,6 +765,7 @@ static int owl_spi_remove(struct platform_device *pdev)
 
 static const struct of_device_id owl_spi_dt_ids[] = {
 	{ .compatible = "actions,s900-spi" },
+	{ .compatible = "actions,s700-spi" },
 	{ .compatible = "actions,s500-spi" },
 	{ .compatible = "actions,ats3605-spi" },
 };
