@@ -39,7 +39,7 @@ struct owl_crtc {
 	unsigned int index;
 
 	bool enabled;
-	bool full_update;
+	bool mode_update;
 
 	struct owl_drm_apply apply;
 
@@ -204,6 +204,22 @@ int owl_crtc_handle_hotplug(struct owl_drm_panel *panel)
 	return 0;
 }
 
+static int owl_crtc_set_config(struct drm_mode_set *set)
+{
+	size_t i;
+
+	DBG_KMS("crtc=%u, num_connectors=%zu", set->crtc->base.id, set->num_connectors);
+	for (i = 0; i < set->num_connectors; i++) {
+		DBG_KMS("connector%zu=%u, connector_type=%d", i,
+				set->connectors[i]->base.id, set->connectors[i]->connector_type);
+	}
+
+	if (set->mode)
+		DBG_KMS("fb=%u, mode=%dx%d", set->fb->base.id, set->mode->hdisplay, set->mode->vdisplay);
+
+	return drm_crtc_helper_set_config(set);
+}
+
 static void owl_crtc_destroy(struct drm_crtc *crtc)
 {
 	struct owl_crtc *owl_crtc = to_owl_crtc(crtc);
@@ -223,11 +239,13 @@ static void owl_crtc_dpms(struct drm_crtc *crtc, int mode)
 	struct drm_plane *plane;
 	bool enabled = (mode == DRM_MODE_DPMS_ON);
 
-	DBG_KMS("crtc= %u, mode=%d", crtc->base.id, mode);
+	DBG_KMS("crtc=%u, mode=%d", crtc->base.id, mode);
 
 	if (enabled != owl_crtc->enabled) {
 		owl_crtc->enabled = enabled;
-		owl_crtc->full_update = true;
+
+		/* track the associate power state */
+		owl_crtc->apply.enabled = enabled;
 		owl_crtc_apply(crtc, &owl_crtc->apply);
 
 		/* also enable our private plane: */
@@ -277,7 +295,7 @@ static int owl_crtc_mode_set(struct drm_crtc *crtc,
 	 * so that hardware can be seet to proper mode.
 	 */
 	memcpy(&crtc->mode, adjusted_mode, sizeof(*adjusted_mode));
-	owl_crtc->full_update = true;
+	owl_crtc->mode_update = true;
 
 	return owl_plane_mode_set(owl_crtc->primary, crtc, crtc->fb,
 			0, 0, mode->hdisplay, mode->vdisplay,
@@ -500,7 +518,7 @@ static int owl_crtc_cursor_set(struct drm_crtc *crtc, struct drm_file *file_priv
 	BUG_ON(!cursor);
 	WARN_ON(cursor->crtc != crtc && cursor->crtc != NULL);
 
-	DBG_KMS("crtc=%u, cursor=%u", crtc->base.id, cursor->base.id);
+	DBG_KMS("crtc=%u, cursor=%u, handle=%u", crtc->base.id, cursor->base.id, handle);
 
 	if (handle) {
 		fb = dev->mode_config.funcs->fb_create(dev, file_priv, &fbreq);
@@ -563,7 +581,7 @@ static int owl_crtc_cursor_move(struct drm_crtc *crtc, int x, int y)
 }
 
 static struct drm_crtc_funcs owl_crtc_funcs = {
-	.set_config = drm_crtc_helper_set_config,
+	.set_config = owl_crtc_set_config,
 	.destroy    = owl_crtc_destroy,
 	.page_flip  = owl_crtc_page_flip_locked,
 	.set_property = owl_crtc_set_property,
@@ -635,8 +653,12 @@ int owl_crtc_apply(struct drm_crtc *crtc, struct owl_drm_apply *apply)
 	WARN_ON(!mutex_is_locked(&crtc->mutex));
 
 	/* no need to queue it again if it is already queued: */
-	if (apply->queued)
+	if (apply->queued) {
+		DBG_KMS("crtc(%u): %s apply already queured", crtc->base.id,
+				apply == &owl_crtc->apply ? "crtc" : "plane");
+		apply->pending = true;
 		return 0;
+	}
 
 	apply->queued = true;
 	list_add_tail(&apply->queued_node, &owl_crtc->queued_applies);
@@ -665,10 +687,8 @@ static void set_enabled(struct drm_crtc *crtc, bool enable)
 
 	wait = owl_irq_wait_init(dev, pipe2irq(owl_crtc->index), 1);
 	ret = owl_irq_wait(dev, wait, msecs_to_jiffies(100));
-	if (ret) {
-		DEV_ERR(dev->dev, "timeout waiting for %s",
-				enable ? "enable" : "disable");
-	}
+	if (ret)
+		DEV_ERR(dev->dev, "timeout waiting for %s", enable ? "enable" : "disable");
 #endif
 }
 
@@ -677,34 +697,44 @@ static void owl_crtc_pre_apply(struct owl_drm_apply *apply)
 	struct owl_crtc *owl_crtc = container_of(apply, struct owl_crtc, apply);
 	struct drm_crtc *crtc = &owl_crtc->base;
 	struct owl_drm_dssdev *dssdev = owl_dssdev_get(crtc->dev);
-	struct owl_drm_panel *panel = NULL;
+	struct owl_drm_panel *panel = owl_dssdev_get_panel(dssdev, &crtc->base);
+	bool enabled = apply->enabled;
 
-	DBG_KMS("crtc=%u, enabled=%d, full=%d", crtc->base.id,
-			owl_crtc->enabled, owl_crtc->full_update);
+	DBG_KMS("crtc=%u, enabled=%d, update=%d", crtc->base.id,
+			enabled, owl_crtc->mode_update);
 
-	if (owl_crtc->full_update)
-		panel = owl_dssdev_get_panel(dssdev, &crtc->base);
-
-	if (!owl_crtc->enabled) {
-		if (panel) {
-			set_enabled(&owl_crtc->base, false);
-			owl_connector_set_enabled(panel->connector, false);
-		}
-	} else {
-		if (panel) {
-			owl_connector_set_enabled(panel->connector, false);
-			owl_connector_update(panel->connector, &crtc->mode);
-			owl_connector_set_enabled(panel->connector, true);
-			set_enabled(&owl_crtc->base, true);
-		}
+	if (!panel) {
+		DBG_KMS("crtc(%u): panel is NULL", crtc->base.id);
+		return;
 	}
 
-	owl_crtc->full_update = false;
+	if (!enabled) {
+		/* set_enabled(&owl_crtc->base, false); */
+		owl_connector_set_enabled(panel->connector, false);
+	} else {
+		if (owl_crtc->mode_update) {
+			owl_connector_update(panel->connector, &crtc->mode);
+			owl_crtc->mode_update = false;
+		}
+		owl_connector_set_enabled(panel->connector, true);
+		/* set_enabled(&owl_crtc->base, true); */
+	}
 }
 
 static void owl_crtc_post_apply(struct owl_drm_apply *apply)
 {
-	/* nothing needed for post-apply */
+	struct owl_crtc *owl_crtc = container_of(apply, struct owl_crtc, apply);
+	struct drm_crtc *crtc = &owl_crtc->base;
+
+	/* queue again if any pending */
+	if (apply->pending) {
+		DBG_KMS("crtc=%u, enabled=%d", crtc->base.id, owl_crtc->enabled);
+
+		apply->enabled = owl_crtc->enabled;
+		owl_crtc_apply(&owl_crtc->base, apply);
+
+		apply->pending = false;
+	}
 }
 
 struct drm_crtc *owl_crtc_init(struct drm_device *dev,

@@ -106,10 +106,10 @@ static int update_pin(struct drm_plane *plane, struct drm_framebuffer *fb)
 		}
 
 		if (pinned_fb) {
-			drm_framebuffer_unreference(pinned_fb);
 			/* unpin old fb */
 			for (i = 0; i < owl_framebuffer_get_planes(pinned_fb); i++)
 				unpin(plane, owl_framebuffer_bo(pinned_fb, i));
+			drm_framebuffer_unreference(pinned_fb);
 		}
 
 		if (ret) {
@@ -135,12 +135,15 @@ static void owl_plane_pre_apply(struct owl_drm_apply *apply)
 	struct owl_drm_window *win = &owl_plane->win;
 	struct owl_drm_dssdev *dssdev = owl_dssdev_get(plane->dev);
 	struct owl_drm_panel *panel = NULL;
-	bool enabled = owl_plane->enabled && plane->crtc;
+	bool enabled = apply->enabled && plane->crtc;
 
 	DBG_KMS("plane=%u, enabled=%d", plane->base.id, enabled);
 
 	/* if fb has changed, pin new fb: */
-	update_pin(plane, enabled ? plane->fb : NULL);
+	if (update_pin(plane, enabled ? plane->fb : NULL)) {
+		ERR("plane=%u, update_pin failed", plane->base.id);
+		return;
+	}
 
 	if (plane->crtc)
 		panel = owl_dssdev_get_panel(dssdev, &plane->crtc->base);
@@ -192,6 +195,7 @@ static void owl_plane_pre_apply(struct owl_drm_apply *apply)
 static void owl_plane_post_apply(struct owl_drm_apply *apply)
 {
 	struct owl_plane *owl_plane = container_of(apply, struct owl_plane, apply);
+	struct drm_plane *plane = &owl_plane->base;
 	struct drm_gem_object *bo = NULL;
 	struct callback cb;
 
@@ -205,6 +209,18 @@ static void owl_plane_post_apply(struct owl_drm_apply *apply)
 
 	if (cb.fxn)
 		cb.fxn(cb.arg);
+
+	/* queue again if any pending */
+	if (apply->pending) {
+		if (plane->crtc) {
+			DBG_KMS("plane=%u, enabled=%d", plane->base.id, owl_plane->enabled);
+
+			apply->enabled = owl_plane->enabled;
+			owl_crtc_apply(plane->crtc, apply);
+		}
+
+		apply->pending = false;
+	}
 
 	/* TODO: flush cache */
 /*
@@ -221,6 +237,8 @@ static int apply(struct drm_plane *plane)
 {
 	if (plane->crtc) {
 		struct owl_plane *owl_plane = to_owl_plane(plane);
+		/* track the associate power state */
+		owl_plane->apply.enabled = owl_plane->enabled;
 		return owl_crtc_apply(plane->crtc, &owl_plane->apply);
 	}
 
@@ -241,6 +259,7 @@ int owl_plane_mode_set(struct drm_plane *plane,
 	/*
 	DBG_KMS("crtc=%u, plane=%u, fb=%u", crtc->base.id, plane->base.id, fb->base.id);
 	*/
+
 	win->crtc_x = crtc_x;
 	win->crtc_y = crtc_y;
 	win->crtc_w = crtc_w;
@@ -281,10 +300,9 @@ static int owl_plane_update(struct drm_plane *plane,
 
 	owl_plane->enabled = true;
 
+	drm_framebuffer_reference(fb);
 	if (plane->fb)
 		drm_framebuffer_unreference(plane->fb);
-
-	drm_framebuffer_reference(fb);
 
 	return owl_plane_mode_set(plane, crtc, fb,
 			crtc_x, crtc_y, crtc_w, crtc_h,
@@ -338,13 +356,14 @@ static void owl_plane_install_properties(struct drm_plane *plane, struct drm_mod
 	struct owl_plane *owl_plane = to_owl_plane(plane);
 	struct owl_drm_overlay *overlay = owl_plane->overlay;
 	struct owl_drm_private *priv = plane->dev->dev_private;
+	struct owl_drm_dssdev *dssdev = priv->dssdev;
 	struct drm_property *prop;
 	int cap_scaling = 0;
 
 	/* zpos property */
 	prop = priv->plane_property[PLANE_PROP_ZPOS];
 	if (!prop) {
-		prop = drm_property_create_range(plane->dev, 0, "zpos", 0, priv->num_planes - 1);
+		prop = drm_property_create_range(plane->dev, 0, "zpos", 0, dssdev->num_overlay - 1);
 		if (!prop)
 			return;
 
@@ -364,9 +383,10 @@ static void owl_plane_install_properties(struct drm_plane *plane, struct drm_mod
 	}
 
 	overlay->funcs->query(overlay, OVERLAY_CAP_SCALING, &cap_scaling);
-	DBG("overlay %d: cap_scaling %d", overlay->zpos, cap_scaling);
-
 	drm_object_attach_property(obj, prop, cap_scaling);
+
+	DBG_KMS("plane(%u): overlay: zpos=%d, cap_scaling=%d",
+			plane->base.id, overlay->zpos, cap_scaling);
 }
 
 static int owl_plane_set_property(struct drm_plane *plane,
@@ -397,9 +417,9 @@ static struct drm_plane_funcs owl_plane_funcs = {
 	.set_property  = owl_plane_set_property,
 };
 
-struct drm_plane *owl_plane_init(struct drm_device *dev, bool private_plane)
+struct drm_plane *owl_plane_init(struct drm_device *dev,
+		bool private_plane, unsigned int possible_crtcs)
 {
-	struct owl_drm_private *priv = dev->dev_private;
 	struct owl_drm_dssdev *dssdev = owl_dssdev_get(dev);
 	struct owl_drm_overlay *overlay;
 	struct owl_plane *owl_plane;
@@ -423,8 +443,8 @@ struct drm_plane *owl_plane_init(struct drm_device *dev, bool private_plane)
 	owl_plane->apply.pre_apply  = owl_plane_pre_apply;
 	owl_plane->apply.post_apply = owl_plane_post_apply;
 
-	ret = drm_plane_init(dev, plane, (1u << priv->num_crtcs) - 1,
-			&owl_plane_funcs, owl_formats, ARRAY_SIZE(owl_formats), private_plane);
+	ret = drm_plane_init(dev, plane, possible_crtcs, &owl_plane_funcs,
+			owl_formats, ARRAY_SIZE(owl_formats), private_plane);
 	if (ret) {
 		ERR("failed to initialize plane");
 		goto fail_free_kfifo;
@@ -439,7 +459,8 @@ struct drm_plane *owl_plane_init(struct drm_device *dev, bool private_plane)
 	owl_plane->overlay = overlay;
 	owl_plane->win.zpos = overlay->zpos;
 
-	owl_plane_install_properties(plane, &plane->base);
+	if (!private_plane)
+		owl_plane_install_properties(plane, &plane->base);
 
 	DBG_KMS("plane=%u, private=%d", plane->base.id, private_plane);
 

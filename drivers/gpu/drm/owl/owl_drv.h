@@ -286,7 +286,11 @@ struct owl_drm_window {
  */
 struct owl_drm_apply {
 	struct list_head pending_node, queued_node;
-	bool queued;
+	bool queued;  /* already queued ? */
+	bool pending; /* any pending that request another queue ? */
+
+	bool enabled; /* crtc/plane enabled ? */
+
 	void (*pre_apply)(struct owl_drm_apply *apply);
 	void (*post_apply)(struct owl_drm_apply *apply);
 };
@@ -323,10 +327,6 @@ struct owl_drm_private {
 
 	int num_connectors;
 	struct drm_connector *connectors[MAX_CONNECTORS];
-
-	/* for encoders */
-	unsigned int possible_crtcs;
-	unsigned int possible_clones;
 
 	/* Properties */
 	struct drm_property *plane_property[PLANE_PROP_MAX_NUM];
@@ -371,7 +371,8 @@ void owl_fbdev_free(struct drm_device *dev);
 /*******************************************************************************
  * plane
  ******************************************************************************/
-struct drm_plane *owl_plane_init(struct drm_device *dev, bool private_plane);
+struct drm_plane *owl_plane_init(struct drm_device *dev, bool private_plane,
+		unsigned int possible_crtcs);
 int owl_plane_mode_set(struct drm_plane *plane,
 		struct drm_crtc *crtc, struct drm_framebuffer *fb,
 		int crtc_x, int crtc_y,
@@ -397,7 +398,8 @@ uint32_t owl_crtc_mask(const struct drm_crtc *crtc);
 /*******************************************************************************
  * encoder
  ******************************************************************************/
-struct drm_encoder *owl_encoder_init(struct drm_device *dev);
+struct drm_encoder *owl_encoder_init(struct drm_device *dev,
+		unsigned int possible_crtcs, unsigned int possible_clones);
 
 /*******************************************************************************
  * connector

@@ -8,6 +8,7 @@
  */
 
 #include "owl_drv.h"
+#include "dss/dispc.h"
 
 static LIST_HEAD(owldrm_subdrv_list);
 
@@ -220,7 +221,7 @@ int owl_subdrv_register_panel(struct owl_drm_subdrv *subdrv,
 	}
 
 	/* create and initialize a encoder for this sub driver. */
-	encoder = owl_encoder_init(dssdev->drm);
+	encoder = owl_encoder_init(dssdev->drm, (1u << OWL_DRM_NUM_DISPLAY_TYPES) - 1, 0);
 	if (IS_ERR(encoder)) {
 		DEV_ERR(dev, "panel %x: fail to create encoder", subdrv->display_type);
 		return PTR_ERR(encoder);

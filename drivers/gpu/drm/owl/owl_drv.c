@@ -50,9 +50,6 @@ static int owl_modeset_init(struct drm_device *dev)
 
 	drm_mode_config_init(dev);
 
-	priv->possible_crtcs = (1u << MAX_CRTCS) - 1;
-	priv->possible_clones = 0; /* (1u << MAX_CRTCS) - 1; */
-
 	/* register subdrv encoders, connectors, panels and overlays */
 	ret = owl_subdrv_list_load(dev);
 	if (ret)
@@ -85,7 +82,7 @@ static int owl_modeset_init(struct drm_device *dev)
 #endif
 
 	num_planes = min(MAX_PLANES, priv->dssdev->num_overlay);
-	num_crtcs = min3(MAX_CRTCS, num_planes, priv->dssdev->num_panel);
+	num_crtcs = min3(MAX_CRTCS, num_planes / 2, priv->dssdev->num_panel);
 
 	/* planes are sorted by zpos from lowest to highest by default */
 	for (i = 0; i < num_planes; i++) {
@@ -93,7 +90,8 @@ static int owl_modeset_init(struct drm_device *dev)
 		bool private_plane = (i < num_crtcs) || (i >= (num_planes - num_crtcs));
 		struct drm_plane *plane;
 
-		plane = owl_plane_init(dev, private_plane);
+		/* possible_crtcs is meaningless for private planes */
+		plane = owl_plane_init(dev, private_plane, (1u << num_crtcs) - 1);
 		if (IS_ERR(plane)) {
 			ret = PTR_ERR(plane);
 			goto fail;

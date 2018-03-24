@@ -78,14 +78,16 @@ static int hdmi_set_mode(struct owl_drm_panel *panel, struct owl_videomode *mode
 	return dispc_panel_set_mode(panel, mode);
 }
 
-static void hdmi_hotplug_cb(struct owl_panel *owl_panel, void *data, u32 value)
+static void hdmi_hotplug_cb(struct owl_panel *owl_panel, void *data, u32 status)
 {
 	struct dispc_manager *mgr = data;
 	struct owl_videomode *modes;
 	int num;
 
+	DSS_DBG(mgr, "hotplug=%u", status);
+
 	/* panel disconnected, or fake_mode uninitialized */
-	if (!value || !fake_stat)
+	if (!status || !fake_stat)
 		goto out;
 
 	/* get the mode list */
@@ -107,10 +109,10 @@ static void hdmi_hotplug_cb(struct owl_panel *owl_panel, void *data, u32 value)
 		}
 	}
 
-	DSS_DBG(mgr, "fake_mode(stat=%d): xres=%d, yres=%d, refresh=%d",
-			fake_stat, fake_mode.xres, fake_mode.yres, fake_mode.refresh);
+	DSS_DBG(mgr, "fake_mode(real=%d): %dx%d-%dHZ",
+			fake_stat > 0, fake_mode.xres, fake_mode.yres, fake_mode.refresh);
 out:
-	dispc_panel_hotplug_cb(owl_panel, data, value);
+	dispc_panel_hotplug_cb(owl_panel, data, status);
 }
 #endif /* CONFIG_DRM_OWL_HDMI_FAKE_LCD_MODE */
 

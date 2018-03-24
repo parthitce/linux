@@ -189,7 +189,7 @@ bool dispc_panel_detect(struct owl_drm_panel *panel)
 	if (mgr->type == OWL_DRM_DISPLAY_EXTERNAL)
 		connected = owl_panel_hpd_is_connected(mgr->owl_panel);
 
-	DSS_DBG(mgr, "connected %d", connected);
+	DSS_DBG(mgr, "connected=%d", connected);
 
 	return connected;
 }
@@ -299,21 +299,25 @@ int dispc_panel_set_mode(struct owl_drm_panel *panel, struct owl_videomode *mode
 	struct dispc_manager *mgr = panel_to_mgr(panel);
 	struct owl_panel *owl_panel = mgr->owl_panel;
 	struct owl_videomode default_mode;
-	int ret = 0;
 
-	DSS_DBG(mgr, "panel=%p, mode: xres=%d, yres=%d, refresh=%d",
-			panel, mode->xres, mode->yres, mode->refresh);
+	DSS_DBG(mgr, "panel=%p, mode=%dx%d-%dHZ", panel, mode->xres, mode->yres, mode->refresh);
+
 #if 0
-	owl_panel_hpd_enable(owl_panel, false);
 	owl_panel_get_default_mode(owl_panel, &default_mode);
 	default_mode.xres = mode->xres;
 	default_mode.yres = mode->yres;
 	default_mode.refresh = mode->refresh;
-	ret = owl_panel_set_default_mode(owl_panel, mode);
+	owl_panel_set_default_mode(owl_panel, &default_mode);
+
+	owl_panel_hpd_enable(owl_panel, false);
+	udelay(1000);
+	dispc_panel_disable(panel);
 	owl_panel_hpd_enable(owl_panel, true);
+	udelay(1000);
+	dispc_panel_enable(panel);
 #endif
 
-	return ret;
+	return 0;
 }
 
 int dispc_panel_enable_vblank(struct owl_drm_panel *panel)
@@ -332,7 +336,7 @@ void dispc_panel_disable_vblank(struct owl_drm_panel *panel)
 	owl_de_path_disable_vsync(mgr->owl_path);
 }
 
-void dispc_panel_vsync_cb(struct owl_panel *owl_panel, void *data, u32 value)
+void dispc_panel_vsync_cb(struct owl_panel *owl_panel, void *data, u32 status)
 {
 	struct dispc_manager *mgr = data;
 	struct owl_drm_panel *panel = mgr->subdrv.panel;
@@ -341,7 +345,7 @@ void dispc_panel_vsync_cb(struct owl_panel *owl_panel, void *data, u32 value)
 		panel->callbacks.vsync(panel);
 }
 
-void dispc_panel_hotplug_cb(struct owl_panel *owl_panel, void *data, u32 value)
+void dispc_panel_hotplug_cb(struct owl_panel *owl_panel, void *data, u32 status)
 {
 	struct dispc_manager *mgr = data;
 	struct owl_drm_panel *panel = mgr->subdrv.panel;
@@ -403,13 +407,17 @@ static int dispc_video_apply(struct owl_drm_overlay *overlay, struct owl_overlay
 	owl_de_video_set_info(owl_video, &owl_info);
 	owl_de_path_attach(owl_path, owl_video);
 
+	/*
 	if (!owl_de_path_is_enabled(mgr->owl_path))
 		owl_de_path_enable(mgr->owl_path);
+	*/
 
 	owl_de_path_apply(owl_path);
 
+	/*
 	if (!owl_panel_is_enabled(mgr->owl_panel))
 		owl_panel_enable(mgr->owl_panel);
+	*/
 
 	/* Do not wait for vsync */
 	/*

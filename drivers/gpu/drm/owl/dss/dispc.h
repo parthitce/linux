@@ -62,8 +62,8 @@ bool dispc_panel_validate_mode(struct owl_drm_panel *panel, struct owl_videomode
 int dispc_panel_set_mode(struct owl_drm_panel *panel, struct owl_videomode *mode);
 int dispc_panel_enable_vblank(struct owl_drm_panel *panel);
 void dispc_panel_disable_vblank(struct owl_drm_panel *panel);
-void dispc_panel_vsync_cb(struct owl_panel *owl_panel, void *data, u32 value);
-void dispc_panel_hotplug_cb(struct owl_panel *owl_panel, void *data, u32 value);
+void dispc_panel_vsync_cb(struct owl_panel *owl_panel, void *data, u32 status);
+void dispc_panel_hotplug_cb(struct owl_panel *owl_panel, void *data, u32 status);
 
 int dispc_subdrv_add_panels(struct drm_device *drm, struct owl_drm_subdrv *subdrv,
 		struct owl_drm_panel_funcs *funcs);

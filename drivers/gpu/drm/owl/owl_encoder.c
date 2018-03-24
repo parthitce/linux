@@ -89,9 +89,9 @@ static struct drm_encoder_helper_funcs owl_drm_encoder_helper_funcs = {
 	.disable    = owl_encoder_disable,
 };
 
-struct drm_encoder *owl_encoder_init(struct drm_device *dev)
+struct drm_encoder *owl_encoder_init(struct drm_device *dev,
+		unsigned int possible_crtcs, unsigned int possible_clones)
 {
-	struct owl_drm_private *priv = dev->dev_private;
 	struct owl_encoder *owl_encoder;
 	struct drm_encoder *encoder;
 	int ret;
@@ -103,8 +103,8 @@ struct drm_encoder *owl_encoder_init(struct drm_device *dev)
 	}
 
 	encoder = &owl_encoder->base;
-	encoder->possible_crtcs = priv->possible_crtcs;
-	encoder->possible_clones = priv->possible_clones;
+	encoder->possible_crtcs = possible_crtcs;
+	encoder->possible_clones = possible_clones;
 
 	drm_encoder_init(dev, encoder, &owl_encoder_funcs, DRM_MODE_ENCODER_TMDS);
 	drm_encoder_helper_add(encoder, &owl_drm_encoder_helper_funcs);

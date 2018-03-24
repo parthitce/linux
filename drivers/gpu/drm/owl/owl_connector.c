@@ -233,6 +233,8 @@ int owl_connector_update(struct drm_connector *connector, struct drm_display_mod
 
 	copy_mode_drm_to_owl(&owl_mode, mode);
 
+	DBG_KMS("new mode: %dx%d-%dHZ", owl_mode.xres, owl_mode.yres, owl_mode.refresh);
+
 	if (panel->funcs->validate_mode &&
 		!panel->funcs->validate_mode(panel, &owl_mode))
 		goto fail;
