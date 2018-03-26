@@ -88,8 +88,10 @@
 	};
 
 	i2c1: i2c@e0174000 {
-		clock-frequency = <400000>;
 		status = "okay";
+                i2c_num = <1>;
+                clock-frequency = <400000>;
+                pinctrl-names = "default";
 		mpu6500@68 {
 		compatible = "owl-gyrosensor";
 		interrupt-parent = <&gpioa>;
@@ -101,27 +103,31 @@
 		MASTER_inv6500_position = "3";
 		SECONDARY_ak8963c_position = "3";
 		};
-		
-		ft5x06@38 {
-			compatible = "ft5x06";
-			reg = <0x38>;
-			tp_vcc = "ldo5";
-			reset_gpios = <&gpioc 27 1>; /*GPIOB(3) 0: high, 1: low*/
-			max_points = <10>;
-			x_pixel = <1024>;
-			y_pixel = <600>;
-			x_revert_en = <0>;
-			y_revert_en = <1>;
-			xy_swap_en = <0>;
-			rotate_degree = <270>;  /* 0 90 180 270 */
-    		interrupt-parent = <&sirq>;
-    		interrupts =< 0 0x4 >; /*SIRQ0*/
-			vol_range = <3100000 3110000>;
-		};
 	};
 
 	i2c2: i2c@e0178000 {
 		status = "okay";
+                i2c_num = <2>;
+                clock-frequency = <400000>;
+                pinctrl-names = "default";
+  
+                gslX680@40 {
+                        compatible = "gslX680";
+                        reg = <0x40>;
+                        tp_vcc = "ldo5";
+                        reset_gpios = <&gpiob 3 1>;/*GPIOB(3) 0: high, 1: low*/
+                        x_pixel = <1024>;
+                        y_pixel = <600>;
+                        x_revert_en = <0>;
+                        y_revert_en = <1>;
+                        xy_swap_en = <1>;
+                        rotate_degree = <180>;  /* 0 90 180 270 */
+                        interrupt-parent = <&sirq>;
+                        interrupts =< 1 0x4 >; /*SIRQ1*/
+                        vol_range = <3100000 3110000>;
+                };
+
+
 	};
 
 

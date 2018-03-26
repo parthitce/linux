@@ -4,10 +4,10 @@
 
 # copy prebuilt objs to output directory
 $(shell mkdir -p $(objtree)/$(obj)/) 
-$(shell cp -rf $(srctree)/$(src)/gsl_point_id.bin $(objtree)/$(obj)/) 
+$(shell cp -rf $(srctree)/$(src)/gsl_point_id.a_shipped $(objtree)/$(obj)/) 
 
 obj-$(CONFIG_TOUCHSCREEN_GSL_X680)		  += ctp_gslX680.o
-ctp_gslX680-objs := gslX680.o gsl_point_id.bin
+ctp_gslX680-objs := gslX680.o gsl_point_id.a	
 
 
 
