@@ -1060,10 +1060,16 @@ static void adc_poll(struct work_struct *data)
 		printk("sndrv: speaker off \n");
 		/* 1:headset with mic;  2:headset without mic */
 		switch_set_state(&headphone_sdev, HEADSET_MIC);
+		if(speaker_gpio_num > 0){
+                	gpio_direction_output(speaker_gpio_num, speaker_gpio_active); 
+           	}  
 
 	} else {
 		printk("sndrv: speaker on state %d, old_state %d\n", state, old_state);
 		switch_set_state(&headphone_sdev, SPEAKER_ON);
+		if(speaker_gpio_num > 0){
+                	gpio_direction_output(speaker_gpio_num, !speaker_gpio_active); 
+           	}  
 	}
 
 	old_state = state;
@@ -1803,7 +1809,9 @@ static void atc2603c_platform_shutdown(struct platform_device *pdev)
 {
 	/* close speaker gpio before shutdown */
 	/* speaker_gpio_active: 0 close 1 open*/
-	gpio_direction_output(speaker_gpio_num, !speaker_gpio_active);
+	if(speaker_gpio_num > 0){
+		gpio_direction_output(speaker_gpio_num, !speaker_gpio_active);
+	}
 #if 0
 	snd_soc_write(atc2603c_codec, DAC_VOLUMECTL0, 0xBEBE);
 	snd_soc_write(atc2603c_codec, DAC_ANALOG1, 0x0);
