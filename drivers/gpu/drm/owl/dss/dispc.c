@@ -92,9 +92,9 @@ static int drm_overlay_to_dss_videoinfo(struct dispc_manager *mgr,
 
 	info->is_original_scaled = (info->width != info->out_width || info->height != info->out_height);
 
-	DBG("crop: (%d,%d, %dx%d) --> display: (%d,%d, %dx%d)",
-		info->xoff, info->yoff, info->width, info->height,
-		info->pos_x, info->pos_y, info->out_width, info->out_height);
+	DSS_DBG(mgr, "crop: (%d,%d, %dx%d) --> display: (%d,%d, %dx%d)",
+			info->xoff, info->yoff, info->width, info->height,
+			info->pos_x, info->pos_y, info->out_width, info->out_height);
 
 	/*
 	 * caculate real position without scaling
@@ -105,9 +105,9 @@ static int drm_overlay_to_dss_videoinfo(struct dispc_manager *mgr,
 	info->real_pos_y = (info->pos_y == 0 ? 0 : (info->pos_y - (info->height - info->out_height) / 2));
 	info->real_pos_y = (info->real_pos_y < 0 ? 0 : info->real_pos_y);
 
-	DBG("original area-->");
-	DBG("(xoff,yoff, WidthxHeight) --> (pos_x,pos_y/real_pos_x,real_pos_y WidthxHeight)");
-	DBG("(%d,%d %dx%d) --> (%d,%d/%d,%d %dx%d)",
+	DSS_DBG(mgr, "original area-->");
+	DSS_DBG(mgr, "(xoff,yoff, WidthxHeight) --> (pos_x,pos_y/real_pos_x,real_pos_y WidthxHeight)");
+	DSS_DBG(mgr, "(%d,%d %dx%d) --> (%d,%d/%d,%d %dx%d)",
 			info->xoff, info->yoff, info->width, info->height,
 			info->pos_x, info->pos_y, info->real_pos_x, info->real_pos_y,
 			info->out_width, info->out_height);
@@ -134,9 +134,9 @@ static int drm_overlay_to_dss_videoinfo(struct dispc_manager *mgr,
 	info->out_width = DIV_ROUND_CLOSEST(info->out_width * disp_width, draw_width);
 	info->out_height = DIV_ROUND_CLOSEST(info->out_height * disp_height, draw_height);
 
-	DBG("area after adjusting-->");
-	DBG("(xoff,yoff, WidthxHeight) --> (pos_x,pos_y/real_pos_x,real_pos_y WidthxHeight)");
-	DBG("(%d,%d %dx%d) --> (%d,%d/%d,%d %dx%d)",
+	DSS_DBG(mgr, "area after adjusting-->");
+	DSS_DBG(mgr, "(xoff,yoff, WidthxHeight) --> (pos_x,pos_y/real_pos_x,real_pos_y WidthxHeight)");
+	DSS_DBG(mgr, "(%d,%d %dx%d) --> (%d,%d/%d,%d %dx%d)",
 			info->xoff, info->yoff, info->width, info->height,
 			info->pos_x, info->pos_y, info->real_pos_x, info->real_pos_y,
 			info->out_width, info->out_height);
@@ -168,9 +168,9 @@ static int drm_overlay_to_dss_videoinfo(struct dispc_manager *mgr,
 			info->addr[plane] = overlay->dma_addr[plane] + info->offset[plane];
 		}
 
-		DBG("plane %d, Pitch %d, Offset %d, Addr %ld",
-			plane, info->pitch[plane], info->offset[plane],
-			info->addr[plane]);
+		DSS_DBG(mgr, "plane %d, Pitch %d, Offset %d, Addr %ld",
+				plane, info->pitch[plane], info->offset[plane],
+				info->addr[plane]);
 	}
 
 	/* choose any values as you like */
@@ -249,21 +249,7 @@ int dispc_panel_get_modes(struct owl_drm_panel *panel,
 		struct owl_videomode *modes, int num_modes)
 {
 	struct dispc_manager *mgr = panel_to_mgr(panel);
-	struct owl_panel *owl_panel = mgr->owl_panel;
-	int count = owl_panel->n_modes ? owl_panel->n_modes : 1;
-
-	/* try to get the number of supported modes */
-	if (!modes || !num_modes)
-		return count;
-
-	num_modes = min(count, num_modes);
-
-	if (owl_panel->n_modes)
-		memcpy(modes, owl_panel->mode_list, num_modes * sizeof(*modes));
-	else
-		memcpy(modes, &owl_panel->mode, sizeof(*modes));
-
-	return num_modes;
+	return owl_panel_get_mode_list(mgr->owl_panel, modes, num_modes);
 }
 
 bool dispc_panel_validate_mode(struct owl_drm_panel *panel, struct owl_videomode *mode)
@@ -294,28 +280,49 @@ bool dispc_panel_validate_mode(struct owl_drm_panel *panel, struct owl_videomode
 	return false;
 }
 
+static void modeset_hotplug(struct owl_panel *owl_panel, void *data, u32 status)
+{
+	struct dispc_manager *mgr = data;
+	complete(&mgr->modeset_completion);
+}
+
 int dispc_panel_set_mode(struct owl_drm_panel *panel, struct owl_videomode *mode)
 {
 	struct dispc_manager *mgr = panel_to_mgr(panel);
 	struct owl_panel *owl_panel = mgr->owl_panel;
-	struct owl_videomode default_mode;
 
 	DSS_DBG(mgr, "panel=%p, mode=%dx%d-%dHZ", panel, mode->xres, mode->yres, mode->refresh);
 
-#if 0
-	owl_panel_get_default_mode(owl_panel, &default_mode);
-	default_mode.xres = mode->xres;
-	default_mode.yres = mode->yres;
-	default_mode.refresh = mode->refresh;
-	owl_panel_set_default_mode(owl_panel, &default_mode);
+	if (mode->xres == owl_panel->mode.xres &&
+		mode->yres == owl_panel->mode.yres &&
+		mode->refresh == owl_panel->mode.refresh)
+		return 0;
 
+	/* reinitialize in case of accident */
+	INIT_COMPLETION(mgr->modeset_completion);
+
+	/* fake the modeset hotplug handler */
+	owl_panel_hotplug_cb_set(mgr->owl_panel, modeset_hotplug, mgr);
+
+	/* simulate hotplug in */
 	owl_panel_hpd_enable(owl_panel, false);
-	udelay(1000);
+	wait_for_completion_interruptible_timeout(&mgr->modeset_completion, msecs_to_jiffies(3000));
+
+	/* disable panel */
 	dispc_panel_disable(panel);
+
+	/* config the target mode */
+	owl_panel_set_default_mode(owl_panel, mode);
+
+	/* simulate hotplug out */
 	owl_panel_hpd_enable(owl_panel, true);
-	udelay(1000);
+	wait_for_completion_interruptible_timeout(&mgr->modeset_completion, msecs_to_jiffies(3000));
+
+	/* enable panel */
 	dispc_panel_enable(panel);
-#endif
+
+	/* restore hotplug handler */
+	owl_panel_hotplug_cb_set(mgr->owl_panel, mgr->hotplug, mgr);
 
 	return 0;
 }
@@ -336,22 +343,44 @@ void dispc_panel_disable_vblank(struct owl_drm_panel *panel)
 	owl_de_path_disable_vsync(mgr->owl_path);
 }
 
-void dispc_panel_vsync_cb(struct owl_panel *owl_panel, void *data, u32 status)
+void dispc_panel_default_vsync(struct owl_panel *owl_panel, void *data, u32 status)
 {
 	struct dispc_manager *mgr = data;
 	struct owl_drm_panel *panel = mgr->subdrv.panel;
 
-	if (panel && panel->callbacks.vsync)
+	if (!panel) {
+		DSS_DBG(mgr, "drm panel not connected");
+		goto out;
+	}
+
+	if (panel->callbacks.vsync)
 		panel->callbacks.vsync(panel);
+out:
+	atomic_inc(&mgr->vsync_counter);
 }
 
-void dispc_panel_hotplug_cb(struct owl_panel *owl_panel, void *data, u32 status)
+void dispc_panel_default_hotplug(struct owl_panel *owl_panel, void *data, u32 status)
 {
 	struct dispc_manager *mgr = data;
 	struct owl_drm_panel *panel = mgr->subdrv.panel;
 
-	if (panel && panel->callbacks.hotplug)
+	DSS_DBG(mgr, "hotplug=%u", status);
+
+	if (!panel) {
+		DSS_DBG(mgr, "drm panel not connected");
+		goto out;
+	}
+
+	/* FIXME: Should we do the dpms here ? */
+	if (status)
+		dispc_panel_enable(panel);
+	else
+		dispc_panel_disable(panel);
+
+	if (panel->callbacks.hotplug)
 		panel->callbacks.hotplug(panel);
+out:
+	atomic_inc(&mgr->hotplug_counter);
 }
 
 int dispc_subdrv_add_panels(struct drm_device *drm, struct owl_drm_subdrv *subdrv,
@@ -404,29 +433,25 @@ static int dispc_video_apply(struct owl_drm_overlay *overlay, struct owl_overlay
 
 	mutex_lock(&mgr->mutex);
 
+	if (!owl_de_path_is_enabled(mgr->owl_path) ||
+		!owl_panel_is_enabled(mgr->owl_panel)) {
+		DSS_ERR(mgr, "panel not enabled yet");
+		ret = -EINVAL;
+		goto fail_unlock;
+	}
+
 	owl_de_video_set_info(owl_video, &owl_info);
 	owl_de_path_attach(owl_path, owl_video);
-
-	/*
-	if (!owl_de_path_is_enabled(mgr->owl_path))
-		owl_de_path_enable(mgr->owl_path);
-	*/
-
 	owl_de_path_apply(owl_path);
-
-	/*
-	if (!owl_panel_is_enabled(mgr->owl_panel))
-		owl_panel_enable(mgr->owl_panel);
-	*/
 
 	/* Do not wait for vsync */
 	/*
 	 * owl_de_path_wait_for_go(owl_path);
 	 */
 
+fail_unlock:
 	mutex_unlock(&mgr->mutex);
-
-	return 0;
+	return ret;
 }
 
 static int dispc_video_enable(struct owl_drm_overlay *overlay)
@@ -551,7 +576,7 @@ struct dispc_manager *dispc_manager_get(int type)
 	return dispc_mgrs[type];
 }
 
-struct dispc_manager *dispc_manager_init(struct device *dev, int display_type)
+struct dispc_manager *dispc_manager_create(struct device *dev, int display_type)
 {
 	struct dispc_manager *mgr = NULL;
 	int type, i, ret = 0;
@@ -615,10 +640,11 @@ struct dispc_manager *dispc_manager_init(struct device *dev, int display_type)
 		}
 	}
 
-	/* Cancel the mmu skipping introduced for android */
+	/* cancel the mmu skipping introduced for android */
 	owl_de_path_set_mmuskip(mgr->owl_path, 0);
 
 	mutex_init(&mgr->mutex);
+	init_completion(&mgr->modeset_completion);
 
 	mgr->type = type;
 	dispc_mgrs[type] = mgr;
@@ -629,4 +655,10 @@ fail_free:
 	devm_kfree(dev, mgr);
 fail:
 	return ERR_PTR(ret);
+}
+
+void dispc_manager_destroy(struct dispc_manager *mgr)
+{
+	complete_all(&mgr->modeset_completion);
+	dispc_mgrs[mgr->type] = NULL;
 }

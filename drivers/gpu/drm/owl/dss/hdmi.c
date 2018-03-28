@@ -84,13 +84,16 @@ static void hdmi_hotplug_cb(struct owl_panel *owl_panel, void *data, u32 status)
 	struct owl_videomode *modes;
 	int num;
 
-	DSS_DBG(mgr, "hotplug=%u", status);
+	/* 1. handle hotplug event */
+	dispc_panel_default_hotplug(owl_panel, data, status);
 
-	/* panel disconnected, or fake_mode uninitialized */
+	/* 2. take care of the fake mode */
+
+	/* 1) panel disconnected, or fake_mode uninitialized */
 	if (!status || !fake_stat)
-		goto out;
+		return;
 
-	/* get the mode list */
+	/* 2) get the mode list */
 	if (owl_panel->n_modes) {
 		modes = owl_panel->mode_list;
 		num = owl_panel->n_modes;
@@ -99,7 +102,7 @@ static void hdmi_hotplug_cb(struct owl_panel *owl_panel, void *data, u32 status)
 		num = 1;
 	}
 
-	/* find whether there is a corresponding real mode, if exist, copy it */
+	/* 3) find whether there is a corresponding real mode, if exist, copy it */
 	while (--num >= 0) {
 		if (fake_mode.xres == modes[num].xres &&
 			fake_mode.yres == modes[num].yres) {
@@ -111,8 +114,6 @@ static void hdmi_hotplug_cb(struct owl_panel *owl_panel, void *data, u32 status)
 
 	DSS_DBG(mgr, "fake_mode(real=%d): %dx%d-%dHZ",
 			fake_stat > 0, fake_mode.xres, fake_mode.yres, fake_mode.refresh);
-out:
-	dispc_panel_hotplug_cb(owl_panel, data, status);
 }
 #endif /* CONFIG_DRM_OWL_HDMI_FAKE_LCD_MODE */
 
@@ -156,9 +157,9 @@ static int hdmi_probe(struct platform_device *pdev)
 	struct owl_drm_subdrv *subdrv;
 	struct dispc_manager *mgr;
 
-	mgr = dispc_manager_init(dev, OWL_DISPLAY_TYPE_HDMI);
+	mgr = dispc_manager_create(dev, OWL_DISPLAY_TYPE_HDMI);
 	if (IS_ERR(mgr)) {
-		DEV_ERR(dev, "dispc_manager_init failed");
+		DEV_ERR(dev, "dispc_manager_create failed");
 		return PTR_ERR(mgr);
 	}
 
@@ -175,12 +176,12 @@ static int hdmi_probe(struct platform_device *pdev)
 #endif
 
 	/* registers vsync and hotplug call back */
-	owl_panel_vsync_cb_set(mgr->owl_panel, dispc_panel_vsync_cb, mgr);
+	dispc_panel_register_vsync(mgr, dispc_panel_default_vsync);
 
 #ifdef CONFIG_DRM_OWL_HDMI_FAKE_LCD_MODE
-	owl_panel_hotplug_cb_set(mgr->owl_panel, hdmi_hotplug_cb, mgr);
+	dispc_panel_register_hotplug(mgr, hdmi_hotplug_cb);
 #else
-	owl_panel_hotplug_cb_set(mgr->owl_panel, dispc_panel_hotplug_cb, mgr);
+	dispc_panel_register_hotplug(mgr, dispc_panel_default_hotplug);
 #endif
 
 	/* hotplug detection */
@@ -192,7 +193,10 @@ static int hdmi_probe(struct platform_device *pdev)
 static int hdmi_remove(struct platform_device *pdev)
 {
 	struct dispc_manager *mgr = platform_get_drvdata(pdev);
+
 	owl_subdrv_unregister(&mgr->subdrv);
+	dispc_manager_destroy(mgr);
+
 	return 0;
 }
 

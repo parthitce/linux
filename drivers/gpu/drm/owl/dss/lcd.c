@@ -45,9 +45,9 @@ static int lcd_probe(struct platform_device *pdev)
 	struct owl_drm_subdrv *subdrv;
 	struct dispc_manager *mgr;
 
-	mgr = dispc_manager_init(dev, OWL_DISPLAY_TYPE_LCD);
+	mgr = dispc_manager_create(dev, OWL_DISPLAY_TYPE_LCD);
 	if (IS_ERR(mgr)) {
-		DEV_ERR(dev, "dispc_manager_init failed");
+		DEV_ERR(dev, "dispc_manager_create failed");
 		return PTR_ERR(mgr);
 	}
 
@@ -60,7 +60,7 @@ static int lcd_probe(struct platform_device *pdev)
 	owl_subdrv_register(subdrv);
 
 	/* registers vsync call back */
-	owl_panel_vsync_cb_set(mgr->owl_panel, dispc_panel_vsync_cb, mgr);
+	dispc_panel_register_vsync(mgr, dispc_panel_default_vsync);
 
 	return 0;
 }
@@ -68,7 +68,10 @@ static int lcd_probe(struct platform_device *pdev)
 static int lcd_remove(struct platform_device *pdev)
 {
 	struct dispc_manager *mgr = platform_get_drvdata(pdev);
+
 	owl_subdrv_unregister(&mgr->subdrv);
+	dispc_manager_destroy(mgr);
+
 	return 0;
 }
 
