@@ -447,6 +447,29 @@ int owl_panel_set_mode(struct owl_panel *panel, struct owl_videomode *mode)
 }
 EXPORT_SYMBOL(owl_panel_set_mode);
 
+int owl_panel_get_mode_list(struct owl_panel *panel,
+			     struct owl_videomode *modes, int n_modes)
+{
+	int count = panel->n_modes ? panel->n_modes : 1;
+
+	if (!panel)
+		return;
+
+	 /* try to get the number of modes */
+	 if (!modes || n_modes <= 0)
+		 return count;
+
+	 n_modes = min(count, n_modes);
+
+	if (panel->n_modes)
+		memcpy(modes, panel->mode_list, n_modes * sizeof(*modes));
+	else
+		memcpy(modes, &panel->mode, sizeof(*modes));
+
+	return n_modes;
+}
+EXPORT_SYMBOL(owl_panel_get_mode_list);
+
 void owl_panel_set_mode_list(struct owl_panel *panel,
 			     struct owl_videomode *modes, int n_modes)
 {

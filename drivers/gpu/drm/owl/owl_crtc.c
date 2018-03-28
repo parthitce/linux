@@ -704,7 +704,7 @@ static void owl_crtc_pre_apply(struct owl_drm_apply *apply)
 			enabled, owl_crtc->mode_update);
 
 	if (!panel) {
-		DBG_KMS("crtc(%u): panel is NULL", crtc->base.id);
+		DBG_KMS("crtc(%u): panel not connected", crtc->base.id);
 		return;
 	}
 
