@@ -12,37 +12,9 @@
 
 #define DRIVER_NAME  "owldrm-lcd"
 
-static struct owl_drm_panel_funcs lcd_panel_funcs = {
-	.detect        = dispc_panel_detect,
-	.prepare       = dispc_panel_prepare,
-	.enable        = dispc_panel_enable,
-	.disable       = dispc_panel_disable,
-	.unprepare     = dispc_panel_unprepare,
-
-	.get_modes     = dispc_panel_get_modes,
-	.validate_mode = dispc_panel_validate_mode,
-
-	.enable_vblank   = dispc_panel_enable_vblank,
-	.disable_vblank  = dispc_panel_disable_vblank,
-};
-
-static int lcd_load(struct drm_device *drm, struct owl_drm_subdrv *subdrv)
-{
-	dispc_subdrv_add_overlays(drm, subdrv);
-	dispc_subdrv_add_panels(drm, subdrv, &lcd_panel_funcs);
-	return 0;
-}
-
-static void lcd_unload(struct drm_device *drm, struct owl_drm_subdrv *subdrv)
-{
-	dispc_subdrv_remove_overlays(drm, subdrv);
-	dispc_subdrv_remove_panels(drm, subdrv);	
-}
-
 static int lcd_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct owl_drm_subdrv *subdrv;
 	struct dispc_manager *mgr;
 
 	mgr = dispc_manager_create(dev, OWL_DISPLAY_TYPE_LCD);
@@ -51,16 +23,12 @@ static int lcd_probe(struct platform_device *pdev)
 		return PTR_ERR(mgr);
 	}
 
-	/* initial subdrv */
-	subdrv = &mgr->subdrv;
-	subdrv->display_type = OWL_DISPLAY_TYPE_LCD;
-	subdrv->dev = dev;
-	subdrv->load = lcd_load;
-	subdrv->unload = lcd_unload;
-	owl_subdrv_register(subdrv);
+	mgr->subdrv.load = dispc_subdrv_load;
+	mgr->subdrv.unload = dispc_subdrv_unload;
+	owl_subdrv_register(&mgr->subdrv);
 
 	/* registers vsync call back */
-	dispc_panel_register_vsync(mgr, dispc_panel_default_vsync);
+	dispc_manager_register_vsync(mgr, dispc_panel_default_vsync);
 
 	return 0;
 }
@@ -75,12 +43,43 @@ static int lcd_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM_SLEEP
+static bool lcd_suspend_state;
+
+static int lcd_suspend(struct device *dev)
+{
+	struct dispc_manager *mgr = dev_get_drvdata(dev);
+
+	lcd_suspend_state = mgr->enabled;
+	dispc_manager_set_enabled(mgr, false);
+
+	return 0;
+}
+
+static int lcd_resume(struct device *dev)
+{
+	struct dispc_manager *mgr = dev_get_drvdata(dev);
+
+	if (lcd_suspend_state)
+		dispc_manager_set_enabled(mgr, true);
+
+	return 0;
+}
+#endif
+
+#ifdef CONFIG_PM
+static SIMPLE_DEV_PM_OPS(lcd_pm_ops, lcd_suspend, lcd_resume);
+#endif
+
 static struct platform_driver lcd_platform_driver = {
 	.probe  = lcd_probe,
 	.remove	= lcd_remove,
 	.driver	= {
 		.name  = DRIVER_NAME,
 		.owner = THIS_MODULE,
+#ifdef CONFIG_PM
+		.pm     = &lcd_pm_ops,
+#endif
 	},
 };
 

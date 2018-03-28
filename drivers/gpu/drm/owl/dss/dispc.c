@@ -55,132 +55,9 @@ static enum owl_color_mode drm_format_to_dss_format(u32 format)
 	return dss_format;
 }
 
-static int drm_overlay_to_dss_videoinfo(struct dispc_manager *mgr,
-		struct owl_overlay_info *overlay, struct owl_de_video_info *info)
-{
-	struct owl_panel *owl_panel = mgr->owl_panel;
-	int disp_x, disp_y, disp_width, disp_height; /* real display area */
-	int draw_width, draw_height;
-	int plane;
-
-	owl_panel_get_draw_size(owl_panel, &draw_width, &draw_height);
-	owl_panel_get_disp_area(owl_panel, &disp_x, &disp_y, &disp_width, &disp_height);
-
-	DSS_DBG(mgr, "disp area(%d,%d %dx%d); draw area(0,0 %dx%d)",
-			disp_x, disp_y, disp_width, disp_height, draw_width, draw_height);
-
-	info->xoff = overlay->src_x;
-	info->yoff = overlay->src_y;
-	info->width = overlay->src_width;
-	info->height = overlay->src_height;
-
-	if (overlay->mode_width != owl_panel->mode.xres) {
-		info->pos_x = DIV_ROUND_CLOSEST(overlay->crtc_x * owl_panel->mode.xres, overlay->mode_width);
-		info->out_width = DIV_ROUND_CLOSEST(overlay->crtc_width * owl_panel->mode.xres, overlay->mode_width);
-	} else {
-		info->pos_x = overlay->crtc_x;
-		info->out_width = overlay->crtc_width;
-	}
-
-	if (overlay->mode_height != owl_panel->mode.yres) {
-		info->pos_y = DIV_ROUND_CLOSEST(overlay->crtc_y * owl_panel->mode.yres, overlay->mode_height);
-		info->out_height = DIV_ROUND_CLOSEST(overlay->crtc_height * owl_panel->mode.yres, overlay->mode_height);
-	} else {
-		info->pos_y = overlay->crtc_y;
-		info->out_height = overlay->crtc_height;
-	}
-
-	info->is_original_scaled = (info->width != info->out_width || info->height != info->out_height);
-
-	DSS_DBG(mgr, "crop: (%d,%d, %dx%d) --> display: (%d,%d, %dx%d)",
-			info->xoff, info->yoff, info->width, info->height,
-			info->pos_x, info->pos_y, info->out_width, info->out_height);
-
-	/*
-	 * caculate real position without scaling
-	 */
-	info->real_pos_x = (info->pos_x == 0 ? 0 : (info->pos_x - (info->width - info->out_width) / 2));
-	info->real_pos_x = (info->real_pos_x < 0 ? 0 : info->real_pos_x);
-
-	info->real_pos_y = (info->pos_y == 0 ? 0 : (info->pos_y - (info->height - info->out_height) / 2));
-	info->real_pos_y = (info->real_pos_y < 0 ? 0 : info->real_pos_y);
-
-	DSS_DBG(mgr, "original area-->");
-	DSS_DBG(mgr, "(xoff,yoff, WidthxHeight) --> (pos_x,pos_y/real_pos_x,real_pos_y WidthxHeight)");
-	DSS_DBG(mgr, "(%d,%d %dx%d) --> (%d,%d/%d,%d %dx%d)",
-			info->xoff, info->yoff, info->width, info->height,
-			info->pos_x, info->pos_y, info->real_pos_x, info->real_pos_y,
-			info->out_width, info->out_height);
-
-	/*
-	 * Adjust with draw size and display area size.
-	 *
-	 * There are 2 rectangles in the coordinate system, one is
-	 * DRAW rectangle, denoted by (0,0 draw_width,draw_height),
-	 * another is DISPLAY rectangle, denoted by
-	 * (disp_x,disp_y disp_width,disp_height).
-	 *
-	 * Now, we need convert the target rectangle
-	 * (pos_x,pos_y out_width,out_height) from DRAW rectangle to
-	 * DISPLAY rectangle, the algorithm is:
-	 * 	out_width / draw_width = out_width_new / disp_width,
-	 * 	out_height / draw_height = out_height_new / disp_height,
-	 *	(pos_x - 0) / draw_width = (pso_x_new - disp_x) / disp_width
-	 *	(pos_y - 0) / draw_height = (pso_y_new - disp_y) / disp_height
-	 */
-	info->pos_x = DIV_ROUND_CLOSEST(info->pos_x * disp_width, draw_width) + disp_x;
-	info->pos_y = DIV_ROUND_CLOSEST(info->pos_y * disp_height, draw_height) + disp_y;
-
-	info->out_width = DIV_ROUND_CLOSEST(info->out_width * disp_width, draw_width);
-	info->out_height = DIV_ROUND_CLOSEST(info->out_height * disp_height, draw_height);
-
-	DSS_DBG(mgr, "area after adjusting-->");
-	DSS_DBG(mgr, "(xoff,yoff, WidthxHeight) --> (pos_x,pos_y/real_pos_x,real_pos_y WidthxHeight)");
-	DSS_DBG(mgr, "(%d,%d %dx%d) --> (%d,%d/%d,%d %dx%d)",
-			info->xoff, info->yoff, info->width, info->height,
-			info->pos_x, info->pos_y, info->real_pos_x, info->real_pos_y,
-			info->out_width, info->out_height);
-
-	info->color_mode = drm_format_to_dss_format(overlay->pixel_format);
-
-	/* FIXME: OWL_BLENDING_PREMULT, OWL_BLENDING_COVERAGE, OWL_BLENDING_NONE ? */
-	info->blending = OWL_BLENDING_PREMULT;
-	info->alpha = 255;
-
-	info->rotation = 0;
-	info->mmu_enable = owl_de_mmu_is_present();
-	info->n_planes = drm_format_num_planes(overlay->pixel_format);
-
-	for (plane = 0; plane < info->n_planes; plane++) {
-		dma_addr_t addr;
-
-		info->offset[plane] = overlay->offsets[plane];
-		info->pitch[plane] = overlay->pitches[plane];
-
-		if (info->mmu_enable) {
-			if (owl_de_mmu_handle_to_addr(overlay->dma_addr[plane], &addr)) {
-				DSS_ERR(mgr, "owl_de_mmu_handle_to_addr failed (hnd=%p)",
-						(void*)overlay->dma_addr[plane]);
-				return -EFAULT;
-			}
-			info->addr[plane] = addr + info->offset[plane];
-		} else {
-			info->addr[plane] = overlay->dma_addr[plane] + info->offset[plane];
-		}
-
-		DSS_DBG(mgr, "plane %d, Pitch %d, Offset %d, Addr %ld",
-				plane, info->pitch[plane], info->offset[plane],
-				info->addr[plane]);
-	}
-
-	/* choose any values as you like */
-	info->brightness = owl_panel_brightness_get(owl_panel);
-	info->contrast = owl_panel_contrast_get(owl_panel);
-	info->saturation = owl_panel_saturation_get(owl_panel);
-
-	return 0;
-}
-
+/*******************************************************************************
+ * struct owl_drm_panel: common implemention of struct owl_drm_panel_funcs
+ ******************************************************************************/
 bool dispc_panel_detect(struct owl_drm_panel *panel)
 {
 	struct dispc_manager *mgr = panel_to_mgr(panel);
@@ -203,10 +80,7 @@ int dispc_panel_enable(struct owl_drm_panel *panel)
 
 	mutex_lock(&mgr->mutex);
 
-	if (!owl_de_path_is_enabled(mgr->owl_path))
-		owl_de_path_enable(mgr->owl_path);
-	if (!owl_panel_is_enabled(mgr->owl_panel))
-		owl_panel_enable(mgr->owl_panel);
+	dispc_manager_set_enabled(mgr, true);
 
 	mutex_unlock(&mgr->mutex);
 
@@ -221,10 +95,7 @@ int dispc_panel_disable(struct owl_drm_panel *panel)
 
 	mutex_lock(&mgr->mutex);
 
-	if (owl_panel_is_enabled(mgr->owl_panel))
-		owl_panel_disable(mgr->owl_panel);
-	if (owl_de_path_is_enabled(mgr->owl_path))
-		owl_de_path_disable(mgr->owl_path);
+	dispc_manager_set_enabled(mgr, false);
 
 	mutex_unlock(&mgr->mutex);
 
@@ -383,31 +254,136 @@ out:
 	atomic_inc(&mgr->hotplug_counter);
 }
 
-int dispc_subdrv_add_panels(struct drm_device *drm, struct owl_drm_subdrv *subdrv,
-		struct owl_drm_panel_funcs *funcs)
+/*******************************************************************************
+ * struct owl_drm_overlay: common implemention of struct owl_drm_overlay_funcs
+ ******************************************************************************/
+static int drm_overlay_to_dss_videoinfo(struct dispc_manager *mgr,
+		struct owl_overlay_info *overlay, struct owl_de_video_info *info)
 {
-	struct owl_drm_panel *panel = devm_kzalloc(drm->dev, sizeof(*panel), GFP_KERNEL);
+	struct owl_panel *owl_panel = mgr->owl_panel;
+	int disp_x, disp_y, disp_width, disp_height; /* real display area */
+	int draw_width, draw_height;
+	int plane;
 
-	if (!panel)
-		return -ENOMEM;
+	owl_panel_get_draw_size(owl_panel, &draw_width, &draw_height);
+	owl_panel_get_disp_area(owl_panel, &disp_x, &disp_y, &disp_width, &disp_height);
 
-	panel->drm = drm;
-	panel->dev = subdrv->dev;
-	panel->funcs = funcs;
-	INIT_LIST_HEAD(&panel->attach_list);
-	INIT_LIST_HEAD(&panel->list);
+	DSS_DBG(mgr, "disp area(%d,%d %dx%d); draw area(0,0 %dx%d)",
+			disp_x, disp_y, disp_width, disp_height, draw_width, draw_height);
 
-	subdrv->panel = panel;
+	info->xoff = overlay->src_x;
+	info->yoff = overlay->src_y;
+	info->width = overlay->src_width;
+	info->height = overlay->src_height;
 
-	return owl_subdrv_register_panel(subdrv, panel);
+	if (overlay->mode_width != owl_panel->mode.xres) {
+		info->pos_x = DIV_ROUND_CLOSEST(overlay->crtc_x * owl_panel->mode.xres, overlay->mode_width);
+		info->out_width = DIV_ROUND_CLOSEST(overlay->crtc_width * owl_panel->mode.xres, overlay->mode_width);
+	} else {
+		info->pos_x = overlay->crtc_x;
+		info->out_width = overlay->crtc_width;
+	}
+
+	if (overlay->mode_height != owl_panel->mode.yres) {
+		info->pos_y = DIV_ROUND_CLOSEST(overlay->crtc_y * owl_panel->mode.yres, overlay->mode_height);
+		info->out_height = DIV_ROUND_CLOSEST(overlay->crtc_height * owl_panel->mode.yres, overlay->mode_height);
+	} else {
+		info->pos_y = overlay->crtc_y;
+		info->out_height = overlay->crtc_height;
+	}
+
+	info->is_original_scaled = (info->width != info->out_width || info->height != info->out_height);
+
+	DSS_DBG(mgr, "crop: (%d,%d, %dx%d) --> display: (%d,%d, %dx%d)",
+			info->xoff, info->yoff, info->width, info->height,
+			info->pos_x, info->pos_y, info->out_width, info->out_height);
+
+	/*
+	 * caculate real position without scaling
+	 */
+	info->real_pos_x = (info->pos_x == 0 ? 0 : (info->pos_x - (info->width - info->out_width) / 2));
+	info->real_pos_x = (info->real_pos_x < 0 ? 0 : info->real_pos_x);
+
+	info->real_pos_y = (info->pos_y == 0 ? 0 : (info->pos_y - (info->height - info->out_height) / 2));
+	info->real_pos_y = (info->real_pos_y < 0 ? 0 : info->real_pos_y);
+
+	DSS_DBG(mgr, "original area-->");
+	DSS_DBG(mgr, "(xoff,yoff, WidthxHeight) --> (pos_x,pos_y/real_pos_x,real_pos_y WidthxHeight)");
+	DSS_DBG(mgr, "(%d,%d %dx%d) --> (%d,%d/%d,%d %dx%d)",
+			info->xoff, info->yoff, info->width, info->height,
+			info->pos_x, info->pos_y, info->real_pos_x, info->real_pos_y,
+			info->out_width, info->out_height);
+
+	/*
+	 * Adjust with draw size and display area size.
+	 *
+	 * There are 2 rectangles in the coordinate system, one is
+	 * DRAW rectangle, denoted by (0,0 draw_width,draw_height),
+	 * another is DISPLAY rectangle, denoted by
+	 * (disp_x,disp_y disp_width,disp_height).
+	 *
+	 * Now, we need convert the target rectangle
+	 * (pos_x,pos_y out_width,out_height) from DRAW rectangle to
+	 * DISPLAY rectangle, the algorithm is:
+	 * 	out_width / draw_width = out_width_new / disp_width,
+	 * 	out_height / draw_height = out_height_new / disp_height,
+	 *	(pos_x - 0) / draw_width = (pso_x_new - disp_x) / disp_width
+	 *	(pos_y - 0) / draw_height = (pso_y_new - disp_y) / disp_height
+	 */
+	info->pos_x = DIV_ROUND_CLOSEST(info->pos_x * disp_width, draw_width) + disp_x;
+	info->pos_y = DIV_ROUND_CLOSEST(info->pos_y * disp_height, draw_height) + disp_y;
+
+	info->out_width = DIV_ROUND_CLOSEST(info->out_width * disp_width, draw_width);
+	info->out_height = DIV_ROUND_CLOSEST(info->out_height * disp_height, draw_height);
+
+	DSS_DBG(mgr, "area after adjusting-->");
+	DSS_DBG(mgr, "(xoff,yoff, WidthxHeight) --> (pos_x,pos_y/real_pos_x,real_pos_y WidthxHeight)");
+	DSS_DBG(mgr, "(%d,%d %dx%d) --> (%d,%d/%d,%d %dx%d)",
+			info->xoff, info->yoff, info->width, info->height,
+			info->pos_x, info->pos_y, info->real_pos_x, info->real_pos_y,
+			info->out_width, info->out_height);
+
+	info->color_mode = drm_format_to_dss_format(overlay->pixel_format);
+
+	/* FIXME: OWL_BLENDING_PREMULT, OWL_BLENDING_COVERAGE, OWL_BLENDING_NONE ? */
+	info->blending = OWL_BLENDING_PREMULT;
+	info->alpha = 255;
+
+	info->rotation = 0;
+	info->mmu_enable = owl_de_mmu_is_present();
+	info->n_planes = drm_format_num_planes(overlay->pixel_format);
+
+	for (plane = 0; plane < info->n_planes; plane++) {
+		dma_addr_t addr;
+
+		info->offset[plane] = overlay->offsets[plane];
+		info->pitch[plane] = overlay->pitches[plane];
+
+		if (info->mmu_enable) {
+			if (owl_de_mmu_handle_to_addr(overlay->dma_addr[plane], &addr)) {
+				DSS_ERR(mgr, "owl_de_mmu_handle_to_addr failed (hnd=%p)",
+						(void*)overlay->dma_addr[plane]);
+				return -EFAULT;
+			}
+			info->addr[plane] = addr + info->offset[plane];
+		} else {
+			info->addr[plane] = overlay->dma_addr[plane] + info->offset[plane];
+		}
+
+		DSS_DBG(mgr, "plane %d, Pitch %d, Offset %d, Addr %ld",
+				plane, info->pitch[plane], info->offset[plane],
+				info->addr[plane]);
+	}
+
+	/* choose any values as you like */
+	info->brightness = owl_panel_brightness_get(owl_panel);
+	info->contrast = owl_panel_contrast_get(owl_panel);
+	info->saturation = owl_panel_saturation_get(owl_panel);
+
+	return 0;
 }
 
-void dispc_subdrv_remove_panels(struct drm_device *drm, struct owl_drm_subdrv *subdrv)
-{
-	owl_subdrv_unregister_panel(subdrv, subdrv->panel);
-}
-
-static int dispc_video_apply(struct owl_drm_overlay *overlay, struct owl_overlay_info *info)
+int dispc_ovr_apply(struct owl_drm_overlay *overlay, struct owl_overlay_info *info)
 {
 	struct dispc_manager *mgr = overlay_to_mgr(overlay);
 	struct owl_de_path *owl_path = mgr->owl_path;
@@ -433,8 +409,7 @@ static int dispc_video_apply(struct owl_drm_overlay *overlay, struct owl_overlay
 
 	mutex_lock(&mgr->mutex);
 
-	if (!owl_de_path_is_enabled(mgr->owl_path) ||
-		!owl_panel_is_enabled(mgr->owl_panel)) {
+	if (!mgr->enabled) {
 		DSS_ERR(mgr, "panel not enabled yet");
 		ret = -EINVAL;
 		goto fail_unlock;
@@ -454,14 +429,14 @@ fail_unlock:
 	return ret;
 }
 
-static int dispc_video_enable(struct owl_drm_overlay *overlay)
+int dispc_ovr_enable(struct owl_drm_overlay *overlay)
 {
 	struct dispc_manager *mgr = overlay_to_mgr(overlay);
 	DSS_DBG(mgr, "overlay=%p, zpos=%d", overlay, overlay->zpos);
 	return 0;
 }
 
-static int dispc_video_disable(struct owl_drm_overlay *overlay)
+int dispc_ovr_disable(struct owl_drm_overlay *overlay)
 {
 	struct dispc_manager *mgr = overlay_to_mgr(overlay);
 	struct owl_de_path *owl_path = mgr->owl_path;
@@ -483,7 +458,7 @@ static int dispc_video_disable(struct owl_drm_overlay *overlay)
 	return 0;
 }
 
-static int dispc_video_attach(struct owl_drm_overlay *overlay, struct owl_drm_panel *panel)
+int dispc_ovr_attach(struct owl_drm_overlay *overlay, struct owl_drm_panel *panel)
 {
 	struct dispc_manager *mgr = panel_to_mgr(panel);
 
@@ -498,14 +473,14 @@ static int dispc_video_attach(struct owl_drm_overlay *overlay, struct owl_drm_pa
 	return 0;
 }
 
-static int dispc_video_detach(struct owl_drm_overlay *overlay, struct owl_drm_panel *panel)
+int dispc_ovr_detach(struct owl_drm_overlay *overlay, struct owl_drm_panel *panel)
 {
 	struct dispc_manager *mgr = panel_to_mgr(panel);
 	DSS_DBG(mgr, "panel=%p, overlay=%p, zpos=%d", panel, overlay, overlay->zpos);
 	return 0;
 }
 
-static int dispc_video_query(struct owl_drm_overlay *overlay, int what, int *value)
+int dispc_ovr_query(struct owl_drm_overlay *overlay, int what, int *value)
 {
 	DBG("overlay(%d)=%p, what=%d", overlay->zpos, overlay, what);
 
@@ -522,13 +497,30 @@ static int dispc_video_query(struct owl_drm_overlay *overlay, int what, int *val
 	return 0;
 }
 
+/*******************************************************************************
+ * struct owl_drm_subdrv: panel/overlay register/unregister
+ ******************************************************************************/
+static struct owl_drm_panel_funcs owldrm_panel_funcs = {
+	.detect        = dispc_panel_detect,
+	.prepare       = dispc_panel_prepare,
+	.enable        = dispc_panel_enable,
+	.disable       = dispc_panel_disable,
+	.unprepare     = dispc_panel_unprepare,
+
+	.get_modes     = dispc_panel_get_modes,
+	.validate_mode = dispc_panel_validate_mode,
+
+	.enable_vblank   = dispc_panel_enable_vblank,
+	.disable_vblank  = dispc_panel_disable_vblank,
+};
+
 static const struct owl_drm_overlay_funcs owldrm_overlay_funcs = {
-	.apply   = dispc_video_apply,
-	.enable  = dispc_video_enable,
-	.disable = dispc_video_disable,
-	.attach  = dispc_video_attach,
-	.detach  = dispc_video_detach,
-	.query   = dispc_video_query,
+	.apply   = dispc_ovr_apply,
+	.enable  = dispc_ovr_enable,
+	.disable = dispc_ovr_disable,
+	.attach  = dispc_ovr_attach,
+	.detach  = dispc_ovr_detach,
+	.query   = dispc_ovr_query,
 };
 
 static struct owl_drm_overlay *owldrm_overlays;
@@ -542,8 +534,7 @@ int dispc_subdrv_add_overlays(struct drm_device *drm, struct owl_drm_subdrv *sub
 	if (owldrm_overlays)
 		return 0;
 
-	owldrm_overlays = devm_kcalloc(drm->dev, mgr->num_videos,
-			sizeof(*owldrm_overlays), GFP_KERNEL);
+	owldrm_overlays = kcalloc(mgr->num_videos, sizeof(*owldrm_overlays), GFP_KERNEL);
 	if (!owldrm_overlays)
 		return -ENOMEM;
 
@@ -565,15 +556,82 @@ void dispc_subdrv_remove_overlays(struct drm_device *drm, struct owl_drm_subdrv 
 	struct dispc_manager *mgr = subdrv_to_mgr(subdrv);
 	int i;
 
+	if (!owldrm_overlays)
+		return;
+
 	for (i = 0; i < mgr->num_videos; i++)
 		owl_subdrv_unregister_overlay(subdrv, &owldrm_overlays[i]);
+
+	kfree(owldrm_overlays);
+	owldrm_overlays = NULL;
 }
 
+int dispc_subdrv_add_panel(struct drm_device *drm, struct owl_drm_subdrv *subdrv,
+		struct owl_drm_panel_funcs *funcs)
+{
+	struct owl_drm_panel *panel = devm_kzalloc(drm->dev, sizeof(*panel), GFP_KERNEL);
+
+	if (!panel)
+		return -ENOMEM;
+
+	panel->drm = drm;
+	panel->dev = subdrv->dev;
+	panel->funcs = funcs;
+	INIT_LIST_HEAD(&panel->attach_list);
+	INIT_LIST_HEAD(&panel->list);
+
+	subdrv->panel = panel;
+
+	return owl_subdrv_register_panel(subdrv, panel);
+}
+
+void dispc_subdrv_remove_panel(struct drm_device *drm, struct owl_drm_subdrv *subdrv)
+{
+	owl_subdrv_unregister_panel(subdrv, subdrv->panel);
+}
+
+int dispc_subdrv_load(struct drm_device *drm, struct owl_drm_subdrv *subdrv)
+{
+	dispc_subdrv_add_overlays(drm, subdrv);
+	dispc_subdrv_add_panel(drm, subdrv, &owldrm_panel_funcs);
+	return 0;
+}
+
+void dispc_subdrv_unload(struct drm_device *drm, struct owl_drm_subdrv *subdrv)
+{
+	dispc_subdrv_remove_overlays(drm, subdrv);
+	dispc_subdrv_remove_panel(drm, subdrv);
+}
+
+/*******************************************************************************
+ * struct dispc_manager
+ ******************************************************************************/
 static struct dispc_manager *dispc_mgrs[OWL_DRM_NUM_DISPLAY_TYPES];
 
 struct dispc_manager *dispc_manager_get(int type)
 {
 	return dispc_mgrs[type];
+}
+
+int dispc_manager_set_enabled(struct dispc_manager *mgr, bool enabled)
+{
+	if (mgr->enabled == enabled)
+		return 0;
+
+	if (enabled) {
+		if (!owl_de_path_is_enabled(mgr->owl_path))
+			owl_de_path_enable(mgr->owl_path);
+		if (!owl_panel_is_enabled(mgr->owl_panel))
+			owl_panel_enable(mgr->owl_panel);
+	} else {
+		if (owl_panel_is_enabled(mgr->owl_panel))
+			owl_panel_disable(mgr->owl_panel);
+		if (owl_de_path_is_enabled(mgr->owl_path))
+			owl_de_path_disable(mgr->owl_path);
+	}
+
+	mgr->enabled = enabled;
+	return 0;
 }
 
 struct dispc_manager *dispc_manager_create(struct device *dev, int display_type)
@@ -646,6 +704,8 @@ struct dispc_manager *dispc_manager_create(struct device *dev, int display_type)
 	mutex_init(&mgr->mutex);
 	init_completion(&mgr->modeset_completion);
 
+	mgr->subdrv.display_type = display_type;
+	mgr->subdrv.dev = dev;
 	mgr->type = type;
 	dispc_mgrs[type] = mgr;
 

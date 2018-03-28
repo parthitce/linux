@@ -141,20 +141,13 @@ static struct owl_drm_panel_funcs hdmi_panel_funcs = {
 static int hdmi_load(struct drm_device *drm, struct owl_drm_subdrv *subdrv)
 {
 	dispc_subdrv_add_overlays(drm, subdrv);
-	dispc_subdrv_add_panels(drm, subdrv, &hdmi_panel_funcs);
+	dispc_subdrv_add_panel(drm, subdrv, &hdmi_panel_funcs);
 	return 0;
-}
-
-static void hdmi_unload(struct drm_device *drm, struct owl_drm_subdrv *subdrv)
-{
-	dispc_subdrv_remove_overlays(drm, subdrv);
-	dispc_subdrv_remove_panels(drm, subdrv);
 }
 
 static int hdmi_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct owl_drm_subdrv *subdrv;
 	struct dispc_manager *mgr;
 
 	mgr = dispc_manager_create(dev, OWL_DISPLAY_TYPE_HDMI);
@@ -163,25 +156,21 @@ static int hdmi_probe(struct platform_device *pdev)
 		return PTR_ERR(mgr);
 	}
 
-	/* initial subdrv */
-	subdrv = &mgr->subdrv;
-	subdrv->display_type = OWL_DISPLAY_TYPE_HDMI;
-	subdrv->dev = dev;
-	subdrv->load = hdmi_load;
-	subdrv->unload = hdmi_unload;
-	owl_subdrv_register(subdrv);
+	mgr->subdrv.load = hdmi_load;
+	mgr->subdrv.unload = dispc_subdrv_unload;
+	owl_subdrv_register(&mgr->subdrv);
 
 #ifdef CONFIG_DRM_OWL_HDMI_FAKE_LCD_MODE
 	hdmi_init_fakemode();
 #endif
 
 	/* registers vsync and hotplug call back */
-	dispc_panel_register_vsync(mgr, dispc_panel_default_vsync);
+	dispc_manager_register_vsync(mgr, dispc_panel_default_vsync);
 
 #ifdef CONFIG_DRM_OWL_HDMI_FAKE_LCD_MODE
-	dispc_panel_register_hotplug(mgr, hdmi_hotplug_cb);
+	dispc_manager_register_hotplug(mgr, hdmi_hotplug_cb);
 #else
-	dispc_panel_register_hotplug(mgr, dispc_panel_default_hotplug);
+	dispc_manager_register_hotplug(mgr, dispc_panel_default_hotplug);
 #endif
 
 	/* hotplug detection */
@@ -200,12 +189,43 @@ static int hdmi_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM_SLEEP
+static bool hdmi_suspend_state;
+
+static int hdmi_suspend(struct device *dev)
+{
+	struct dispc_manager *mgr = dev_get_drvdata(dev);
+
+	hdmi_suspend_state = mgr->enabled;
+	dispc_manager_set_enabled(mgr, false);
+
+	return 0;
+}
+
+static int hdmi_resume(struct device *dev)
+{
+	struct dispc_manager *mgr = dev_get_drvdata(dev);
+
+	if (hdmi_suspend_state)
+		dispc_manager_set_enabled(mgr, true);
+
+	return 0;
+}
+#endif
+
+#ifdef CONFIG_PM
+static SIMPLE_DEV_PM_OPS(hdmi_pm_ops, hdmi_suspend, hdmi_resume);
+#endif
+
 static struct platform_driver hdmi_platform_driver = {
 	.probe  = hdmi_probe,
 	.remove	= hdmi_remove,
 	.driver = {
 		.name = DRIVER_NAME,
 		.owner = THIS_MODULE,
+#ifdef CONFIG_PM
+		.pm     = &hdmi_pm_ops,
+#endif
 	},
 };
 

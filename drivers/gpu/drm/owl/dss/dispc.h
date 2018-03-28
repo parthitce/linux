@@ -36,6 +36,7 @@ enum {
 struct dispc_manager {
 	/* OWL_DRM_DISPLAY_x */
 	int type;
+	bool enabled;
 
 	/* public data registered to drm */
 	struct owl_drm_subdrv subdrv;
@@ -60,22 +61,54 @@ struct dispc_manager {
 	struct mutex mutex;
 };
 
+/*******************************************************************************
+ * struct dispc_manager
+ ******************************************************************************/
 /* @display_type: OWL_DISPLAY_TYPE_x */
 struct dispc_manager *dispc_manager_create(struct device *dev, int display_type);
 void dispc_manager_destroy(struct dispc_manager *mgr);
+
+int dispc_manager_set_enabled(struct dispc_manager *mgr, bool enabled);
+
 /* @type: OWL_DRM_DISPLAY_x */
 struct dispc_manager *dispc_manager_get(int type);
 
+/* register vsync handler */
+static inline void dispc_manager_register_vsync(struct dispc_manager *mgr, owl_panel_cb_t vsync)
+{
+	mgr->vsync = vsync;
+	owl_panel_vsync_cb_set(mgr->owl_panel, vsync, mgr);
+}
+
+/* register hotplug handler */
+static inline void dispc_manager_register_hotplug(struct dispc_manager *mgr, owl_panel_cb_t hotplug)
+{
+	mgr->hotplug = hotplug;
+	owl_panel_hotplug_cb_set(mgr->owl_panel, hotplug, mgr);
+}
+
+/* default vsync/hotplug handler of struct dispc_manager */
+void dispc_panel_default_vsync(struct owl_panel *owl_panel, void *data, u32 status);
+void dispc_panel_default_hotplug(struct owl_panel *owl_panel, void *data, u32 status);
+
+/*******************************************************************************
+ * struct owl_drm_subdrv: panel/overlay register/unregister
+ ******************************************************************************/
 /* register/unregister panel to drm */
-int dispc_subdrv_add_panels(struct drm_device *drm, struct owl_drm_subdrv *subdrv,
+int dispc_subdrv_add_panel(struct drm_device *drm, struct owl_drm_subdrv *subdrv,
 		struct owl_drm_panel_funcs *funcs);
-void dispc_subdrv_remove_panels(struct drm_device *drm, struct owl_drm_subdrv *subdrv);
+void dispc_subdrv_remove_panel(struct drm_device *drm, struct owl_drm_subdrv *subdrv);
 
 /* register/unregister overlay to drm */
 int dispc_subdrv_add_overlays(struct drm_device *drm, struct owl_drm_subdrv *subdrv);
 void dispc_subdrv_remove_overlays(struct drm_device *drm, struct owl_drm_subdrv *subdrv);
 
-/* common implemention of struct owl_drm_panel_funcs */
+int dispc_subdrv_load(struct drm_device *drm, struct owl_drm_subdrv *subdrv);
+void dispc_subdrv_unload(struct drm_device *drm, struct owl_drm_subdrv *subdrv);
+
+/*******************************************************************************
+ * struct owl_drm_panel: common implemention of struct owl_drm_panel_funcs
+ ******************************************************************************/
 bool dispc_panel_detect(struct owl_drm_panel *panel);
 int dispc_panel_enable(struct owl_drm_panel *panel);
 int dispc_panel_disable(struct owl_drm_panel *panel);
@@ -87,28 +120,14 @@ int dispc_panel_set_mode(struct owl_drm_panel *panel, struct owl_videomode *mode
 int dispc_panel_enable_vblank(struct owl_drm_panel *panel);
 void dispc_panel_disable_vblank(struct owl_drm_panel *panel);
 
-/* register vsync callback to struct owl_panel
- * @mgr: will pass to cb as param "data"
- */
-static inline void dispc_panel_register_vsync(struct dispc_manager *mgr, owl_panel_cb_t cb)
-{
-	owl_panel_vsync_cb_set(mgr->owl_panel, cb, mgr);
-	mgr->vsync = cb;
-}
-
-/* register hotplug callback to struct owl_panel
- * @mgr: will pass to cb as param "data"
- */
-static inline void dispc_panel_register_hotplug(struct dispc_manager *mgr, owl_panel_cb_t cb)
-{
-	owl_panel_hotplug_cb_set(mgr->owl_panel, cb, mgr);
-	mgr->hotplug = cb;
-}
-
-/* default vsync/hotplug callback to struct owl_panel
- * @data: always the address of "struct dispc_manager" which owl_panel belongs to
- */
-void dispc_panel_default_vsync(struct owl_panel *owl_panel, void *data, u32 status);
-void dispc_panel_default_hotplug(struct owl_panel *owl_panel, void *data, u32 status);
+/*******************************************************************************
+ * struct owl_drm_overlay: common implemention of struct owl_drm_overlay_funcs
+ ******************************************************************************/
+int dispc_ovr_apply(struct owl_drm_overlay *overlay, struct owl_overlay_info *info);
+int dispc_ovr_enable(struct owl_drm_overlay *overlay);
+int dispc_ovr_disable(struct owl_drm_overlay *overlay);
+int dispc_ovr_attach(struct owl_drm_overlay *overlay, struct owl_drm_panel *panel);
+int dispc_ovr_detach(struct owl_drm_overlay *overlay, struct owl_drm_panel *panel);
+int dispc_ovr_query(struct owl_drm_overlay *overlay, int what, int *value);
 
 #endif /* _DSS_DISPC_H_ */
