@@ -149,6 +149,11 @@
 		};
 	};
 
+	de@e02e0000 {
+		video_id_for_scaler0 = <1>;
+		video_id_for_scaler1 = <2>;
+	};
+
 	backlight {
 		compatible = "actions,owl-pwm-backlight";
 
@@ -259,6 +264,12 @@
 		//vbus_otg_en_gpio =<&gpiod 20 0>; /*GPIO D20 1:high enable vubs,0:low enable vbus*/
 		port_host_plug_detect = <2>; /*0:disable,for wifi/bt module 1:enable detect and vbus contrl 2:only detect 3:enable detect and usb0 and usb1 use the same gpio*/
 		status = "okay";
+	};
+
+	owl_aotg_config {
+		compatible = "actions,owl-aotg-config";
+		usb_cam_shield1 = "e01d0000";
+		usb_cam_shield2 = "e01d8000";
 	};
 
 	wifi_bt_power_ctl {
@@ -588,6 +599,17 @@
 		};
 	};	
 	
+	
+       spi0: spi@e0300000 {
+                status = "okay";
+                pinctrl-names = "default";
+                pinctrl-0 = <&spi0_state_default>;
+                spidev@0 {
+                        compatible ="rohm,dh2228fv";
+                        reg = <0x0>;
+                        spi-max-frequency = <500000>;
+                };
+        };
 //	isp0: isp@0xe0268000 {
 //			mirror_flip = <3>;  /* bit-0:rear camera; bit-1:front camera; 0: no flip,no mirror; 1: no flip,horizontal mirror; 2:vertical flip,no mirror; 3: vertical flip,horizontal mirror */
 
