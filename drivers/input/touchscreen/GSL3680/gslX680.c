@@ -109,6 +109,20 @@ static struct tp_cfg_dts cfg_dts;
 #define FILTER_MAX	9	
 #endif
 
+#define TPD_PROC_DEBUG
+#ifdef TPD_PROC_DEBUG
+#include <linux/proc_fs.h>
+#include <asm/uaccess.h>
+#include <linux/seq_file.h>  //lzk
+//static struct proc_dir_entry *gsl_config_proc = NULL;
+#define GSL_CONFIG_PROC_FILE "gsl_config"
+#define CONFIG_LEN 31
+static char gsl_read[CONFIG_LEN];
+static u8 gsl_data_proc[8] = {0};
+static u8 gsl_proc_flag = 0;
+#endif
+
+
 
 #define GSL_DATA_REG		0x80
 #define GSL_STATUS_REG		0xe0
@@ -539,6 +553,158 @@ static void check_mem_data(struct i2c_client *client)
 	}
 }
 
+
+#ifdef TPD_PROC_DEBUG
+static int char_to_int(char ch)
+{
+	if(ch>='0' && ch<='9')
+		return (ch-'0');
+	else
+		return (ch-'a'+10);
+}
+
+//static int gsl_config_read_proc(char *page, char **start, off_t off, int count, int *eof, void *data)
+static int gsl_config_read_proc(struct seq_file *m,void *v)
+{
+	char temp_data[5] = {0};
+	unsigned int tmp=0;
+	if('v'==gsl_read[0]&&'s'==gsl_read[1])
+	{
+#ifdef GSL_NOID_VERSION 
+		tmp=gsl_version_id();
+#else 
+		tmp=0x20121215;
+#endif
+		seq_printf(m,"version:%x\n",tmp);
+	}
+	else if('r'==gsl_read[0]&&'e'==gsl_read[1])
+	{
+		if('i'==gsl_read[3])
+		{
+#ifdef GSL_NOID_VERSION 
+					tmp=(gsl_data_proc[5]<<8) | gsl_data_proc[4];
+					seq_printf(m,"gsl_config_data_id[%d] = ",tmp);
+					if(tmp>=0&&tmp<ARRAY_SIZE(gsl_config_data_id)) 
+					{
+							//ptr +=sprintf(ptr,"%d\n",gsl_config_data_id[tmp]); 
+							seq_printf(m,"%d\n",gsl_config_data_id[tmp]);
+					}
+#endif
+
+
+		}
+		else 
+		{
+			//gsl_read_interface(i2c_client,0xf0,&gsl_data_proc[4],4);
+			//gsl_read_interface(i2c_client,gsl_data_proc[0],temp_data,4);
+			i2c_smbus_write_i2c_block_data(gsl_client,0xf0,4,&gsl_data_proc[4]);
+			if(gsl_data_proc[0] < 0x80)
+				i2c_smbus_read_i2c_block_data(gsl_client,gsl_data_proc[0],4,temp_data);
+			i2c_smbus_read_i2c_block_data(gsl_client,gsl_data_proc[0],4,temp_data);
+			seq_printf(m,"offset : {0x%02x,0x",gsl_data_proc[0]);
+			seq_printf(m,"%02x",temp_data[3]);
+			seq_printf(m,"%02x",temp_data[2]);
+			seq_printf(m,"%02x",temp_data[1]);
+			seq_printf(m,"%02x};\n",temp_data[0]);
+		}
+	}
+	return 0;
+}
+static ssize_t  gsl_config_write_proc(struct file *file, const char __user  *buffer, size_t  count, loff_t *data)
+{
+	u8 buf[8] = {0};
+	char temp_buf[CONFIG_LEN];
+	char *path_buf;
+	int tmp2 = 0;
+	int tmp1 = 0;
+	print_info("[tp-gsl][%s] \n",__func__);
+	if(count > 512)
+	{
+		print_info("size not match [%d:%d]\n", CONFIG_LEN, count);
+        	return -EFAULT;
+	}
+	path_buf=kzalloc(count,GFP_KERNEL);
+	if(!path_buf)
+	{
+		printk("alloc path_buf memory error \n");
+		return -1;
+	}	
+	if(copy_from_user(path_buf, buffer, count))
+	{
+		print_info("copy from user fail\n");
+		goto exit_write_proc_out;
+	}
+	memcpy(temp_buf,path_buf,(count<CONFIG_LEN?count:CONFIG_LEN));
+	print_info("[tp-gsl][%s][%s]\n",__func__,temp_buf);
+	buf[3]=char_to_int(temp_buf[14])<<4 | char_to_int(temp_buf[15]);	
+	buf[2]=char_to_int(temp_buf[16])<<4 | char_to_int(temp_buf[17]);
+	buf[1]=char_to_int(temp_buf[18])<<4 | char_to_int(temp_buf[19]);
+	buf[0]=char_to_int(temp_buf[20])<<4 | char_to_int(temp_buf[21]);
+	
+	buf[7]=char_to_int(temp_buf[5])<<4 | char_to_int(temp_buf[6]);
+	buf[6]=char_to_int(temp_buf[7])<<4 | char_to_int(temp_buf[8]);
+	buf[5]=char_to_int(temp_buf[9])<<4 | char_to_int(temp_buf[10]);
+	buf[4]=char_to_int(temp_buf[11])<<4 | char_to_int(temp_buf[12]);
+	if('v'==temp_buf[0]&& 's'==temp_buf[1])//version //vs
+	{
+		memcpy(gsl_read,temp_buf,4);
+		printk("gsl version\n");
+	}
+	else if('s'==temp_buf[0]&& 't'==temp_buf[1])//start //st
+	{
+	#ifdef GSL_MONITOR
+		cancel_delayed_work_sync(&gsl_monitor_work);
+	#endif
+		gsl_proc_flag = 1;
+		reset_chip(gsl_client);  //gsl_reset_core
+	}
+	else if('e'==temp_buf[0]&&'n'==temp_buf[1])//end //en
+	{
+		msleep(20);
+		reset_chip(gsl_client);  //gsl_reset_core
+		startup_chip(gsl_client); // gsl_start_core
+		gsl_proc_flag = 0;
+	}
+	else if('r'==temp_buf[0]&&'e'==temp_buf[1])//read buf //
+	{
+		memcpy(gsl_read,temp_buf,4);
+		memcpy(gsl_data_proc,buf,8);
+	}
+	else if('w'==temp_buf[0]&&'r'==temp_buf[1])//write buf
+	{
+		//gsl_read_interface(i2c_client,buf[4],buf,4);
+		i2c_smbus_write_i2c_block_data(gsl_client,buf[4],4,buf);
+	}
+	
+#ifdef GSL_NOID_VERSION
+	else if('i'==temp_buf[0]&&'d'==temp_buf[1])//write id config //
+	{
+		tmp1=(buf[7]<<24)|(buf[6]<<16)|(buf[5]<<8)|buf[4];
+		tmp2=(buf[3]<<24)|(buf[2]<<16)|(buf[1]<<8)|buf[0];
+		if(tmp1>=0 && tmp1<512)
+		{
+			gsl_config_data_id[tmp1] = tmp2;
+		}
+	}
+#endif
+exit_write_proc_out:
+	kfree(path_buf);
+	return count;
+}
+static int gsl_server_list_open(struct inode *inode,struct file *file)
+{
+	return single_open(file,gsl_config_read_proc,NULL);
+}
+static const struct file_operations gsl_seq_fops = {
+	.open = gsl_server_list_open,
+	.read = seq_read,
+	.release = single_release,
+	.write = gsl_config_write_proc,
+	.owner = THIS_MODULE,
+};
+#endif
+
+
 #ifdef FILTER_POINT
 static void filter_point(u16 x, u16 y , u8 id)
 {
@@ -832,6 +998,12 @@ static void gslX680_ts_worker(struct work_struct *work)
 		i2c_lock_flag = 1;
 #endif
 
+#ifdef TPD_PROC_DEBUG
+		if(gsl_proc_flag == 1)
+			return;
+#endif
+
+
 	mutex_lock(&mutex);
 
 	print_info("=====gslX680_ts_worker=====\n");
@@ -999,6 +1171,13 @@ static void gsl_monitor_worker(struct work_struct *data)
 	char download_flag = 0;
 	
 	print_info("----------------gsl_monitor_worker-----------------\n");	
+
+
+	
+#ifdef TPD_PROC_DEBUG
+			if(gsl_proc_flag == 1)
+				return;
+#endif
 
 	if(i2c_lock_flag != 0)
 		goto queue_monitor_work;
@@ -1384,6 +1563,12 @@ static void gsl_ts_early_suspend(struct early_suspend *h)
 	int i=0;
 
 	printk("[GSLX680] Enter %s ########%d\n", __func__,__LINE__);
+
+	
+#ifdef TPD_PROC_DEBUG
+		if(gsl_proc_flag == 1)
+			return;
+#endif
 	
 	disable_irq(this_ts->irq);
 	flush_workqueue(this_ts->wq);
@@ -1409,6 +1594,11 @@ static void gsl_ts_early_suspend(struct early_suspend *h)
 static void gsl_ts_late_resume(struct early_suspend *h)
 {
 	enable_irq(this_ts->irq);
+	
+#ifdef TPD_PROC_DEBUG
+		if(gsl_proc_flag == 1)
+			return;
+#endif
 	
 	//printk("[GSLX680] Enter %s ########%d\n", __func__,__LINE__);
 	pr_info("[GSLX680] Enter %s ########%d\n", __func__,__LINE__);
@@ -1491,6 +1681,12 @@ static int gsl_ts_probe(struct i2c_client *client,
 	gsl_monitor_workqueue = create_singlethread_workqueue("gsl_monitor_workqueue");
 	queue_delayed_work(gsl_monitor_workqueue, &gsl_monitor_work, 500);
 	#endif
+
+	
+#ifdef TPD_PROC_DEBUG
+			proc_create(GSL_CONFIG_PROC_FILE,0666,NULL,&gsl_seq_fops);
+			gsl_proc_flag = 0;
+#endif
 	
 	printk("[GSLX680] End %s\n", __func__);
 
