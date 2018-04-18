@@ -29,8 +29,10 @@
 #include <linux/ctype.h>
 #include <linux/fs.h>
 #include <linux/random.h>
+#include <asm/system_info.h>
 
 #include "stmmac.h"
+#include "des.h"
 
 #define ETH_MAC_ADDR_RANDDOM_PATH "/etc/mac_address_random"
 #define ETH_MAC_LEN 6
@@ -114,6 +116,18 @@ static int parse_mac_address(const char *mac, int len)
 
 
 #ifdef CONFIG_OF
+static void get_mac_address_by_chip(unsigned char input[MBEDTLS_DES_KEY_SIZE],char *mac_address)
+{
+	unsigned char mac_array[ETH_MAC_LEN] = {0x00,0x18,0xFE,0,0,0};
+
+	mac_array[3] = input[0];
+	mac_array[4] = input[4];
+	mac_array[5] = input[7];
+
+	memcpy(mac_address,mac_array,ETH_MAC_LEN);
+	return;
+}
+
 static int stmmac_probe_config_dt(struct platform_device *pdev,
 				  struct plat_stmmacenet_data *plat,
 				  const char **mac)
@@ -125,6 +139,13 @@ static int stmmac_probe_config_dt(struct platform_device *pdev,
 	struct file *filp;
 	loff_t offset = 0;
 	int ret;
+	unsigned long long system_serial = (unsigned long long)system_serial_low | ((unsigned long long)system_serial_high << 32);
+  printk(KERN_ERR"%s 0x%llx\n",__func__,system_serial);
+  printk(KERN_ERR"%s system_serial_low:%d, system_serial_high:%d\n",__func__,system_serial_low,system_serial_high);
+  mbedtls_des_context ctx;
+  unsigned char key_buff[MBEDTLS_DES_KEY_SIZE] = {1,4,13,21,59,67,69,127};
+  unsigned char input_value[MBEDTLS_DES_KEY_SIZE] = {0};
+  unsigned char output_value[MBEDTLS_DES_KEY_SIZE] = {0};
 
 	if (!np)
 		return -ENODEV;
@@ -168,9 +189,28 @@ static int stmmac_probe_config_dt(struct platform_device *pdev,
 	str = of_get_property(np, "local-mac-address", NULL);
 	if (str == NULL)
 		printk(KERN_ERR"no local-mac-address in dts\n");
-	else
+	else{
 		*mac = of_get_mac_address(np);
-	return 0;
+		return 0;
+	}
+	
+	printk(KERN_ERR"%s 0x%llx\n",__func__,system_serial);
+  mbedtls_des_init(&ctx);
+  printk(KERN_ERR"key_buff:0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x\n",key_buff[0],key_buff[1],key_buff[2],key_buff[3],key_buff[4],key_buff[5],key_buff[6],key_buff[7]);
+  if(mbedtls_des_key_check_key_parity(key_buff)){
+      mbedtls_des_key_set_parity(key_buff);
+  }
+  mbedtls_des_setkey_enc(&ctx,key_buff);
+  memcpy(input_value,&system_serial,MBEDTLS_DES_KEY_SIZE);
+  printk(KERN_ERR"input_value:0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x\n",input_value[0],input_value[1],input_value[2],input_value[3],input_value[4],input_value[5],input_value[6],input_value[7]);
+  mbedtls_des_crypt_ecb(&ctx,input_value,output_value);
+  printk(KERN_ERR"output_value:0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x\n",output_value[0],output_value[1],output_value[2],output_value[3],output_value[4],output_value[5],output_value[6],output_value[7]);
+  get_mac_address_by_chip(output_value,g_default_mac_addr);
+
+  printk(KERN_ERR"use the mac address by chip\n");
+  print_mac_address(g_default_mac_addr);
+  *mac = g_default_mac_addr;
+  return 0;
 
 random_mac:
 	get_random_bytes(def_mac, ETH_MAC_LEN);

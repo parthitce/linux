@@ -8,6 +8,8 @@
 #include <linux/compat.h>
 #include <linux/bootafinfo.h>
 
+#include <asm/system_info.h>
+
 #if 1
 #define DVFS_PRINT(fmt, args...)\
 	printk(fmt, ##args)
@@ -25,6 +27,7 @@
 #define OWL_COREPLL_RECALC_RATE 0xc3000004
 #define OWL_COREPLL_SET_RATE 0xc3000005
 #define OWL_UPDATE_TABLE_VOLT 0xc3000006
+#define OWL_MACHINE_ID 0xc3000007
 
 struct dvfs_trans_t {
 	unsigned char *keybox;
@@ -233,6 +236,50 @@ int owl_update_table_volt(struct cpu0_opp_table *table, int table_size)
 }
 EXPORT_SYMBOL_GPL(owl_update_table_volt);
 
+
+
+static int __owl_get_machine_id_smc(char *id)
+{
+	int ret;
+	ret = (int)_invoke_fn_smc(OWL_MACHINE_ID, __pa(id), 0, 0);
+	if (ret < 0) {
+		pr_err("%s error %d\n ", __func__, ret);
+		return ret;
+	}
+	return 0;
+}
+
+int owl_get_machine_id(char *id, int len)
+{
+	char machine_id[17];
+
+	if ( machine_id == NULL || len <=0)
+		return -1;
+	if ( len > 16)
+		len = 16;
+	smp_call_function_single(0,
+				(smp_call_func_t)__owl_get_machine_id_smc,
+					(void*)machine_id, 1);
+
+	memcpy(id, machine_id, len);
+	return len;
+}
+
+void machine_id_init(void)
+{
+	char machine_id[17];
+	unsigned int val;
+	owl_get_machine_id(machine_id, 16);
+	machine_id[16] = 0;
+	printk("machine id =%s\n", machine_id);
+	kstrtouint(machine_id+8, 16, &val);
+	system_serial_low = val;
+	machine_id[8] = 0;
+	kstrtouint(machine_id, 16, &val);
+	system_serial_high = val;
+	printk("machine Serial\t\t: %08x%08x\n",
+		   system_serial_high, system_serial_low);
+}
 static int cpu0_trans(struct dvfs_trans_t *arg)
 {
 	int ret;
@@ -432,6 +479,7 @@ static int owl_chipid_init(void)
 
 	DVFS_PRINT("%s\n", __func__);
 
+	machine_id_init();
 	ret = misc_register(&owl_chipid_miscdevice);
 	if (ret) {
 		DVFS_PRINT("register owl_chipid misc device failed!\n");

@@ -167,7 +167,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&ethernet_state_default>;
 		compatible = "actions,s700-ethernet";/*actions,s700-ethernet*/
-		random-mac-address = "okay";
+		//random-mac-address = "okay";
 		//local-mac-address = [ 00 18 fe 66 66 66 ];
 		phy-mode = "rmii";
 		phy-handle = <&phy0>;
