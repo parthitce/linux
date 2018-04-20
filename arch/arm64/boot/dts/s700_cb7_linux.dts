@@ -283,11 +283,6 @@
 		status = "okay";
 	};
 
-	owl_aotg_config {
-		compatible = "actions,owl-aotg-config";
-		usb_cam_shield1 = "e01d0000";
-		usb_cam_shield2 = "e01d8000";
-	};
 
 	wifi_bt_power_ctl {
 		compatible = "wifi,bt,power,ctl";
