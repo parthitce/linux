@@ -33,6 +33,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/delay.h>
+#include <linux/sched.h>
 
 #include <video/owl_dss.h>
 
@@ -76,6 +77,7 @@ static int				vsync_always_on = 1;
 #else
 static int				vsync_always_on;
 #endif
+
 
 /*=============================================================================
   external functions for others
@@ -236,6 +238,12 @@ int owl_de_get_video_num(void)
 	return g_cur_de->num_videos;
 }
 EXPORT_SYMBOL(owl_de_get_video_num);
+
+bool owl_de_is_ats3605(void)
+{
+	return g_cur_de->hw_id == DE_HW_ID_ATS3605;
+}
+EXPORT_SYMBOL(owl_de_is_ats3605);
 
 bool owl_de_is_s700(void)
 {
@@ -800,10 +808,8 @@ void owl_de_path_wait_for_go(struct owl_de_path *path)
 		frame_period_ns = 1000 * 1000 * 30;
 	else
 		frame_period_ns = 1000 * 1000 * 1000 / frame_period_ns;
-#ifdef CONFIG_ADF
-	if (owl_de_is_s700() && path->id == 0) 
-#endif
-	{
+
+	if (owl_de_is_s700() && path->id == 0) {
 		/*
 		 * alwful trick for S700 HDMI & CVBS, because HDMI and CVBS
 		 * share the same path, the same IRQ bit, we can only wait
@@ -817,7 +823,10 @@ void owl_de_path_wait_for_go(struct owl_de_path *path)
 		}
 	}
 
-	if (owl_de_is_s900() || PANEL_IS_PRIMARY(panel)) {
+#ifdef CONFIG_ADF
+	if (owl_de_is_s900() || PANEL_IS_PRIMARY(panel))
+#endif
+	{
 		__de_path_enable_vsync(path, true);
 		/* do not wait vsync for linux X display TODO */
 #ifdef CONFIG_ADF
