@@ -34,6 +34,7 @@
 		i2c2 = &i2c2;
 		isp0 = &isp0;
 		spi0 = &spi0;
+		spi2 = &spi2;
 		gpio0=&gpioa;
 		gpio1=&gpiob;
 		gpio2=&gpioc;
@@ -179,6 +180,15 @@
 		interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
 		clocks = <&clock CLK_SPI0>;
 		clock-names = "spi0";
+		status = "disabled";
+	};
+
+	spi2: spi@b0308000 {
+		compatible = "actions,ats3605-spi";
+		reg = <0xb0308000  0x40>;
+		interrupts = <GIC_SPI 22 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clock CLK_SPI2>;
+		clock-names = "spi2";
 		status = "disabled";
 	};
 
@@ -391,4 +401,31 @@
 		pinctl_val = <0x619c0>;
 		pinctl_mask = <0xe39e0>;
 	};
+	de@b02f0000 {
+		compatible = "actions,ats3605-de";
+		reg = <0xb02f0000 0x4078>;
+		reg-names = "regs";
+		interrupts = <GIC_SPI 1 IRQ_TYPE_LEVEL_HIGH>;
+		//power-domains = <&powergate POWER_DOMAIN_DS>;
+		clocks = <&clock CLK_DE1>, <&clock CLK_DE2>, <&clock CLK_DE3>, <&clock CLK_DEV>;
+		clock-names = "clk_de1", "clk_de2", "clk_de3", "clk_parent";
+		resets = <&reset RESET_DE>;
+		reset-names = "de";
+	};
+	
+	lcd: lcd@b02a0000 {
+		compatible = "actions,ats3605-lcd", "simple-bus";
+		reg = <0xb02a0000 0x208>;
+		reg-names = "regs";
+
+		clocks = <&clock CLK_LCD>;
+		clock-names = "lcd";
+
+		resets = <&reset RESET_LCD>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&lcd0_state_default>;
+	};
+
+
 };

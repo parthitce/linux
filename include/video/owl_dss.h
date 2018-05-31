@@ -221,6 +221,7 @@ struct owl_display_ctrl_ops {
 	int (*aux_read)(struct owl_display_ctrl *ctrl, char *buf, int count);
 	int (*aux_write)(struct owl_display_ctrl *ctrl, const char *buf,
 			int count);
+	int (*refresh_frame)(struct owl_display_ctrl *ctrl);
 
 	int (*set_3d_mode)(struct owl_display_ctrl *ctrl,
 			   enum owl_3d_mode mode);
@@ -473,6 +474,7 @@ void owl_panel_get_disp_area(struct owl_panel *panel, int *x, int *y,
 
 int owl_panel_get_vmode(struct owl_panel *panel);
 int owl_panel_get_refresh_rate(struct owl_panel *panel);
+int owl_panel_refresh_frame(struct owl_panel *panel);
 void owl_panel_get_draw_size(struct owl_panel *panel, int *width, int *height);
 int owl_panel_get_bpp(struct owl_panel *panel);
 char *owl_panel_get_name(struct owl_panel *panel);
@@ -525,6 +527,7 @@ struct owl_de_range_type {
 };
 
 enum owl_de_hw_id {
+	DE_HW_ID_ATS3605,
 	DE_HW_ID_ATM7059TC,
 	DE_HW_ID_ATM7059,
 	DE_HW_ID_S900,
@@ -810,6 +813,7 @@ int owl_de_mmu_config(uint32_t base_addr);
 int owl_de_get_path_num(void);
 int owl_de_get_video_num(void);
 
+bool owl_de_is_ats3605(void);
 bool owl_de_is_s700(void);
 bool owl_de_is_s900(void);
 bool owl_de_is_ott(void);

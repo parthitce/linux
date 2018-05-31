@@ -1112,6 +1112,21 @@ void aotg_hcd_abort_urb(struct aotg_hcd *acthcd)
 		spin_lock(&acthcd->lock);
 	}*/
 
+	/* Stop DMA first */
+	for (cnt = 1; cnt < MAX_EP_NUM; cnt++) {
+		ep = acthcd->inep[cnt];
+		ring = ep ? ep->ring : NULL;
+		if (ep && ring)
+			aotg_stop_ring(ring);
+	}
+
+	for (cnt = 1; cnt < MAX_EP_NUM; cnt++) {
+		ep = acthcd->outep[cnt];
+		ring = ep ? ep->ring : NULL;
+		if (ep && ring)
+			aotg_stop_ring(ring);
+	}
+
 	for (cnt = 1; cnt < MAX_EP_NUM; cnt++) {
 		ep = acthcd->inep[cnt];
 		if (ep) {

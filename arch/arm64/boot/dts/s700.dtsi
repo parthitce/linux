@@ -242,27 +242,28 @@
 		interrupt-controller;
 		#interrupt-cells = <1>;
 	};
-	
-	   spi0: spi@e0300000 {
-                compatible = "actions,s700-spi";
-                reg = <0 0xe0300000 0 0x1000>;
-                interrupts = <GIC_SPI 19 IRQ_TYPE_LEVEL_HIGH>;
-                clocks = <&clock CLK_SPI0>;
-                clock-names = "spi0";
-                status = "disabled";
-        };
 
-        serial0: uart@e0120000 {
-                compatible = "actions,s700-serial";
-                reg = <0 0xe0120000 0 0x1000>;
-                interrupts = <GIC_SPI 29 IRQ_TYPE_LEVEL_HIGH>;
-                clocks = <&clock CLK_UART0>;
-                clock-names = "uart";
-                resets = <&reset RESET_UART0>;
-                pinctrl-names = "default";
-                pinctrl-0 = <&serial0_state_default>;
-        };
+	spi0: spi@e0300000 {
+		compatible = "actions,s700-spi";
+		reg = <0 0xe0300000 0 0x1000>;
+		interrupts = <GIC_SPI 19 IRQ_TYPE_LEVEL_HIGH>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		clocks = <&clock CLK_SPI0>;
+		clock-names = "spi0";
+		status = "disabled";
+	};
 
+	serial0: uart@e0120000 {
+		compatible = "actions,s700-serial";
+		reg = <0 0xe0120000 0 0x1000>;
+		interrupts = <GIC_SPI 29 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&clock CLK_UART0>;
+		clock-names = "uart";
+		resets = <&reset RESET_UART0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&serial0_state_default>;
+	};
 
 	serial2: uart@e0124000 {
 		compatible = "actions,s700-serial";
@@ -274,7 +275,8 @@
 		//pinctrl-names = "default";
 		//pinctrl-0 = <&serial2_state_default>;
 	};
-        serial3: uart@e0126000 {
+
+	serial3: uart@e0126000 {
 		compatible = "actions,s700-serial";
 		reg = <0 0xe0126000 0 0x1000>;
 		interrupts = <GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>;
@@ -284,6 +286,7 @@
 		//pinctrl-names = "default";
 		//pinctrl-0 = <&serial3_state_default>;
 	};
+
 	serial5: uart@e012a000 {
 		compatible = "actions,s700-serial";
 		reg = <0 0xe012a000 0 0x1000>;
@@ -291,8 +294,8 @@
 		clocks = <&clock CLK_UART5>;
 		clock-names = "uart";
 		resets = <&reset RESET_UART5>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&serial5_state_default>;
+		//pinctrl-names = "default";
+		//pinctrl-0 = <&serial5_state_default>;
 		status = "disabled";
 	};
 
@@ -317,8 +320,8 @@
 		#size-cells = <0>;
 		clocks = <&clock CLK_I2C1>;
 		clock-names = "i2c1";
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_i2c1_default>;
+		//pinctrl-names = "default";
+		//pinctrl-0 = <&pinctrl_i2c1_default>;
 		status = "disabled";
 	};
 
@@ -387,6 +390,7 @@
 		resets = <&reset RESET_HDMI>;
 		reset-names = "hdmi";
 	};
+
 	lcd: lcd@e02a0000 {
 		compatible = "actions,s700-lcd", "simple-bus";
 		reg = <0 0xe02a0000 0 0x208>;
@@ -400,6 +404,7 @@
 		pinctrl-names = "default";
 		pinctrl-0 = <&lvds_state_default>;
 	};
+
 	hdmi_cec@e02c011c {
 		compatible = "actions,s700-hdmi-cec";
 		reg = <0 0xe02c011c 0 0x160>;

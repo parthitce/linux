@@ -195,12 +195,12 @@
 				bat_type = <1>;/*0:4.18v; 1:4.2v; 2:4.3v; 3:4.35v*/
 				bl_on_current_usb_pc = <200>;
 				bl_off_current_usb_pc = <400>;
-				bl_on_current_usb_adp = <600>;
+				bl_on_current_usb_adp = <400>;
 				bl_on_current_usb_adp_high = <1000>;
-				bl_off_current_usb_adp = <1200>;
+				bl_off_current_usb_adp = <1400>;
 				bl_on_current_wall_adp = <400>;
 				bl_off_current_wall_adp = <1400>;
-				support_adaptor_type = <3>; /*1: DCIN  2: USB  3:DCIN+USB*/
+				support_adaptor_type = <2>; /*1: DCIN  2: USB  3:DCIN+USB*/
 				ext_charger = <0>;
 				usb_adapter_as_ac = <1>;/*0:usb ada keep itself; 1:usb ada used as DCIN when usb plug and batv<3.3v during minicharge*/
 				usb_pc_ctl_mode = <1>; /*0:disable vbus ctl;1:current limited;2:voltage limited*/

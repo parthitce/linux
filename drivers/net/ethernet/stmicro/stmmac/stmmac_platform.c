@@ -41,7 +41,7 @@
 extern void __iomem *ppaddr;
 extern const struct plat_stmmacenet_data owl_gmac_data;
 
-static char g_default_mac_addr[ETH_MAC_LEN] = {
+char g_default_mac_addr[ETH_MAC_LEN] = {
 	0x00, 0x18, 0xFE, 0x61, 0xD5, 0xD6};
 
 static void print_mac_address(const char *mac)
@@ -70,7 +70,7 @@ static int ctox(int c)
 	return tmp;
 }
 
-static int parse_mac_address(const char *mac, int len)
+int parse_mac_address(const char *mac, int len)
 {
 	int tmp, tmp2;
 	int i = 0;
@@ -168,6 +168,11 @@ static int stmmac_probe_config_dt(struct platform_device *pdev,
 	}
 
 #ifdef MISCINFO_HAS_ETHMAC
+        /*read_mi_item will be failed ,because the flash is not ready 
+               when ethernet driver read ETHMAC in flash.
+               so we move the read ETHMAC  code into stmmac_open() fun
+               in stmmac_main.c
+             */
 	ret = read_mi_item("ETHMAC", def_mac, 20);
 	if (ret > 0) {
 		printk(KERN_DEBUG"Using the mac address in miscinfo.\n");

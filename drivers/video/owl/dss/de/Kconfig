@@ -9,6 +9,17 @@ config VIDEO_OWL_DE
 
 	  To compile this driver as a module, choose M here.
 
+config VIDEO_OWL_DE_ATS3605
+	depends on VIDEO_OWL_DE
+	bool "OWL ATS3605 DE support"
+	---help---
+	  Actions OWL Soc ATS3605 DE support.
+
+	  Say Y here if you need it in your system.
+	  If unsure, say Y.
+
+	  To compile this driver as a module, choose M here.
+
 config VIDEO_OWL_DE_S900
 	depends on VIDEO_OWL_DE
 	bool "OWL S900 DE support"

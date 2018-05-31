@@ -421,9 +421,9 @@ static int owl_dma_start_next_sg(struct owl_dma_vchan *vchan)
 	struct owl_dma_txd *txd ;
 	struct dma_slave_config *sconfig = &vchan->cfg;
 	struct owl_sg *psg;
-	dma_addr_t  src = 0, dst = 0;
-	u32  mode;
-	unsigned long flags;
+	dma_addr_t  src = 0, dst = 0, next_src = 0, next_dst = 0;
+	u32  mode, r_mode,  first_tx = 1;
+	unsigned long flags, next_idx;
 
 	BUG_ON(pchan == NULL || vchan->at == NULL); 
 	txd = vchan->at;
@@ -433,6 +433,15 @@ static int owl_dma_start_next_sg(struct owl_dma_vchan *vchan)
 		return -EINVAL;
 	}
 	psg = &txd->sg[txd->sgidx];
+	if(txd->cyclic) {
+		r_mode = pchan_readl(pchan,  DMAX_MODE);
+		next_idx = txd->sgidx +1;
+		if (next_idx >= txd->sglen)
+			next_idx = 0;
+		if (DMA_MODE_RELO & r_mode) {
+			first_tx = 0;
+		}
+	}
 	
 	switch (txd->dir) {
 	case DMA_MEM_TO_MEM:
@@ -440,6 +449,10 @@ static int owl_dma_start_next_sg(struct owl_dma_vchan *vchan)
 		| DMA_MODE_SAM_INC | DMA_MODE_DAM_INC;
 		src = psg->addr;
 		dst =   psg->mem_dst;
+		if(txd->cyclic ) {
+			next_src = txd->sg[next_idx].addr;
+			next_dst =  txd->sg[next_idx].mem_dst ;
+		}
 		break;
 	case DMA_MEM_TO_DEV:
 		mode = DMA_MODE_DT(vchan->drq)| DMA_MODE_ST_DDR 
@@ -450,7 +463,10 @@ static int owl_dma_start_next_sg(struct owl_dma_vchan *vchan)
 			mode |= DMA_MODE_UART8BIT;
 		src =  psg->addr;
 		dst =  txd->dev_addr;
-
+		if(txd->cyclic ) {
+			next_src = txd->sg[next_idx].addr;
+			next_dst =  txd->dev_addr;
+		}
 		break;
 	case DMA_DEV_TO_MEM:
 		 mode = DMA_MODE_ST(vchan->drq) | DMA_MODE_DT_DDR
@@ -458,6 +474,10 @@ static int owl_dma_start_next_sg(struct owl_dma_vchan *vchan)
 
 		 dst=  psg->addr;
 		 src=  txd->dev_addr;
+		if(txd->cyclic ) {
+			next_src =  txd->dev_addr;
+			next_dst =  txd->sg[next_idx].addr ;
+		}
 		/* for uart device */
 		if (sconfig->src_addr_width == DMA_SLAVE_BUSWIDTH_1_BYTE)
 			mode |= DMA_MODE_UART8BIT;
@@ -468,11 +488,14 @@ static int owl_dma_start_next_sg(struct owl_dma_vchan *vchan)
 		return -EINVAL;
 	}
 
-	pchan_writel(pchan, mode, DMAX_MODE);	
-	pchan_writel(pchan, src, DMAX_SRC);
-	pchan_writel(pchan, dst, DMAX_DST);
-	pchan_writel(pchan, psg->len, DMAX_CNT);
-
+	if (first_tx) {
+		if(txd->cyclic)
+			mode |= DMA_MODE_RELO;
+		pchan_writel(pchan, mode, DMAX_MODE);
+		pchan_writel(pchan, src, DMAX_SRC);
+		pchan_writel(pchan, dst, DMAX_DST);
+		pchan_writel(pchan, psg->len, DMAX_CNT);
+	}
 
 	spin_lock_irqsave(&od->lock, flags);
 	dma_writel(od,  1 << (pchan->id<<1),  DMA_IRQ_PD);
@@ -481,8 +504,20 @@ static int owl_dma_start_next_sg(struct owl_dma_vchan *vchan)
 	dev_dbg(chan2dev(&vchan->vc.chan), "start pchan%d for vchan(drq:%d)\n",
 		pchan->id, vchan->drq);
 	spin_unlock_irqrestore(&od->lock, flags);
-	
-	pchan_writel(pchan, DMA_CMD_START, DMAX_CMD);
+
+	if (first_tx) {
+		pchan_writel(pchan, DMA_CMD_START, DMAX_CMD);
+	}
+
+	if(txd->cyclic)  {// cyclic mode use DMA_MODE_RELO
+		r_mode = pchan_readl(pchan,  DMAX_MODE); // for delay, DMA_MODE_RELO, wrtie next addr
+		if (!(DMA_MODE_RELO & r_mode)) {
+			dev_err(od->dma.dev,"cyclic, %s: relo mode err\n", __func__);
+		}
+		pchan_writel(pchan, next_src, DMAX_SRC);
+		pchan_writel(pchan, next_dst, DMAX_DST);
+		pchan_writel(pchan, txd->sg[next_idx].len, DMAX_CNT);
+	}
 
 	return 0;
 }
@@ -500,7 +535,7 @@ static int owl_dma_start_next_txd(struct owl_dma_vchan *vchan)
 	vchan->txd_issued++;
 	pchan->ts_issued = ktime_get();
 	vchan->ts_issued = ktime_get();
-
+	pchan_writel(pchan, 0, DMAX_MODE); // for reload check
 	owl_dma_start_next_sg(vchan);
 	
 	return 0;
@@ -828,9 +863,13 @@ static enum dma_status owl_dma_tx_status(struct dma_chan *chan,
 
 		} else {
 			txd = vchan->at;
-			bytes = pchan_readl(vchan->pchan, DMAX_REM);
-			for (i = txd->sgidx+1; i < txd->sglen; i++) 
-				bytes += txd->sg[i].len;
+			if (!vchan->pchan || !txd) {
+				bytes = 0;
+			} else {
+				bytes = pchan_readl(vchan->pchan, DMAX_REM);
+				for (i = txd->sgidx+1; i < txd->sglen; i++) 
+					bytes += txd->sg[i].len;
+			}
 		}
 	}
 	spin_unlock_irqrestore(&vchan->vc.lock, flags);

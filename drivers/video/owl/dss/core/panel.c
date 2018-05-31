@@ -513,12 +513,12 @@ int owl_panel_enable(struct owl_panel *panel)
 	/* controller power on */
 	owl_ctrl_power_on(panel->ctrl);
 
+	/* controller enable */
+	owl_ctrl_enable(panel->ctrl);
+
 	/* panel enable */
 	if (desc->ops && desc->ops->enable)
 		desc->ops->enable(panel);
-
-	/* controller enable */
-	owl_ctrl_enable(panel->ctrl);
 
 	if (desc->enable_delay > 0)
 		mdelay(desc->enable_delay);
@@ -658,6 +658,16 @@ int owl_panel_get_vmode(struct owl_panel *panel)
 	return panel->mode.vmode;
 }
 EXPORT_SYMBOL(owl_panel_get_vmode);
+
+int owl_panel_refresh_frame(struct owl_panel *panel)
+{
+	struct owl_display_ctrl *ctrl = panel->ctrl;
+
+	/* refresh one frame */
+	if (ctrl->ops && ctrl->ops->refresh_frame)
+		ctrl->ops->refresh_frame(ctrl);
+}
+EXPORT_SYMBOL(owl_panel_refresh_frame);
 
 int owl_panel_get_refresh_rate(struct owl_panel *panel)
 {

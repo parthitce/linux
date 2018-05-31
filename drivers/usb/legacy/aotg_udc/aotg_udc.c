@@ -2284,7 +2284,8 @@ irqreturn_t aotg_udc_irq(int irq, void *data)
 		udc->gadget.a_alt_hnp_support = 0;
 		udc->highspeed = 0;
 		udc_ep_packet_config(USB_SPEED_FULL, udc);
-		mdelay(4);
+		/* Do not delay in interrupt context */
+		//mdelay(4);
 		udc->reset_cnt++;
 		break;
 	case UIV_HSPEED:

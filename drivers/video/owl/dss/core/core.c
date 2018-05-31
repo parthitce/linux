@@ -20,7 +20,7 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/of_gpio.h>
-
+#include <linux/sched.h>
 #include <video/owl_dss.h>
 
 int owl_dss_get_color_bpp(enum owl_color_mode color)

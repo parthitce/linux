@@ -62,6 +62,8 @@ struct mtd_blktrans_ops {
 	/* Access functions */
 	int (*readsect)(struct mtd_blktrans_dev *dev,
 		    unsigned long block, char *buffer);
+	int (*read_nsect)(struct mtd_blktrans_dev *dev,
+		    unsigned long block, char *buffer, int blk_cnt);
 	int (*writesect)(struct mtd_blktrans_dev *dev,
 		     unsigned long block, char *buffer);
 	int (*discard)(struct mtd_blktrans_dev *dev,

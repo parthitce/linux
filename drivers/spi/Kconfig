@@ -303,6 +303,13 @@ config SPI_OWL
 	help
 	  This enables using the SPI master controller on Actions OWL SoC.
 
+config SPI_VUI
+	tristate "Actions VUI I2C-SPI driver"
+	depends on ARCH_OWL && I2C
+	help
+	  Support for the I2C-SPI found on the Actions VUI Devices
+	  ATT3006/ATT3008 board.
+
 config SPI_PL022
 	tristate "ARM AMBA PL022 SSP controller"
 	depends on ARM_AMBA

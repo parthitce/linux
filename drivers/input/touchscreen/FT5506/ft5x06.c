@@ -19,6 +19,7 @@
 #include <linux/of_irq.h>
 #include "ft5x06_reg.h"
 #include "ft5x06.h"
+//#include "mach/hardware.h"
 
 #define FT5X06_NAME             "ft5x06"
 #define VALUE_XY(h, l)          ((h & 0x0f) << 8 | l)
@@ -1131,8 +1132,8 @@ static int ft5x06_read_points(struct ft5x06_device *ftdev,
 			y = tmp;
 #endif
 #endif
-#if CFG_FT_USE_CONFIG
 
+#if 0//CFG_FT_USE_CONFIG
 				if (cfg_dts.XYSwap == 1) {
 					int tmp;
 					tmp = x;
@@ -1565,7 +1566,7 @@ static int tp_of_data_get(void)
 	}
 
 
-	printk("gpio num:%d, i2c_addr:%02x, irq_number:%d,x_pixel:%d, y_pixel:%d,x_revert_en:%d,y_revert_en:%d,xy_swap_en:%d, max_point:%d, rotate:%d, i2cNum:%d\n",
+	printk("gpio num:%d, i2c_addr:0x%02x, irq_number:%d,x_pixel:%d, y_pixel:%d,x_revert_en:%d,y_revert_en:%d,xy_swap_en:%d, max_point:%d, rotate:%d, i2cNum:%d\n",
 		gpio_reset,
 		cfg_dts.i2cAddr,
 		cfg_dts.sirq,
@@ -1806,10 +1807,10 @@ static int ft5x06_probe(struct i2c_client *client,
 	set_bit(ABS_MT_WIDTH_MAJOR, input->absbit);
 	set_bit(ABS_MT_TRACKING_ID, input->absbit);
 
-	printk("ft5x06 probe v2.0 i file,FT5X0X_DOWNLOAD_FIRM=(%d)\n", FT5X0X_DOWNLOAD_FIRM);
+	printk(KERN_ERR"ft5x06 probe v2.0 i file,FT5X0X_DOWNLOAD_FIRM=(%d)\n", FT5X0X_DOWNLOAD_FIRM);
 	#if (FT5X0X_DOWNLOAD_FIRM == 1)
 printk("download !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
-	fts_ctpm_auto_upg(client);
+	    //fts_ctpm_auto_upg(client);
 	#endif
 
 #if CFG_FT_USE_CONFIG

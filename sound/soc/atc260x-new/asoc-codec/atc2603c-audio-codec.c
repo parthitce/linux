@@ -1060,16 +1060,15 @@ static void adc_poll(struct work_struct *data)
 		printk("sndrv: speaker off \n");
 		/* 1:headset with mic;  2:headset without mic */
 		switch_set_state(&headphone_sdev, HEADSET_MIC);
-		if(speaker_gpio_num > 0){
-                	gpio_direction_output(speaker_gpio_num, speaker_gpio_active); 
-           	}  
 
+		if (speaker_gpio_num >= 0)
+			gpio_direction_output(speaker_gpio_num, speaker_gpio_active);
 	} else {
 		printk("sndrv: speaker on state %d, old_state %d\n", state, old_state);
 		switch_set_state(&headphone_sdev, SPEAKER_ON);
-		if(speaker_gpio_num > 0){
-                	gpio_direction_output(speaker_gpio_num, !speaker_gpio_active); 
-           	}  
+
+		if (speaker_gpio_num >= 0)
+			gpio_direction_output(speaker_gpio_num, !speaker_gpio_active);
 	}
 
 	old_state = state;
@@ -1235,8 +1234,17 @@ static int atc2603c_audio_hw_params(struct snd_pcm_substream *substream,
 		hw_init_flag = true;
 
 	}
-	/* 4WIRE MODE */
-	snd_soc_update_bits(codec, AUDIOINOUT_CTL, 0x03 << 5, 0x01 << 5);
+
+	if(audio_hw_cfg.i2s_mode){
+		printk(KERN_ERR"atc2603c_audio_hw_params 6WIRE MODE");
+		/* 6WIRE MODE */
+		snd_soc_update_bits(codec, AUDIOINOUT_CTL, 0x03 << 5, 0x2 << 5);
+		snd_soc_update_bits_pmu(codec, ATC2603C_PAD_EN, 0x03 << 2, 0x3 << 2);
+	}else{
+		printk(KERN_ERR"atc2603c_audio_hw_params 4WIRE MODE");
+		/* 4WIRE MODE */
+		snd_soc_update_bits(codec, AUDIOINOUT_CTL, 0x03 << 5, 0x01 << 5);
+	}
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 /*
@@ -1328,6 +1336,10 @@ static int atc2603c_audio_set_dai_fmt(struct snd_soc_dai *dai, unsigned int fmt)
 
 	switch (fmt & SND_SOC_DAIFMT_FORMAT_MASK) {
 	case SND_SOC_DAIFMT_I2S:
+		audio_hw_cfg.i2s_mode = 0;
+		break;
+	case SND_SOC_DAIFMT_I2S_6WIRE:
+		audio_hw_cfg.i2s_mode = 1;
 		break;
 	default:
 		return -EINVAL;
@@ -1544,6 +1556,14 @@ static int atc2603c_resume(struct snd_soc_codec *codec)
     if(atc2603c_open_count > 0){
         atc2603c_playback_set_controls(codec);
         snd_soc_update_bits(codec, AUDIOINOUT_CTL, 0x01 << 1, 0x01 << 1);
+		if(audio_hw_cfg.i2s_mode){
+			/* 6WIRE MODE */
+			snd_soc_update_bits(codec, AUDIOINOUT_CTL, 0x03 << 5, 0x2 << 5);
+			snd_soc_update_bits_pmu(codec, ATC2603C_PAD_EN, 0x03 << 2, 0x3 << 2);
+		}else{
+			/* 4WIRE MODE */
+			snd_soc_update_bits(codec, AUDIOINOUT_CTL, 0x03 << 5, 0x01 << 5);
+		}
     }
 #endif
 	return 0;
@@ -1809,9 +1829,8 @@ static void atc2603c_platform_shutdown(struct platform_device *pdev)
 {
 	/* close speaker gpio before shutdown */
 	/* speaker_gpio_active: 0 close 1 open*/
-	if(speaker_gpio_num > 0){
+	if (speaker_gpio_num >= 0)
 		gpio_direction_output(speaker_gpio_num, !speaker_gpio_active);
-	}
 #if 0
 	snd_soc_write(atc2603c_codec, DAC_VOLUMECTL0, 0xBEBE);
 	snd_soc_write(atc2603c_codec, DAC_ANALOG1, 0x0);

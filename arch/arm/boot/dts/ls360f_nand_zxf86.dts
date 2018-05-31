@@ -1,0 +1,723 @@
+/*
+ * Copyright (C) 2014 Actions Semi. Inc
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License as
+ * published by the Free Software Foundation version 2.
+ *
+ * This program is distributed "as is" WITHOUT ANY WARRANTY of any
+ * kind, whether express or implied; without even the implied warranty
+ * of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+/dts-v1/;
+
+ /* reserve 8MB for ion(pmem) */
+/memreserve/ 0x3800000 0x800000;
+
+#include "ats3605.dtsi"
+
+/ {
+	model = "ats3605";
+	compatible = "actions,ats3605";
+
+	chosen {
+		bootargs="console=ttyS5,115200 earlyprintk no_console_suspend loglevel=7 clk_ignore_unused";
+	};
+
+	cpus {
+		CPU0: cpu@0 {
+			cpuvdd-supply = <&dcdc1>;
+		};
+	};
+	ion_config {
+		compatible = "actions,ats3605-ion";
+		actions,ion_heap_pmem = <0x3800000 0x800000>;
+	};
+	
+	serial1: uart@b0162000 {
+		status = "okay";
+		pinctrl-names = "default";
+	};
+	
+	serial2: uart@b0164000 {
+		status = "okay";
+		pinctrl-names = "default";
+	};
+	//For BT
+	serial3: uart@b0166000 {
+		dmas = <&dma DMA_DRQ_UART3>, <&dma DMA_DRQ_UART3>;
+		dma-names = "tx", "rx";
+		status = "okay";
+		pinctrl-names = "default";
+		pinctrl-0 = <&serial3_state_default>;
+	};
+
+	serial5: uart@b016a000 {
+		status = "okay";
+		//pinctrl-names = "default";
+		//pinctrl-0 = <&serial5_state_default>;
+	};
+
+
+	spi0: spi@b0300000 {
+		status = "okay";
+		pinctrl-names = "default";
+		pinctrl-0 = <&spi0_state_default>;
+ 		m25p80@0 {
+			compatible = "mx25l12805d";
+			reg = <0>;
+			spi-max-frequency = <30000000>;
+            partition@0 {
+            	reg = <0x0 0xe0000>;
+            	label = "u-boot(896k)";
+            };
+
+            partition@e0000 {
+            	reg = <0xe0000 0x20000>;
+            	label = "misc info(128k)";
+            };
+
+            partition@100000 {
+            	reg = <0x100000 0xf00000>;
+            	label = "others(15360k)";
+            };
+		};
+    };
+
+	i2c0: i2c@b0180000{
+		i2c_num = <0>;
+		clock-frequency = <400000>;
+		status = "okay";
+  };
+
+	i2c1: i2c@b0184000 {
+		i2c_num = <1>;
+		clock-frequency = <400000>;
+		status = "okay";
+		
+		    ft5x06@38 {
+        compatible = "ft5x06";
+        reg = <0x38>;
+        tp_vcc = "ldo5";
+        reset_gpios = <&gpiob 3 1>; /*GPIOB(3) 0: high, 1: low*/
+        max_points = <10>;
+        x_pixel = <320>;
+        y_pixel = <240>;
+        x_revert_en = <0>;
+        y_revert_en = <0>;
+        xy_swap_en = <0>;
+        rotate_degree = <180>;  /* 0 90 180 270 */
+        interrupt-parent = <&gpiob>;
+        interrupts =< 4 0x4 >; /*GPIOB4*/
+        vol_range = <3100000 3110000>;
+    };
+	};
+
+	i2c2: i2c@b0188000{
+		i2c_num = <2>;
+		clock-frequency = <400000>;
+		status = "okay";
+		/* atc2603c (5307) */
+		atc260x: atc2603c@65 {
+			compatible = "actions,atc2603c";
+			reg = <0x65>;
+			interrupt-parent = <&sirq>;
+			interrupts =< 2 0x4 >;
+			interrupt-controller;
+			#interrupt-cells = <1>;
+
+			losc_32k_output_enable = <1>;    /* enable/disable output 32.768K clock via I2S_MCLK1 pin */
+			losc_32k_output_voltage = <18>;  /* select voltage scale of the 32.768K clock output, 18:1.8v, 31:3.1v */
+			board_flag = <1>;
+			pm {
+				compatible = "actions,atc2603c-pm";
+			};
+
+			onoff {
+				compatible = "actions,atc2603c-onoff";
+				//gpios = <&gpiob 3 1>;/*hardkey  0: high, 1: low*/
+				keycode = <54>; /*KEY VAL*/
+				poweroff = <1>; /*hardkey :1 poweroff, 0 poweron */
+			};
+
+			rtc{
+				compatible = "actions,atc2603c-rtc";
+			};
+
+			atc260x_gpio: atc260x_gpio {
+				compatible = "actions,atc2603c-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+			};
+
+			atc260x_sgpio: atc260x_sgpio {
+				compatible = "actions,atc2603c-sgpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+			};
+
+			atc260x-adckeypad{
+#define KEY_MODE		0x175
+#define KEY_LEFT		105
+#define KEY_RIGHT		106
+#define KEY_ESC			1
+#define KEY_MENU		139
+#define KEY_DOWN		108
+#define KEY_UP			103
+#define KEY_VOLUMEDOWN	114
+#define KEY_VOLUMEUP	115
+#define KEY_PLAY		207
+				keymapsize = <10>;                   /* number of ADC key */
+				filter_dep = <3>;                   /* depth of the moving average filter (length of filter queue) */
+				variance = <10>;                    /* filter will not output until the difference between every two ADC samples in the filter queue goes below this value */
+				poll_interval =  <10>;              /* sample period, in ms */
+				left_adc_val =  <0 51 168 267 342 459 576 699 801 901>;     /* for key code translator, each value defines a lower bound of ADC value of a key */
+				right_adc_val = <50 167 266 341 458 575 698 800 900 970>;   /* for key code translator, each value defines a upper bound of ADC value of a key */
+				key_val = <KEY_PLAY KEY_VOLUMEUP KEY_VOLUMEDOWN KEY_UP KEY_DOWN KEY_MENU KEY_ESC KEY_RIGHT KEY_LEFT KEY_MODE>; /* for key code translator, each value defines the key_code of a key */
+				adc_channel_name = "REMCON";          /* the ADC channel used for sampling, valid names are REMCON AUX0 AUX1 AUX2 (AUX3) */
+				compatible = "actions,atc2603c-adckeypad";
+				status = "okay";                /* enable/disable ADC key function (okay or disabled) */
+			};
+
+			/*the cfg params must be read	in the first installed ko,
+			 now snd-soc-atv5302.ko is first installed.
+			 1, earphone_detect_level use the third value of earphone_gpios
+			 2, commonly, we shouldn't change the value of speaker_gain and earphone_gain*/
+			atc260x-audio{
+				compatible = "actions,atc2603c-audio";
+				status = "okay";
+				pinctrl-names = "default";
+				pinctrl-0 = <&i2s0_state_default>;
+				//earphone_detect_gpios = <&gpio 21 0>; /*0: low, 1: high GPIOA21 0*/
+				speaker_en_gpios = <&atc260x_sgpio 4 0>; /*GPIOB(0) 0: low, 1: high*/
+				//speaker_mode_gpios = <&gpiob 1 1>; /*GPIOB(1) 0: low, 1: high*/
+				earphone_output_mode = <0>; /*0: direct mode, 1: undirect mode*/
+				mic_num = <1>; /*just suport 1, 2*/
+				mic0_gain = < 0x4 0xd >; /*<Lchannel,Rchannel> [0x0~0xF]*/
+				speaker_gain = < 0xbe 0xbe >; /*<Lchannel,Rchannel>[0x00~0xbebe]*/
+				earphone_gain = < 0xbe 0xbe >; /*<Lchannel,Rchannel>[0x00~0xbebe]*/
+				mic_mode = <2>; /* 1: differential,  2: single end*/
+				speaker_volume = < 0x28 0x28 >; /*volume [0x00~0x28]*/
+				earphone_volume = < 0x28 0x28 >; /*volume [0x00~0x28]*/
+				earphone_detect_method = <2>; /*0:gpio, 1:irq, 2:adc*/
+				adc_plugin_threshold = <741>; /*adc earphone detect plugin threshold value*/
+				adc_level = <0>; /*adc plugin level, 1:high vol when plugin; 0:low vol when plug in*/
+				adc_num = <0>;/*use 2603C_PMU_AUXADC0*/
+			};
+
+			atc260x-hwmon{
+				compatible = "actions,atc2603c-hwmon";
+			};
+			atc260x-charger{
+				compatible = "actions,atc2603c-charger";
+				rsense = <20>;/*unit:mohm*/
+				bat_type = <1>;/*0:4.18v; 1:4.2v; 2:4.3v; 3:4.35v*/
+				bl_on_current_usb_pc = <200>;
+				bl_off_current_usb_pc = <400>;
+				bl_on_current_usb_adp = <600>;
+				bl_on_current_usb_adp_high = <1000>;
+				bl_off_current_usb_adp = <1200>;
+				bl_on_current_wall_adp = <400>;
+				bl_off_current_wall_adp = <1400>;
+				support_adaptor_type = <3>; /*1: DCIN  2: USB  3:DCIN+USB*/
+				ext_charger = <0>;
+				usb_adapter_as_ac = <1>;/*0:usb ada keep itself; 1:usb ada used as DCIN when usb plug and batv<3.3v during minicharge*/
+				usb_pc_ctl_mode = <1>; /*0:disable vbus ctl;1:current limited;2:voltage limited*/
+				//wall_switch = <&gpioa 25 0>;/*GPIOA25,0: high, 1: low*/
+			};
+
+			atc2603c-battery{
+				compatible = "actions,atc2603c-battery";
+				capacity = < 2000 >;                              /*mAh, the full capacity of battery used*/
+				taper_voltage = < 4180 >;                         /*mV,the one close to the full capacity*/
+				taper_current = <300>;
+				min_over_chg_protect_voltage = < 4275 >;				/*mA,the one close to the full capacity*/
+				terminal_voltage = <3400>;                        /*mV,the lowest voltage of battery permitted*/
+				suspend_current = < 17000 >;                       /* uA,the current of suspend*/
+				shutdown_current = < 50 >;                        /* uA,the current of shutdown*/
+				print_switch = <0>;                               /*0:open the switch of printing information 1:the opposite*/
+				log_switch = <0>;                                 /*0:open the switch of recording charging log 1:the opposite*/
+				support_battery_temperature = <0>;				/*0:not support 1:support*/
+				ocv_soc_00 = <3477 3534 3591 3624 3637 3649 3661 3667 3673 3677>;    	 /* capacity:from 1% to 10%*/
+				ocv_soc_10 = <3682 3685 3690 3693 3700 3706 3712 3716 3722 3728 >;	 /* capacity:from 11% to 20%*/
+				ocv_soc_20 = <3732 3736 3739 3744 3747 3751 3755 3758 3761 3765>;	 /* capacity:from 21% to 30%*/
+				ocv_soc_30 = <3768 3771 3775 3777 3782 3784 3788 3791 3793 3794 >;	 /* capacity:from 31% to 40%*/
+				ocv_soc_40 = <3800 3801 3804 3807 3812 3815 3819 3823 3825 3830>;	 /* capacity:from 41% to 50%*/
+				ocv_soc_50 = <3834 3838 3841 3845 3850 3854 3858 3864 3870 3874>;	 /* capacity:from 51% to 60%*/
+				ocv_soc_60 = <3880 3889 3895 3902 3908 3916 3926 3933 3940 3947>;	 /* capacity:from 61% to 70%*/
+				ocv_soc_70 = <3954 3961 3968 3972 3979 3985 3992 3997 4005 4012>;	 /* capacity:from 71% to 80%*/
+				ocv_soc_80 = <4019 4028 4036 4046 4054 4061 4068 4075 4084 4090>;	 /* capacity:from 81% to 90%*/
+				ocv_soc_90 = <4099 4107 4115 4126 4132 4141 4152 4160 4170 4180>;	 /* capacity:from 91% to 100%*/
+			};
+
+			dcdc1: dcdc1 {
+				compatible = "actions,atc2603c-dcdc1","actions,atc2603c-dcdc";
+				regulator-name = "dcdc1";
+				regulator-min-microvolt = <700000>;
+				regulator-max-microvolt = <1400000>;
+				regulator-always-on;
+			};
+
+			dcdc2: dcdc2 {
+				compatible = "actions,atc2603c-dcdc2","actions,atc2603c-dcdc";
+				regulator-name = "dcdc2";
+				regulator-min-microvolt = <1400000>;
+				regulator-max-microvolt = <2200000>;
+				regulator-always-on;
+			};
+
+			dcdc3: dcdc3 {
+				compatible = "actions,atc2603c-dcdc3","actions,atc2603c-dcdc";
+				regulator-name = "dcdc3";
+				regulator-min-microvolt = <2600000>;
+				regulator-max-microvolt = <3100000>;
+			};
+
+			dcdc4: dcdc4 {
+				compatible = "actions,atc2603c-dcdc4","actions,atc2603c-dcdc";
+				regulator-name = "dcdc4";
+				regulator-min-microvolt = <5000000>;
+				regulator-max-microvolt = <5000000>;
+			};
+
+			dcdc5: dcdc5 {
+				status = "disabled";
+			};
+
+			ldo1: ldo1{
+				compatible = "actions,atc2603c-ldo1","actions,atc2603c-ldo";
+				regulator-name = "ldo1";
+				regulator-min-microvolt  = <2600000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-always-on;
+			};
+
+			ldo2: ldo2{
+				compatible = "actions,atc2603c-ldo2","actions,atc2603c-ldo";
+				regulator-name = "ldo2";
+				regulator-min-microvolt  = <2600000>;
+				regulator-max-microvolt = <3300000>;
+			};
+
+			ldo3: ldo3{
+				compatible = "actions,atc2603c-ldo3","actions,atc2603c-ldo";
+				regulator-name = "ldo3";
+				regulator-min-microvolt  = <1500000>;
+				regulator-max-microvolt = <2000000>;
+			};
+
+			ldo4: ldo4{
+				compatible = "actions,atc2603c-ldo4","actions,atc2603c-ldo";
+				regulator-name = "ldo4";
+				regulator-min-microvolt  = <2800000>;
+				regulator-max-microvolt = <3500000>;
+			};
+
+			ldo5: ldo5{
+				compatible = "actions,atc2603c-ldo5","actions,atc2603c-ldo";
+				regulator-name = "ldo5";
+				regulator-min-microvolt  = <2600000>;
+				regulator-max-microvolt = <3300000>;
+			};
+
+			ldo6: ldo6{
+				compatible = "actions,atc2603c-ldo6","actions,atc2603c-ldo";
+				regulator-name = "ldo6";
+				regulator-min-microvolt  = <700000>;
+				regulator-max-microvolt = <1400000>;
+			};
+
+			ldo7: ldo7{
+				compatible = "actions,atc2603c-ldo7","actions,atc2603c-ldo";
+				regulator-name = "ldo7";
+				regulator-min-microvolt  = <1500000>;
+				regulator-max-microvolt = <2000000>;
+				regulator-always-on;
+			};
+
+			ldo8: ldo8{
+				compatible = "actions,atc2603c-ldo8","actions,atc2603c-ldo";
+				regulator-name = "ldo8";
+				regulator-min-microvolt  = <2300000>;
+				regulator-max-microvolt = <3300000>;
+				regulator-boot-on;
+			};
+
+			ldo9: ldo9{
+				compatible = "actions,atc2603c-ldo9","actions,atc2603c-ldo";
+				regulator-name = "ldo9";
+				regulator-min-microvolt  = <1000000>;
+				regulator-max-microvolt = <1500000>;
+			};
+
+			ldo10: ldo10{
+				compatible = "actions,atc2603c-ldo10","actions,atc2603c-ldo";
+				regulator-name = "ldo10";
+				regulator-min-microvolt  = <2300000>;
+				regulator-max-microvolt = <3300000>;
+			};
+
+			ldo11: ldo11{
+				compatible = "actions,atc2603c-ldo11","actions,atc2603c-ldo";
+				regulator-name = "ldo11";
+				regulator-min-microvolt  = <2600000>;
+				regulator-max-microvolt = <3300000>;
+			};
+
+			switch1:switch1{
+				compatible = "actions,atc2603c-switch1","actions,atc2603c-switch";
+				regulator-name = "switch1";
+				regulator-min-microvolt  = <3000000>;
+				regulator-max-microvolt = <3300000>;
+			};
+
+			switch2:switch2{
+				status = "disabled";
+			};
+		};
+	};
+
+	isp0: isp@0xb0210000 {
+        mirror_flip = <3>;  /* bit-0:rear camera; bit-1:front camera; 0: no flip,no mirror; 1: no flip,horizontal mirror; 2:vertical flip,no mirror; 3: vertical flip,horizontal mirror */
+        
+        avdd-src = "regulator";  /* only: "gpio", "regulator" */
+        avdd-regulator = "ldo1"; /* only when vbus-src is "regulator" */
+        avdd-regulator-scope = <2800000 2810000>;  /* uV */
+        dvdd-regulator = "ldo7";
+        dvdd-regulator-scope = <1800000 1810000>;  /* uV */
+        
+        board_type = "evb";/* "ces" or "evb"*/
+        sensors = "rear"; /* "dual", "front" or "rear" */
+        pwdn-rear-gpios = <&gpiob 21 1>; /* GPIOB21 */
+        reset-gpios = <&gpiob 28 1>; /*GPIOB28*/
+        pinctrl-names = "default";
+        pinctrl-0 = <&isp0_state0_dvp>;
+        
+        status = "okay"; /* create platform-device */
+	};
+
+	sensors: isp-sensor {
+		compatible = "sensor_common";
+		i2c_adapter = <&i2c1>; /* 0-3 begin from enabled ones */
+
+		status = "okay";
+	};
+
+	mmc0: mmc@b0348000 {
+		card-type = "emmc";
+		status = "disabled";
+	};
+
+	mmc1: mmc@b0344000 {
+		card-type = "wifi";
+		pinctrl-names = "pinctrl_mmc1";
+		pinctrl-0 = <&mm1_pinctrl_state_lcd0>;
+		status = "okay";
+	};
+
+	mmc2: mmc@b0340000 {
+		card-type = "memory";  		/* only: "memory", "wifi", or "emmc" */
+		card-detect-mode = "command";  /* only:"gpio", or "command" */
+		sd_vcc = "switch1";
+		status = "okay";
+	};
+
+	wifi_bt_power_ctl {
+		compatible = "wifi,bt,power,ctl";
+		wifi_bt_power_gpios = <&gpiod 4 1>; /* SGPIO4, high active */
+		reg_wl_bt_vddio = "ldo8";  /*"ldo5";*/
+		wifi_bt_vddio_vol_range = <3300000 3310000>; /* set ldo voltage as 3.3v*/
+		wifi_en_gpios= <&gpiod 2 1>;				/* GPIOB24, high active */
+		bt_en_gpios = <&gpiod 10 1>; 				/* GPIOB6, high active */
+		bt_rst_n_gpios = <&gpiod 5 1>; 				/* GPIOD5, high active */
+		wifi_wakeup_host_gpios = <&gpiod 3 1>; 	/* GPIOB25 */
+	};
+
+	monitor {
+		compatible = "actions,ats3605-usb-monitor";
+		//adaptor_type = <>;	/* 1: DCIN; 2: USB; 3: both; default: both */
+		detect_type = <1>; /* config what to detect, 0:DISABLE ; 1:DEVICE_ONLY; 2:HOST_ONLY; 3: HOST_AND_DEVICE */
+		idpin_type   = <3>; /* 0: ic idpin; 1: soft idpin; 2: gpio idpin; 3: adc */
+		vbus_type   = <20>; /* 0: ic vbus; 1: gpio detect; 2: gpio ctrl; 3: gpio detect & ctrl; 10: soft vbus; 20: DC5V */
+		//idpin_gpio = <&gpiob 31 1>;   /* 1: low-active; 0: high-active */
+		//vbus_det_gpio = <>;	/* detect gpio */
+		//vbus_ctl_gpio = <>;	/* control gpio */
+		otg_vbus_en = <&gpiob 9 0>;
+		idpin_adc_threshold_min = <0>;
+		idpin_adc_threshold_max = <500>;
+		idpin_adc_threshold_min_2 = <900>;
+		idpin_adc_threshold_max_2 = <1000>;
+		status = "okay";
+	};
+
+	owl_usb_config {
+		compatible = "actions,owl-usb-config";
+		usb_serialnumber_config = <2>;		/* 0: fixed ascii; 1: fixed unicode; 2: non-fixed unicode */
+		status = "okay";
+	};
+
+	usb2h0: usb@b0240000 {
+		//power_en_gpio = <&gpiod 20 0>;	/* legacy configs, add for compatability */
+		//wifi_power_en_gpio = <&gpiod 20 0>;
+		//wifi_gpio = <&gpiod 20 0>;
+		status = "okay";
+	};
+
+	usb2h1: usb@b0250000 {
+		//power_en_gpio = <&gpiod 20 0>;
+		//wifi_power_en_gpio = <&gpiod 20 0>;
+		//wifi_gpio = <&gpiod 20 0>;
+		status = "okay";
+	};
+
+	aotg_usb2_config {
+		compatible = "actions,ats3605-usb2-config";
+		ports_config = <0>;		/* aotg usb2 enable: 0: both enable, 1: enable usb2h0, 2: enable ush2h1 */
+		//aotg0_host_plug_detect = <1>;	/* aotg0(usb2h0) uhost monitor: 0: disable, 1: enable */
+		aotg1_host_plug_detect = <1>;	/* aotg1(usb2h1) uhost monitor: 0: disable, 1: enable */
+		status = "okay";
+	};
+
+	backlight {
+		compatible = "actions,owl-pwm-backlight";
+
+		/* GPIOD28, active high */
+		en-gpios = <&gpiod 28 1>;
+
+		/*1.pwm num; 2. period in ns; */
+		/*3.plarity, 0: high active, 1: low active*/
+		 pwms = <&pwm 0 50000 1>; 
+
+		total_steps = <1024>;
+		min_brightness = <100>;
+		max_brightness = <1000>;
+		dft_brightness = <500>;
+
+		delay_bf_pwm = <0>; /*in ms*/
+		delay_af_pwm = <20>; /*in ms*/
+	};
+
+
+	lcd: lcd@b02a0000 {
+		pinctrl-names = "default";
+		pinctrl-0 = <&lcd0_cpu_state_default>;
+
+		panel_configs = <&config0>;
+		/*
+		 * lcd_configs, used to configure lcd controller,
+		 * its values should set according to lcd panel's spec.
+		 * Currently, the configration is for fpga panel.
+		 */
+		config0: lcd_configs {
+			port_type = <1>;	/* 0, RGB; 1, CPU; 2, LVDS; 3, EDP */
+
+			vsync_inversion = <0>;
+			hsync_inversion = <0>;
+			dclk_inversion = <0>;
+			lde_inversion = <0>;
+
+			/* cpu port properties */
+			cpu_format = <2>;		/* 0: 16 bit RGB 565 1 transfer;
+							 * 1: 18 bit RGB 666 1 transfer
+							 * 2:  8 bit RGB 565 2 transfer
+							 * 3:  9 bit RGB 666 2 transfer
+							 * 4:  8 bit RGB 888 3 transfer
+							 * 5:  6 bit RGB 666 3 transfer
+							 */
+			
+			/* lvds config */
+			lvds_format = <1>;      /* 0: 18-bit; 1: 24-bit */
+			lvds_channel = <0>;     /* 0: single channel; 1: dual channel */
+			lvds_bit_mapping = <0>; /* 0: NS Mode; 1: JEIDA Mode */
+			lvds_ch_swap = <0>;     /* 0: No Swap; 1: Odd/Even Swap */
+			lvds_mirror = <0>;      /* 0: normal; 1: mirror */
+
+			pclk_parent = <0>;	/* 0, DISPLAY PLL; 1, NAND PLL */
+			pclk_rate = <15000000>;/* 10MHz */
+		};
+
+		/* lcd panel */
+		panel@glp {
+			compatible = "actions,panel-glp";
+
+			/* panel's fixed info */
+			width_mm = <197>;
+			height_mm = <147>;
+			bpp = <16>;
+
+			is_primary = <1>;
+
+			/* operation delay in ms */
+			power_on_delay = <0>;
+			power_off_delay = <0>;
+			enable_delay = <0>;
+			disable_delay = <0>;
+
+			power-gpio = <&gpiob 21 0>; /* high active */
+			reset-gpio = <&gpioc 3 1>;/* low active */
+
+			/* screen init command info */
+			glp_init_cmd-0 = <&scmd0>;
+			glp_init_cmd-1 = <&scmd1>;
+			glp_init_cmd-2 = <&scmd2>;
+			glp_init_cmd-3 = <&scmd3>;
+			glp_init_cmd-4 = <&scmd4>;
+			glp_init_cmd-5 = <&scmd5>;
+			glp_init_cmd-6 = <&scmd6>;
+			glp_init_cmd-7 = <&scmd7>;
+			glp_init_cmd-8 = <&scmd8>;
+			glp_init_cmd-9 = <&scmd9>;
+			glp_init_cmd-10 = <&scmd10>;
+			glp_init_cmd-11 = <&scmd11>;
+			glp_init_cmd-12 = <&scmd12>;
+			glp_init_cmd-13 = <&scmd13>;
+			glp_init_cmd-14 = <&scmd14>;
+			glp_init_cmd-15 = <&scmd15>;
+			//glp_init_cmd-16 = <&scmd16>;
+			//glp_init_cmd-17 = <&scmd17>;
+			
+			videomode-0 = <&mode0>;
+
+			/* 800x1280p60 */
+			mode0: videomode {
+				refresh_rate = <60>;
+
+				xres = <240>;
+				yres = <320>;
+				/*
+				 * pclk_rate = 66M
+				 * pixel_clock = picoseconds / pclk_rate
+				 */
+				pixel_clock = <15152>;
+
+				hsw = <12>;
+				hbp = <20>;
+				hfp = <40>;
+
+				vsw = <2>;
+				vbp = <10>;
+				vfp = <33>;
+
+				/* 0: FB_VMODE_NONINTERLACED, 1:FB_VMODE_INTERLACED */
+				vmode = <0>;
+			};
+			scmd0: cmd0 {
+	                        address = <0x11>;
+				delay = <120>;
+			};
+
+
+			scmd1: cmd1 {
+	                        address = <0x36>;
+	                        parameters = [00];
+				delay = <0>;
+			};
+			scmd2: cmd2 {
+	                        address = <0x3a>;
+	                        parameters = [55];
+				delay = <0>;
+			};
+			scmd3: cmd3 {
+	                        address = <0xb2>;
+	                        parameters = [0c 0c 00 33 33];
+				delay = <0>;
+			};
+			scmd4: cmd4 {
+	                        address = <0xb7>;
+	                        parameters = [35];
+				delay = <0>;
+			};
+			scmd5: cmd5 {
+	                        address = <0xbb>;
+	                        parameters = [19];
+				delay = <0>;
+			};
+
+			scmd6: cmd6 {
+	                        address = <0xc0>;
+	                        parameters = [2c];
+				delay = <0>;
+			};
+
+			scmd7: cmd7 {
+	                        address = <0xc2>;
+	                        parameters = [01];
+				delay = <0>;
+			};
+
+			scmd8: cmd8 {
+	                        address = <0xc3>;
+	                        parameters = [12];
+				delay = <0>;
+			};
+
+			scmd9: cmd9 {
+	                        address = <0xc4>;
+	                        parameters = [20];
+				delay = <0>;
+			};
+
+			scmd10: cmd10 {
+	                        address = <0xc6>;
+	                        parameters = [0f];
+				delay = <0>;
+			};
+			scmd11: cmd11 {
+	                        address = <0xd0>;
+	                        parameters = [a4 a1];
+				delay = <0>;
+			};
+			scmd12: cmd12 {
+	                        address = <0xe0>;
+	                        parameters = [d0
+	                        04
+	                        0d
+	                        11
+	                        13
+	                        2b
+	                        3f
+	                        54
+	                        4c
+	                        18
+	                        0d
+	                        0b
+	                        1f
+	                        23];
+				delay = <0>;
+			};
+			scmd13: cmd13 {
+	                        address = <0xe1>;
+	                        parameters = [d0
+	                        04
+	                        0c
+	                        11
+	                        13
+	                        2c
+	                        3f
+	                        44
+	                        51
+	                        2f
+	                        1f
+	                        1f
+	                        20
+	                        23];
+				delay = <0>;
+			};
+			scmd14: cmd14 {
+	                        address = <0x29>;
+				delay = <0>;
+			};
+			scmd15: cmd15 {
+	                        address = <0x2c>;
+				delay = <0>;
+			};
+		};
+	};
+
+	framebuffer {
+		compatible = "actions,framebuffer";
+	};
+};

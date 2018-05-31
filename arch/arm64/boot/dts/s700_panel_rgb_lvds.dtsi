@@ -5,7 +5,7 @@
 / {
 	lcd: lcd@e02a0000 {
 
-		status = "okay";
+
 		pinctrl-names = "default";
 		pinctrl-0 = <&lcd0_state_default>;
 

@@ -279,7 +279,21 @@
 				actions,function = "sd2";
 			};
 		};
+		
+		lcd0_state_default: lcd0_default {
+			lcd0_mux {
+				actions,groups = "mfp0_31_29", "mfp0_28_26", "mfp0_25_23", "mfp0_22_20_sirq0", "mfp0_19_17", "mfp0_16_14", "mfp1_22", "mfp1_21", "mfp1_16_15", "mfp1_14_13_sd1_clkb", "mfp1_12_11", "mfp1_10", "mfp1_9";
+				actions,function = "lcd0";
+			};
+		};
 
+	
+		lcd0_cpu_state_default: lcd0_cpu_default {
+			lcd0_cpu_mux {
+				actions,groups = "mfp0_31_29", "mfp0_28_26", "mfp1_22", "mfp1_21";
+				actions,function = "lcd0";
+			};
+		};
 
 	};
 };

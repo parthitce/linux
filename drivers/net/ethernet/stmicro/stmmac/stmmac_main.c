@@ -50,7 +50,7 @@
 #include <linux/net_tstamp.h>
 #include "stmmac_ptp.h"
 #include "stmmac.h"
-
+//#include "stmmac_platform.h"
 #undef STMMAC_DEBUG
 /*#define STMMAC_DEBUG*/
 #ifdef STMMAC_DEBUG
@@ -76,9 +76,11 @@
 #else
 #define TX_DBG(fmt, args...)  do { } while (0)
 #endif
+extern int read_mi_item(char *name, void *buf, unsigned int count);
 
 #define STMMAC_ALIGN(x)	L1_CACHE_ALIGN(x)
 #define JUMBO_LEN	9000
+#define MISCINFO_HAS_ETHMAC
 
 /* Module parameters */
 #define TX_TIMEO	5000
@@ -1562,6 +1564,37 @@ static void stmmac_init_tx_coalesce(struct stmmac_priv *priv)
 	add_timer(&priv->txtimer);
 }
 
+#ifdef MISCINFO_HAS_ETHMAC
+extern int parse_mac_address(const char *mac, int len);
+#define ETH_MAC_LEN 6
+extern char g_default_mac_addr[ETH_MAC_LEN];
+
+static int read_miscinfo_ethmac(struct stmmac_priv *priv)
+{
+        int ret;
+        int ret2;
+        const char *mac = NULL;
+        char def_mac[20] = "";
+        printk("read_miscinfo_ethmac.\n");
+	ret = read_mi_item("ETHMAC", def_mac, 20);
+	if (ret > 0) {
+		printk("Using the mac address in miscinfo.\n");
+		ret2 = parse_mac_address(def_mac, ret);
+		printk("ret2 = %d\n",ret2);
+		if (ret2 == 0){
+                        
+		}
+		mac = g_default_mac_addr;
+
+        	if (mac)
+        		memcpy(priv->dev->dev_addr, mac, ETH_ALEN);
+        	pr_warn("%s: read_miscinfo_ethmac MAC address %pM\n", priv->dev->name,
+		priv->dev->dev_addr);
+		return 0;
+	}
+}
+#endif
+
 /**
  *  stmmac_open - open entry point of the driver
  *  @dev : pointer to the device structure.
@@ -1577,7 +1610,9 @@ static int stmmac_open(struct net_device *dev)
 	int ret;
 
 	clk_prepare_enable(priv->stmmac_clk);
-
+	#ifdef MISCINFO_HAS_ETHMAC
+        read_miscinfo_ethmac(priv);
+        #endif
 	stmmac_check_ether_addr(priv);
 
 	if (priv->pcs != STMMAC_PCS_RGMII && priv->pcs != STMMAC_PCS_TBI &&

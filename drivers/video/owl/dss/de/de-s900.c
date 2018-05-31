@@ -686,9 +686,10 @@ static void __video_format_set(struct owl_de_video *video,
 		val = REG_SET_VAL(val, 0x0, 29, 28);
 	} else {
 		/* Using BT709_FULL_RANGE for YUV format */
-
-		val = REG_SET_VAL(val, 0x1, 28, 28);	/* BT709 */
-		val = REG_SET_VAL(val, 0x0, 29, 29);	/* NO quantization */
+		/* 0: BT601, 1: BT709 */
+		val = REG_SET_VAL(val, 0x1, 28, 28);
+		/* 0: full range (no quantization), 1: limited range (quantization) */
+		val = REG_SET_VAL(val, 0x0, 29, 29);
 	}
 
 	de_writel(val, DE_OVL_CFG(video->id));

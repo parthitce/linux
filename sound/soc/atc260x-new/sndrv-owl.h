@@ -27,6 +27,7 @@
 #define S900_AIF_I2S_TDM    5
 #define S900_AIF_SPI        6
 
+#define SND_SOC_DAIFMT_I2S_6WIRE		   8 /* I2S mode  see soc-dai.h*/
 
 static int error_switch = 1;
 static int debug_switch = 1;
@@ -88,6 +89,7 @@ typedef struct {
 	unsigned int adc_level;
 	unsigned int adc_num;
 	unsigned int record_source;
+	unsigned int i2s_mode;
 } audio_hw_cfg_t;
 
 /*extern audio_hw_cfg_t audio_hw_cfg;*/

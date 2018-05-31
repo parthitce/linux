@@ -47,6 +47,7 @@
 	mmc0: mmc@e0218000 {
 		card-type = "emmc";
 		status = "okay";
+		/*mmc_hs200_supported;  support emmc high speed 200MHZ mode*/
 	};
 
 	mmc1: mmc@e0214000 {

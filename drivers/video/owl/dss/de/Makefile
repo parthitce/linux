@@ -19,3 +19,4 @@ obj-$(CONFIG_VIDEO_OWL_DE) += owl_de.o
 
 owl_de-$(CONFIG_VIDEO_OWL_DE_S900) := de-s900.o
 owl_de-$(CONFIG_VIDEO_OWL_DE_S700) := de-s700.o
+owl_de-$(CONFIG_VIDEO_OWL_DE_ATS3605) := de-ats3605.o

@@ -5,14 +5,15 @@
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/errno.h>
+#include <linux/vmalloc.h>
 #include <asm/uaccess.h>
 
 #define PRINT(x...)			printk(x)
 #define PRINT_DBG(x...)		do {if (debug_enable) printk(x);} while (0);
 #define PRINT_ERR(x...)		printk(KERN_ERR x)
 #define INFO(x...)
-#define MALLOC(x)			kmalloc(x, GFP_KERNEL)
-#define FREE(x)				kfree(x)
+#define MALLOC(x)			vmalloc(x) /*kmalloc(x, GFP_KERNEL)*/
+#define FREE(x)				vfree(x)  /*kfree(x)*/
 
 #else
 #define PRINT(x...)			printf(x)

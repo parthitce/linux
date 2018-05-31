@@ -60,8 +60,7 @@ static int lcd_resume(struct device *dev)
 {
 	struct dispc_manager *mgr = dev_get_drvdata(dev);
 
-	if (lcd_suspend_state)
-		dispc_manager_set_enabled(mgr, true);
+	dispc_manager_set_enabled(mgr, lcd_suspend_state);
 
 	return 0;
 }

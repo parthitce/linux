@@ -206,8 +206,7 @@ static int hdmi_resume(struct device *dev)
 {
 	struct dispc_manager *mgr = dev_get_drvdata(dev);
 
-	if (hdmi_suspend_state)
-		dispc_manager_set_enabled(mgr, true);
+	dispc_manager_set_enabled(mgr, hdmi_suspend_state);
 
 	return 0;
 }

@@ -35,6 +35,15 @@ config SND_SOC_ACT_ALL_PMU_OWL
 	help
 	  Say Y if you want to add support for SoC audio on 
 	  S500 board.
+
+config SND_SOC_ACT_ALL_PMU_OWL_6WIRE
+	tristate "SoC Audio support for all pmus and 6wire codec on owl  board"
+	select SND_SOC_ACT_OWL
+	select SND_SOC_ACT_DAI_OWL_I2S_6WIRE
+	select SND_SOC_ACT_2603C
+	help
+	  Say Y if you want to add support for SoC audio on 
+	  S500 board.
 	  
 config SND_SOC_ACT_ALL_PMU_OWL_3605_NAU85L40
 	tristate "SoC Audio support for all pmus and nau85l40 on owl 3605 board"

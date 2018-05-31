@@ -314,6 +314,7 @@ struct atc2609a_battery {
 	int interval_sum_r;
 	int interval_sum_pre;
 	int interval_sum_full;
+	u32 interval_sum_acc_full;
 	int interval_sum_disch;
 	struct mutex  bat_mutex;
 	int charging;
@@ -368,6 +369,7 @@ static bool detect_full;
 /*whether if charger was force onoff or not*/
 static bool charger_off_force;
 static int log_switch;
+static int bat_pre_cur;
 static struct battery_data bat_info[16] = {
 	{0, 3000, 400},  {4, 3620, 400},  {8, 3680, 200},  {12, 3693, 120},
 	{16, 3715, 120}, {20, 3734, 120}, {28, 3763, 120}, {36, 3787, 120},
@@ -756,6 +758,8 @@ static void atc2609a_clmt_dump_ocv(struct atc2609a_clmt *clmt)
 			i <<  PMU_CLMT_OCV_TABLE_SOC_SEL_SHIFT);
 		data = atc260x_reg_read(clmt->atc260x, ATC2609A_CLMT_OCV_TABLE)
 			& PMU_CLMT_OCV_TABLE_OCV_SET_MASK;
+		pr_info("[%s], %%%d, ocv:%dmv\n",
+			__func__, bat_info[i].soc, data);
 		data = (data * ADC_LSB_FOR_BATV * 2 + CONST_ROUNDING) /
 			CONST_FACTOR;
 		pr_info("[%s], %%%d, ocv:%dmv\n",
@@ -1144,7 +1148,8 @@ static void atc2609a_clmt_check_fcc(struct atc2609a_clmt *clmt)
 
 	fcc = atc2609a_clmt_get_fcc(clmt);
 	diff_val = abs(items->design_capacity - fcc);
-	if (diff_val > items->design_capacity / 5) {
+	pr_info("diff_val (%d) ---- fcc(%d)\n", diff_val, fcc);
+	if (diff_val > items->design_capacity / 50) {
 		pr_info("[%s] fcc abnormal, fcc(%d)\n", __func__, fcc);
 		atc2609a_clmt_set_fcc(clmt, items->design_capacity);
 	}
@@ -2203,8 +2208,15 @@ static int calc_step_for_discharge(struct atc2609a_battery *battery)
 	} else {
 		if (clmt->soc_filtered_liner < clmt->soc_cur) {
 			step_down = clmt->soc_cur - clmt->soc_filtered_liner;
-			if (step_down > 800)
-				step_down = 800;
+			if (bat_vol > items->term_vol + 100)
+			{
+				if (step_down > 200)
+					step_down = 200;				
+			} else {
+				if (step_down > 100)
+					step_down = 100;						
+			}
+
 			pr_debug("[%s], Vterminal1>batv>Vterminal0,\n"
 				"step_down=%d\n",
 				__func__,
@@ -2257,6 +2269,7 @@ static int soc_filter_for_discharge(struct atc2609a_battery *battery)
 	struct bat_dts_items *items = &battery->items;
 	struct atc2609a_clmt *clmt = battery->clmt;
 	int bat_vol = battery->bat_vol;
+	int bat_cur_diff;
 
 	if (bat_vol > items->term_vol1) {
 		clmt->soc_r = atc2609a_clmt_get_rsoc(clmt);
@@ -2266,12 +2279,13 @@ static int soc_filter_for_discharge(struct atc2609a_battery *battery)
 				__func__,
 				clmt->soc_real,  CONST_SOC_STOP,  clmt->soc_filtered);
 		clmt->liner.inited = 0;
+		bat_pre_cur = battery->bat_cur;	
 		return clmt->soc_filtered;
 	} else {
 		clmt->weight = (bat_vol - items->term_vol) * 1000 /
 			(items->term_vol1 - items->term_vol);
-		clmt->soc_a = atc2609a_clmt_get_asoc(clmt);
-		clmt->soc_real = clmt->soc_a;
+		clmt->soc_r = atc2609a_clmt_get_rsoc(clmt);
+		clmt->soc_real = clmt->soc_r;
 		clmt->soc_weight =
 			(clmt->soc_cur * clmt->weight +
 			clmt->soc_real * (1000 - clmt->weight)) / 1000;
@@ -2290,6 +2304,11 @@ static int soc_filter_for_discharge(struct atc2609a_battery *battery)
 		pr_debug("[%s], batv<Vterminal1, soc_filtered:%d, soc_cur:%d\n",
 			__func__,  clmt->soc_filtered, clmt->soc_cur);
 
+		bat_cur_diff = abs(battery->bat_cur - bat_pre_cur);
+		if(bat_cur_diff > 100)
+			clmt->liner.inited = 0;
+		
+		printk("bat_cur_diff[%d] = battery->bat_cur[%d] - bat_pre_cur[%d]\n", bat_cur_diff, battery->bat_cur, bat_pre_cur);
 		if (!clmt->liner.inited) {
 			atc2609a_clmt_calc_liner(&clmt->liner,
 				battery->bat_vol,
@@ -2324,6 +2343,7 @@ static int soc_filter_for_discharge(struct atc2609a_battery *battery)
 		if (clmt->soc_filtered_liner < 0)
 			clmt->soc_filtered_liner = 0;
 
+		bat_pre_cur = battery->bat_cur;	
 		return clmt->soc_filtered_liner;
 	}
 }
@@ -2396,6 +2416,7 @@ static int curve_smooth(struct atc2609a_battery *battery)
 static void bat_detect_full(struct atc2609a_battery *battery)
 {
 	struct bat_dts_items *items = &battery->items;
+	struct atc2609a_clmt *clmt = battery->clmt;
 	int ocv;
 
 	if (!detect_full_launch)
@@ -2403,6 +2424,9 @@ static void bat_detect_full(struct atc2609a_battery *battery)
 
 	if (charger_off_force)
 		goto detect_ocv;
+
+	if(clmt->soc_show == 99)
+		battery->interval_sum_acc_full += battery->interval;
 
 	battery->interval_sum_full += battery->interval;
 	pr_debug("[%s] check charge current, interval_sum(%dms)\n",
@@ -2422,16 +2446,17 @@ static void bat_detect_full(struct atc2609a_battery *battery)
 
 detect_ocv:
 	ocv = measure_voltage_avr();
-	if (ocv >= items->taper_vol) {
+	if ((ocv >= items->taper_vol) ||
+		(battery->interval_sum_acc_full >= (600 * 1000))) {
 		battery->interval_sum_full += battery->interval;
-		pr_debug("[%s] ocv(%d)>taper_vol,interval_sum_full(%d)\n",
+		pr_debug("[%s] ocv(%d)>taper_vol,interval_sum_full(%d), interval_sum_acc_full(%d)\n",
 			__func__,
-			ocv, battery->interval_sum_full - battery->interval);
-		if (battery->interval_sum_full >=
-			(60 * 1000 + battery->interval)) {
+			ocv, battery->interval_sum_full - battery->interval, battery->interval_sum_acc_full);
+        if (battery->interval_sum_full >= (60 * 1000 + battery->interval)) {
 			pr_info("[%s]:  bat is full charge\n", __func__);
 			detect_full = true;
 			battery->interval_sum_full = 0;
+			battery->interval_sum_acc_full = 0;
 			/*
 			* in order to prevent battery from over-discharging,
 			* don't turn on charger at once.
@@ -2682,6 +2707,7 @@ static void start_anew(struct atc2609a_battery *battery)
 	battery->interval_sum_r = 0;
 	battery->interval_sum_pre = 0;
 	battery->interval_sum_full = 0;
+	battery->interval_sum_acc_full = 0;
 	battery->interval_sum_disch = 0;
 	clmt->liner.inited = 0;
 	detect_full = false;
@@ -2996,6 +3022,7 @@ static void atc2609a_clmt_init(struct atc2609a_clmt *clmt)
 		atc2609a_clmt_set_inited(clmt, true);
 	}
 
+	atc2609a_clmt_check_fcc(clmt);
 	/*if battery is ablmal ever, need update ocv-soc table to normal value*/
 	if (battery->health == BAT_ABNORMAL_EVER) {
 		atc2609a_clmt_set_ocv_batch(clmt, bat_info);
@@ -3054,6 +3081,7 @@ static void  atc2609a_battery_init(struct atc2609a_battery *battery)
 	/*other init*/
 	log_switch = items->log_switch;
 	just_power_on = true;
+	battery->interval_sum_acc_full = 0;
 
 	atc2609a_clmt_init(clmt);
 }
@@ -3264,8 +3292,8 @@ static void atc2609a_bat_shutdown(struct platform_device *pdev)
 		battery->big_current_shutdown = false;
 	}
 	/*disable clmt to enter s4 after shutdown*/
-	atc2609a_clmt_set_inited(clmt, false);
-	atc2609a_clmt_enable(clmt, false);
+	//atc2609a_clmt_set_inited(clmt, false);
+	//atc2609a_clmt_enable(clmt, false);
 	pr_info("[%s] soc(%d%%), batv(%dmv),time(%lds)\n",
 		__func__,
 		clmt->soc_show, battery->bat_vol, shutdown_time_ms/1000);

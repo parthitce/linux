@@ -222,6 +222,8 @@ static int owl_clk_set_rate(struct owl_mmc_host *host, unsigned long freq)
 		pr_err("SDC%d cannot get suitable rate:%lu\n", host->id, rate);
 		return -ENXIO;
 	}
+	if (host->id == 2)
+		printk("mmc%d  set rate %ld\n", host->id, rate);
 
 	ret = clk_set_rate(host->clk, rate);
 	if (ret < 0) {
@@ -335,7 +337,15 @@ static void owl_mmc_set_clk(struct owl_mmc_host *host, int rate)
 		       SD_CTL_RDELAY(SDC0_RDELAY_DDR50) |
 		       SD_CTL_WDELAY(SDC0_WDELAY_DDR50), HOST_CTL(host));
 	} else {
-		pr_err("SD3.0 max clock should not > 100Mhz\n");
+		if(SDC2_SLOT == host->id) {
+			pr_info("emmc clk=%d\n", rate);
+			writel((readl(HOST_CTL(host)) & (~(0xff << 16))) |
+			   SD_CTL_RDELAY(host->rdelay.delay_highclk+4) |
+			   SD_CTL_WDELAY(host->wdelay.delay_highclk+4),
+			   HOST_CTL(host));
+		} else {
+			pr_err("SD3.0 max clock should not > 100Mhz\n");
+		}
 
 	}
 
@@ -496,7 +506,6 @@ static void owl_set_paddrv_pull(struct owl_mmc_host *host)
 		sd1drv = readl(host->mfp_base + MFP_NAND_DRV1);
 		sd1drv |= 0xff;
 		writel(sd2drv, (host->mfp_base + MFP_NAND_DRV1));
-
 		pr_debug
 		    ("host%d:mfpctr3:0x%08x sd2pull:0x%08x sd2drv:0x%08x sd1drv:0x%08x\n",
 		     host->id, readl(host->mfp_base + MFP_CTL3),
@@ -618,7 +627,9 @@ static void owl_mmc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 
 		owl_mmc_set_clk(host, ios->clock);
 	}
-
+	if(SDC2_SLOT == host->id) {
+		printk("owl_mmc_set_ios:clock=%d,w=%d, t=%d\n", host->clock, host->bus_width, host->timing);
+	}
 	if (ios->power_mode != host->power_state) {
 		host->power_state = ios->power_mode;
 
@@ -904,6 +915,7 @@ static int owl_mmc_send_command(struct owl_mmc_host *host,
 	/* start to send corresponding command type */
 	writel(cmd->arg, HOST_ARG(host));
 	writel(cmd->opcode, HOST_CMD(host));
+
 	pr_debug("host%d Transfer mode:0x%x\n\tArg:0x%x\n\tCmd:%u\n",
 		 host->id, mode, cmd->arg, cmd->opcode);
 
@@ -1523,19 +1535,19 @@ static int owl_check_trs_date_status(struct owl_mmc_host *host,
 
 out:
 	if (data->error == DATA_RD_CRC_ERR) {
-		host->read_delay_chain--;
-		if (host->read_delay_chain < 0) {
+		if(host->read_delay_chain > 0 )
+			host->read_delay_chain--;
+		else
 			host->read_delay_chain = 0xf;
-		}
-
 		printk("try read delay chain:%d\n", host->read_delay_chain);
 
 	} else if (data->error == DATA_WR_CRC_ERR) {
 
-		host->write_delay_chain--;
-		if (host->write_delay_chain < 0) {
+		if (host->write_delay_chain > 0)
+			host->write_delay_chain--;
+		else
 			host->write_delay_chain = 0xf;
-		}
+
 
 		printk("try write delay chain:%d\n", host->write_delay_chain);
 	}
@@ -2167,6 +2179,12 @@ static int __init owl_mmc_probe(struct platform_device *pdev)
 		    MMC_CAP_1_8V_DDR | MMC_CAP_UHS_DDR50 | MMC_CAP_8_BIT_DATA;
 		/*emmc and sd card support earse (discard,trim,sediscard) */
 		mmc->caps |= MMC_CAP_ERASE;
+
+		if (of_find_property(dn, "mmc_hs200_supported", NULL)) {
+			mmc->caps2 |= MMC_CAP2_HS200; /*support HS200*/
+			mmc->f_max = 150000000;
+			pr_info("SDC%d support hs200 mode\n", host->id);
+		}
 	}
 
 	if (owl_alloc_sys_resource(host, pdev)) {

@@ -205,6 +205,7 @@ struct owl_drm_panel_callback_funcs {
  * @drm: DRM device owning the panel
  * @connector: DRM connector that the panel is attached to
  * @dev: parent device of the panel
+ * @enabled: is this panel enabled ?
  * @funcs: operations that can be performed on the panel
  * @callbacks: callbacks that can be performed on the panel
  * @num_attach: number of attached overlays in attach_list
@@ -215,6 +216,8 @@ struct owl_drm_panel {
 	struct drm_device *drm;
 	struct drm_connector *connector;
 	struct device *dev;
+
+	bool enabled;
 
 	const struct owl_drm_panel_funcs *funcs;
 	struct owl_drm_panel_callback_funcs callbacks;

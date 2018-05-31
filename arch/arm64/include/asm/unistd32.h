@@ -406,7 +406,7 @@ __SYSCALL(381, sys_ni_syscall)	/* 381 for ched_getattr */
 __SYSCALL(382, sys_ni_syscall)	/* 382 for renameat2 */
 __SYSCALL(383, sys_ni_syscall)	/* 383 for seccomp */
 __SYSCALL(384, sys_getrandom)
-__SYSCALL(385, sys_ni_syscall)	/* 385 for memfd_create */
+__SYSCALL(385, sys_memfd_create)
 #define __NR_compat_syscalls		386
 
 /*

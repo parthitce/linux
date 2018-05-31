@@ -22,8 +22,13 @@
 #include <asm/unaligned.h>
 #include <linux/kallsyms.h>
 
-typedef void (*FUNX)(int);
-FUNX set_delaystatus_flag;
+/* Bugfix for dwc3 gadget */
+extern void set_no_delay_status(int flag);
+__weak void set_no_delay_status(int flag)
+{
+	return;
+}
+
 /*
  * The code in this file is utility code, used to build a gadget driver
  * from one or more "function" drivers, one or more "configuration"
@@ -1837,9 +1842,8 @@ void usb_composite_setup_continue(struct usb_composite_dev *cdev)
 	} else if (--cdev->delayed_status == 0) {
 		DBG(cdev, "%s: Completing delayed status\n", __func__);
 		req->length = 0;
-		set_delaystatus_flag = (FUNX)kallsyms_lookup_name("set_no_delay_status");
-		if (set_delaystatus_flag)
-			set_delaystatus_flag(1);   /* make sure the usb_ep_queue have done really */
+		/* make sure ep_queue(for dwc3) have done alreally */
+		set_no_delay_status(1);
 		value = usb_ep_queue(cdev->gadget->ep0, req, GFP_ATOMIC);
 		if (value < 0) {
 			DBG(cdev, "ep_queue --> %d\n", value);

@@ -69,6 +69,7 @@ struct dispc_manager *dispc_manager_create(struct device *dev, int display_type)
 void dispc_manager_destroy(struct dispc_manager *mgr);
 
 int dispc_manager_set_enabled(struct dispc_manager *mgr, bool enabled);
+bool dispc_manager_is_enabled(struct dispc_manager *mgr);
 
 /* @type: OWL_DRM_DISPLAY_x */
 struct dispc_manager *dispc_manager_get(int type);

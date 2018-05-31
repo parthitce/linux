@@ -75,16 +75,19 @@ bool dispc_panel_detect(struct owl_drm_panel *panel)
 int dispc_panel_enable(struct owl_drm_panel *panel)
 {
 	struct dispc_manager *mgr = panel_to_mgr(panel);
+	int ret;
 
 	DSS_DBG(mgr, "panel=%p", panel);
 
-	mutex_lock(&mgr->mutex);
+	ret = dispc_manager_set_enabled(mgr, true);
+	if (ret) {
+		DSS_ERR(mgr, "panel=%p, enable failed", panel);
+		goto out;
+	}
 
-	dispc_manager_set_enabled(mgr, true);
-
-	mutex_unlock(&mgr->mutex);
-
-	return 0;
+	panel->enabled = true;
+out:
+	return ret;
 }
 
 int dispc_panel_disable(struct owl_drm_panel *panel)
@@ -93,11 +96,8 @@ int dispc_panel_disable(struct owl_drm_panel *panel)
 
 	DSS_DBG(mgr, "panel=%p", panel);
 
-	mutex_lock(&mgr->mutex);
-
 	dispc_manager_set_enabled(mgr, false);
-
-	mutex_unlock(&mgr->mutex);
+	panel->enabled = false;
 
 	return 0;
 }
@@ -169,6 +169,11 @@ int dispc_panel_set_mode(struct owl_drm_panel *panel, struct owl_videomode *mode
 		mode->refresh == owl_panel->mode.refresh)
 		return 0;
 
+	if (!owl_panel_hpd_is_connected(mgr->owl_panel)) {
+		owl_panel_set_default_mode(owl_panel, mode);
+		return 0;
+	}
+
 	/* reinitialize in case of accident */
 	INIT_COMPLETION(mgr->modeset_completion);
 
@@ -180,7 +185,7 @@ int dispc_panel_set_mode(struct owl_drm_panel *panel, struct owl_videomode *mode
 	wait_for_completion_interruptible_timeout(&mgr->modeset_completion, msecs_to_jiffies(3000));
 
 	/* disable panel */
-	dispc_panel_disable(panel);
+	dispc_manager_set_enabled(mgr, false);
 
 	/* config the target mode */
 	owl_panel_set_default_mode(owl_panel, mode);
@@ -190,7 +195,7 @@ int dispc_panel_set_mode(struct owl_drm_panel *panel, struct owl_videomode *mode
 	wait_for_completion_interruptible_timeout(&mgr->modeset_completion, msecs_to_jiffies(3000));
 
 	/* enable panel */
-	dispc_panel_enable(panel);
+	dispc_manager_set_enabled(mgr, true);
 
 	/* restore hotplug handler */
 	owl_panel_hotplug_cb_set(mgr->owl_panel, mgr->hotplug, mgr);
@@ -243,10 +248,10 @@ void dispc_panel_default_hotplug(struct owl_panel *owl_panel, void *data, u32 st
 	}
 
 	/* FIXME: Should we do the dpms here ? */
-	if (status)
-		dispc_panel_enable(panel);
-	else
-		dispc_panel_disable(panel);
+	if (!status)
+		dispc_manager_set_enabled(mgr, false);
+	else if (panel->enabled)
+		dispc_manager_set_enabled(mgr, true);
 
 	if (panel->callbacks.hotplug)
 		panel->callbacks.hotplug(panel);
@@ -393,6 +398,11 @@ int dispc_ovr_apply(struct owl_drm_overlay *overlay, struct owl_overlay_info *in
 
 	DSS_DBG(mgr, "overlay=%p, zpos=%d", overlay, overlay->zpos);
 
+	if (!dispc_manager_is_enabled(mgr)) {
+		DSS_DBG(mgr, "panel not enabled yet");
+		return -EINVAL;
+	}
+
 	owl_de_video_get_info(owl_video, &owl_info);
 
 	ret = drm_overlay_to_dss_videoinfo(mgr, info, &owl_info);
@@ -407,14 +417,6 @@ int dispc_ovr_apply(struct owl_drm_overlay *overlay, struct owl_overlay_info *in
 		return -EINVAL;
 	}
 
-	mutex_lock(&mgr->mutex);
-
-	if (!mgr->enabled) {
-		DSS_ERR(mgr, "panel not enabled yet");
-		ret = -EINVAL;
-		goto fail_unlock;
-	}
-
 	owl_de_video_set_info(owl_video, &owl_info);
 	owl_de_path_attach(owl_path, owl_video);
 	owl_de_path_apply(owl_path);
@@ -424,8 +426,6 @@ int dispc_ovr_apply(struct owl_drm_overlay *overlay, struct owl_overlay_info *in
 	 * owl_de_path_wait_for_go(owl_path);
 	 */
 
-fail_unlock:
-	mutex_unlock(&mgr->mutex);
 	return ret;
 }
 
@@ -613,10 +613,25 @@ struct dispc_manager *dispc_manager_get(int type)
 	return dispc_mgrs[type];
 }
 
+bool dispc_manager_is_enabled(struct dispc_manager *mgr)
+{
+	bool enabled;
+
+	mutex_lock(&mgr->mutex);
+	enabled = mgr->enabled;
+	mutex_unlock(&mgr->mutex);
+
+	return enabled;
+}
+
 int dispc_manager_set_enabled(struct dispc_manager *mgr, bool enabled)
 {
+	DSS_DBG(mgr, "enabled=%d", enabled);
+
+	mutex_lock(&mgr->mutex);
+
 	if (mgr->enabled == enabled)
-		return 0;
+		goto out_unlock;
 
 	if (enabled) {
 		if (!owl_de_path_is_enabled(mgr->owl_path))
@@ -631,6 +646,9 @@ int dispc_manager_set_enabled(struct dispc_manager *mgr, bool enabled)
 	}
 
 	mgr->enabled = enabled;
+
+out_unlock:
+	mutex_unlock(&mgr->mutex);
 	return 0;
 }
 
@@ -720,5 +738,6 @@ fail:
 void dispc_manager_destroy(struct dispc_manager *mgr)
 {
 	complete_all(&mgr->modeset_completion);
+	dispc_manager_set_enabled(mgr, false);
 	dispc_mgrs[mgr->type] = NULL;
 }

@@ -988,6 +988,13 @@ config USB_G_WEBCAM
 	  Say "y" to link the driver statically, or "m" to build a
 	  dynamically linked module called "g_webcam".
 
+config USB_G_STUB
+	tristate "Actions USB Stub Gadget Driver"
+	select USB_LIBCOMPOSITE
+	help
+	  The USB Stub Gadget supports Actions USB Stub protocol.
+	  Note the protocol is parsed in user space.
+
 endchoice
 
 endif # USB_GADGET

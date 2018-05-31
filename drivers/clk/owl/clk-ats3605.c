@@ -150,6 +150,10 @@ static struct clk_factor_table sd_factor_table[] = {
 	{0, 0},
 };
 
+static struct clk_div_table ahb_div_table[] = {
+	{0, 1},   {1, 2},   {2, 3},   {3, 4},
+	{4, 6},  {0, 0},
+};
 
 static struct clk_div_table apb_div_table[] = {
 	{0, 2},   {1, 4},   {2, 6},   {3, 8},
@@ -180,7 +184,7 @@ static struct clk_div_table hdmia_div_table[] = {
 /* divider clocks */
 
 static struct owl_divider_clock ats3605_div_clks[] __initdata = {
-	{ CLK_AHB, "ahb_clk", "hp_clk_mux", 0, CMU_BUSCLK, 4, 3, 0, NULL,"ahb_clk"},
+	{ CLK_AHB, "ahb_clk", "hp_clk_mux", 0, CMU_BUSCLK, 4, 3, 0, ahb_div_table,"ahb_clk"},
 	{ CLK_APB, "apb_clk", "ahb_clk", 0, CMU_BUSCLK, 8, 3, 0,  apb_div_table, "apb_clk"},
 	{ CLK_ACP, "acp_clk", "cpu_clk", 0, CMU_DMACLK, 0, 2, 0,  acp_div_table, "acp_clk"},
 	{ CLK_DE1, "de1", "de_clk", 0, CMU_DECLK, 0, 4, 0,  NULL, "de1"},

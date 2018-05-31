@@ -27,6 +27,9 @@
 #define LCDC_TIM2			(0x0014)
 #define LCDC_COLOR			(0x0018)
 
+/* cpu register */
+#define LCDC_CPU_CTL			(0x001c)
+#define LCDC_CPU_CMD			(0x0020)
 #define LCDC_IMG_XPOS			(0x001c)
 #define LCDC_IMG_YPOS			(0x0020)
 

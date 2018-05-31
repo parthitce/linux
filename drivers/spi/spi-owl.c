@@ -31,11 +31,13 @@
 #include <linux/of_device.h>
 #include <linux/ctype.h>
 
-/* debug stuff */
-#define OWL_SPI_DBG_LEVEL_OFF		0
-#define OWL_SPI_DBG_LEVEL_ON		1
-#define OWL_SPI_DBG_LEVEL_VERBOSE	2
-#define OWL_SPI_DEFAULT_DBG_LEVEL	OWL_SPI_DBG_LEVEL_VERBOSE
+#ifdef CONFIG_DMA_ATS3605
+#include <linux/dmaengine.h>
+#include <linux/dma-mapping.h>
+#include <linux/scatterlist.h>
+#include <dt-bindings/dma/dma-ats3605.h>
+#include <mach/hardware.h>
+#endif
 
 /* SPI controller registers */
 #define SPI_CTL				0x00
@@ -47,6 +49,17 @@
 #define SPI_SEED			0x18
 #define SPI_TXCR			0x1C
 #define SPI_RXCR			0x20
+
+#ifdef CONFIG_DMA_ATS3605
+#define BDMA_MODE               0x0
+#define BDMA_SRC                0x4
+#define BDMA_DST                0x8
+#define BDMA_CNT                0xc
+#define BDMA_REM                0x10
+#define BDMA_CMD                0x14
+#define BDMA_CACHE              0x18
+#define DMA_CHANNEL             0
+#endif
 
 /* SPI_CTL */
 #define SPI_CTL_SDT_MASK		(0x7 << 29)
@@ -88,6 +101,8 @@
 /* SPI_CLKDIV */
 #define SPI_CLKDIV_CLKDIV_MASK		(0x3FF << 0)
 #define SPI_CLKDIV_CLKDIV(x)		(((x) & 0x3FF) << 0)
+#define MAX_SPI_DMA_LEN			15*1024
+#define MAX_SPI_POLL_LOOPS		5000
 
 /******************************************************************************/
 /*SPI_STAT*/
@@ -105,46 +120,9 @@
 
 #define msecs_to_loops(t)		(loops_per_jiffy / 1000 * HZ * t)
 
-static int debug_level = OWL_SPI_DEFAULT_DBG_LEVEL;
-module_param(debug_level, uint, 0644);
-MODULE_PARM_DESC(debug_level, "module debug level (0=off,1=on,2=verbose)");
-
-/*
- * Debug macros
- */
-#define spi_dbg(master, format, args...)	\
-	do { \
-		if (debug_level >= OWL_SPI_DBG_LEVEL_ON) \
-			dev_dbg(&(master)->dev, \
-				"[spi%d] %s: " format, \
-				(master)->bus_num, __func__, ##args); \
-	} while (0)
-
-#define spi_vdbg(master, format, args...)	\
-	do { \
-		if (debug_level >= OWL_SPI_DBG_LEVEL_VERBOSE) \
-			dev_dbg(&(master)->dev, \
-				"[spi%d] %s: " format, \
-				(master)->bus_num, __func__, ##args); \
-	} while (0)
-
-#define spi_err(master, format, args...) \
-	dev_err(&(master)->dev, "[spi%d] " format, \
-		(spi_dev)->adapter.nr, ##args)
-
-#define spi_warn(master, format, args...) \
-	dev_warn(&(master)->dev, "[spi%d] " format, \
-		(master)->bus_num, ##args)
-
-#define spi_info(master, format, args...) \
-	dev_info(&(master)->dev, "[spi%d] " format, \
-		(master)->bus_num, ##args)
-
-
 struct owl_spi_data {
 	struct spi_master	*master;
-	spinlock_t		lock;
-
+    struct device *dev;
 	struct clk		*clk;
 	void __iomem		*base;
 	unsigned long		phys;
@@ -154,7 +132,71 @@ struct owl_spi_data {
 	unsigned int		cur_bits_per_word;
 
 	struct completion	xfer_completion;
+
+#ifdef CONFIG_DMA_ATS3605
+	u8 enable_dma;
+	struct dma_chan			*dma_rx_channel;
+	struct dma_chan			*dma_tx_channel;
+	struct sg_table			sgt_rx;
+	struct sg_table			sgt_tx;
+	bool				dma_running;
+#endif
 };
+
+#ifdef CONFIG_DMA_ATS3605
+#define DMA_MODE_ST(x)			(((x) & 0x1f) << 0)
+#define		DMA_MODE_ST_DDR		DMA_MODE_ST(18)
+#define DMA_MODE_DT(x)			(((x) & 0x1f) << 16)
+#define		DMA_MODE_DT_DDR		DMA_MODE_DT(18)
+#define DMA_MODE_SAM(x)			(((x) & 0x1) << 6)
+#define		DMA_MODE_SAM_CONST	DMA_MODE_SAM(1)
+#define		DMA_MODE_SAM_INC	DMA_MODE_SAM(0)
+#define DMA_MODE_DAM(x)			(((x) & 0x1) << 22)
+#define		DMA_MODE_DAM_CONST	DMA_MODE_DAM(1)
+#define		DMA_MODE_DAM_INC	DMA_MODE_DAM(0)
+
+#define STOP_DMA(dmaNo)            \
+{ \
+    act_writel( act_readl(BDMA0_BASE + (0x30 * dmaNo) + BDMA_CMD) & (~0x1), BDMA0_BASE + (0x30 * dmaNo) + BDMA_CMD ); \
+}
+
+#define RESET_DMA(dmaNo)    STOP_DMA(dmaNo)
+
+#define START_DMA(dmaNo)            \
+{ \
+    act_writel( 0x1, BDMA0_BASE + (0x30 * dmaNo) + BDMA_CMD ); \
+}
+
+#define SET_DMA_COUNT(dmaNo, count)        \
+{ \
+    act_writel(count & 0x1FFFFFF, BDMA0_BASE + (0x30 * dmaNo) + BDMA_CNT); \
+}
+
+#define SET_DMA_SRC_ADDR(dmaNo, addrForDma)        \
+{ \
+    act_writel(addrForDma, BDMA0_BASE + (0x30 * dmaNo) + BDMA_SRC); \
+}
+
+#define SET_DMA_DST_ADDR(dmaNo, addrForDma)        \
+{ \
+    act_writel(addrForDma, BDMA0_BASE + (0x30 * dmaNo) + BDMA_DST); \
+}
+
+#define SET_DMA_MODE(dmaNo, mode)        \
+{ \
+    act_writel(mode, BDMA0_BASE + (0x30 * dmaNo) + BDMA_MODE); \
+}
+
+//Dma Read optimize switch
+//#define DMA_DIRECT
+//#define DMA_SINGLE
+#define DMA_SG
+
+struct owl_dma_slave {
+	struct device		*dma_dev;
+	u32			mode;
+};
+#endif
 
 static inline unsigned int owl_spi_readl(struct owl_spi_data *aspi,
 			unsigned int reg)
@@ -168,10 +210,9 @@ static inline void owl_spi_writel(struct owl_spi_data *aspi,
 	__raw_writel(val, aspi->base + reg);
 }
 
-#ifdef DEBUG
 static void owl_spi_dump_regs(struct owl_spi_data *aspi)
 {
-	spi_dbg(aspi->master, "dump phys %08x regs:\n"
+	pr_debug("dump phys %08x regs:\n"
 		"  ctl:      %.8x  clkdiv: %.8x  stat:    %.8x\n",
 		(u32)aspi->phys,
 		owl_spi_readl(aspi, SPI_CTL),
@@ -179,15 +220,13 @@ static void owl_spi_dump_regs(struct owl_spi_data *aspi)
 		owl_spi_readl(aspi, SPI_STAT));
 }
 
+//#define DUMP_MEM
+#ifdef DUMP_MEM
 static void owl_spi_dump_mem(char *label, const void *base, int len)
 {
 	int i, j;
 	char *data = base;
 	char buf[10], line[80];
-
-	/* only for verbose debug */
-	if (debug_level < OWL_SPI_DBG_LEVEL_VERBOSE)
-		return;
 
 	pr_debug("%s: dump of %d bytes of data at 0x%p\n",
 		label, len, data);
@@ -211,11 +250,7 @@ static void owl_spi_dump_mem(char *label, const void *base, int len)
 	}
 }
 #else
-static void owl_spi_dump_regs(struct owl_spi_data *aspi)
-{
-}
-
-static inline void owl_spi_dump_mem(char *label, const void *base, int len)
+static void owl_spi_dump_mem(char *label, const void *base, int len)
 {
 }
 #endif
@@ -231,7 +266,8 @@ static void enable_cs(struct spi_device *spi)
 	/* enable spi controller */
 	val = owl_spi_readl(aspi, SPI_CTL);
 	val &= ~SPI_CTL_SSCO;
-	val |= SPI_CTL_EN;
+    //Notice:It should not set SPI_CTL_EN here.
+	//val |= SPI_CTL_EN;
 	owl_spi_writel(aspi, val, SPI_CTL);
 }
 
@@ -246,7 +282,8 @@ static void disable_cs(struct spi_device *spi)
 	/* disable spi controller */
 	val = owl_spi_readl(aspi, SPI_CTL);
 	val |= SPI_CTL_SSCO;
-	val &= ~SPI_CTL_EN;
+    //Notice:It should not set SPI_CTL_EN here.
+	//val &= ~SPI_CTL_EN;
 	owl_spi_writel(aspi, val, SPI_CTL);
 }
 
@@ -269,7 +306,8 @@ static int owl_spi_setup_cs(struct spi_device *spi)
 
 	val = owl_spi_readl(aspi, SPI_CTL);
 	val |= SPI_CTL_SSCO;
-	val &= ~SPI_CTL_EN;
+    //Notice:It should not set SPI_CTL_EN here.
+	//val &= ~SPI_CTL_EN;
 	owl_spi_writel(aspi, val, SPI_CTL);
 
 	return 0;
@@ -289,7 +327,6 @@ static int owl_spi_baudrate_set(struct owl_spi_data *aspi, unsigned int speed)
 	spi_source_clk_hz = clk_get_rate(aspi->clk);
 
 	/* setup SPI clock register */
-	/* SPICLK = HCLK/(CLKDIV*2) */
 	clk_div = (spi_source_clk_hz + (2 * speed) - 1) / (speed) / 2;
 	if (clk_div == 0)
 		clk_div = 1;
@@ -311,7 +348,7 @@ static inline int owl_spi_config(struct owl_spi_data *aspi)
 	mode = aspi->cur_mode;
 	val = owl_spi_readl(aspi, SPI_CTL);
 
-	val &= ~(SPI_CTL_CPOS_MASK | SPI_CTL_LMFS | SPI_CTL_LBT |
+	val &= ~(SPI_CTL_CPOS_MASK | SPI_CTL_LMFS | SPI_CTL_LBT | \
 			SPI_CTL_DAWS_MASK | SPI_CTL_CEB);
 
 	if (mode & SPI_CPOL)
@@ -340,6 +377,10 @@ static inline int owl_spi_config(struct owl_spi_data *aspi)
 		break;
 	}
 
+#ifdef CONFIG_DMA_ATS3605
+    val |= SPI_CTL_CPOS_CPOL;
+    val |= SPI_CTL_CPOS_CPHA;
+#endif
 	owl_spi_writel(aspi, val, SPI_CTL);
 
 	owl_spi_baudrate_set(aspi, aspi->cur_speed);
@@ -394,7 +435,7 @@ static int owl_spi_write_read_8bit(struct owl_spi_data *aspi,
 	ctl = owl_spi_readl(aspi, SPI_CTL);
 	ctl &= ~(SPI_CTL_RWC_MASK | SPI_CTL_TDIC_MASK | SPI_CTL_SDT_MASK |
 			SPI_CTL_DTS | SPI_CTL_DAWS_MASK | SPI_CTL_TIEN |
-			SPI_CTL_RIEN | SPI_CTL_TDEN | SPI_CTL_RDEN);
+			SPI_CTL_RIEN | SPI_CTL_TDEN | SPI_CTL_RDEN | SPI_CTL_DM_MASK);
 	ctl |= SPI_CTL_RWC(0) | SPI_CTL_DAWS(0);
 
 	if (aspi->cur_speed > 20000000)
@@ -433,7 +474,7 @@ static int owl_spi_write_read_16bit(struct owl_spi_data *aspi,
 	ctl = owl_spi_readl(aspi, SPI_CTL);
 	ctl &= ~(SPI_CTL_RWC_MASK | SPI_CTL_TDIC_MASK | SPI_CTL_SDT_MASK |
 			SPI_CTL_DTS | SPI_CTL_DAWS_MASK | SPI_CTL_TIEN |
-			SPI_CTL_RIEN | SPI_CTL_TDEN | SPI_CTL_RDEN);
+			SPI_CTL_RIEN | SPI_CTL_TDEN | SPI_CTL_RDEN | SPI_CTL_DM_MASK);
 	ctl |= SPI_CTL_RWC(0) | SPI_CTL_DAWS(1);
 
 	if (aspi->cur_speed > 20000000)
@@ -472,7 +513,7 @@ static int owl_spi_write_read_32bit(struct owl_spi_data *aspi,
 	ctl = owl_spi_readl(aspi, SPI_CTL);
 	ctl &= ~(SPI_CTL_RWC_MASK | SPI_CTL_TDIC_MASK | SPI_CTL_SDT_MASK |
 			SPI_CTL_DTS | SPI_CTL_TIEN | SPI_CTL_RIEN |
-			SPI_CTL_TDEN | SPI_CTL_RDEN);
+			SPI_CTL_TDEN | SPI_CTL_RDEN | SPI_CTL_DM_MASK);
 	ctl |= SPI_CTL_RWC(0) | SPI_CTL_DAWS(2);
 
 	if (aspi->cur_speed > 20000000)
@@ -500,36 +541,816 @@ static int owl_spi_write_read_32bit(struct owl_spi_data *aspi,
 	return 0;
 }
 
+#ifdef CONFIG_DMA_ATS3605
+static int owl_spi_get_channel_no(unsigned int base)
+{
+	switch (base) {
+		case SPI0_BASE:
+			return 0;
+		case SPI1_BASE:
+			return 1;
+		case SPI2_BASE:
+			return 2;
+		case SPI3_BASE:
+			return 3;
+	}
+	return -1;
+}
+
+static unsigned int owl_spi_get_dma_trig(unsigned int base)
+{
+	static unsigned int trigs[] = {DMA_DRQ_SPI0, DMA_DRQ_SPI1, DMA_DRQ_SPI2, DMA_DRQ_SPI3};
+	
+	int spi_no = owl_spi_get_channel_no(base);
+	if(spi_no < 0) {
+		pr_err("error: 0x%x.spi do not support\n", base);
+		return -1;
+	}
+	
+	return trigs[spi_no];
+}
+
+static struct page *owl_spi_virt_to_page(const void *addr)
+{
+	if (is_vmalloc_addr(addr))
+		return vmalloc_to_page(addr);
+	else
+		return virt_to_page(addr);
+}
+
+static void owl_spi_setup_dma_scatter(void *buffer,
+			      unsigned int length,
+			      struct sg_table *sgtab)
+{
+	struct scatterlist *sg;
+	int bytesleft = length;
+	void *bufp = buffer;
+	int mapbytes;
+	int i;
+
+	if (buffer) {
+		for_each_sg(sgtab->sgl, sg, sgtab->nents, i) {
+			if(bytesleft == 0) {
+				sg_mark_end(sg);
+				sgtab->nents = i;
+				break;
+			}
+			/*
+			 * If there are less bytes left than what fits
+			 * in the current page (plus page alignment offset)
+			 * we just feed in this, else we stuff in as much
+			 * as we can.
+			 */
+			if (bytesleft < (PAGE_SIZE - offset_in_page(bufp)))
+				mapbytes = bytesleft;
+			else
+				mapbytes = PAGE_SIZE - offset_in_page(bufp);
+			sg_set_page(sg, owl_spi_virt_to_page(bufp),
+				    mapbytes, offset_in_page(bufp));
+			bufp += mapbytes;
+			bytesleft -= mapbytes;
+			//pr_info("set RX/TX target page @ %p, %d bytes, %d left\n",
+			//	bufp, mapbytes, bytesleft);
+		}
+	}
+	
+	BUG_ON(bytesleft);
+}
+
+static void spi_callback(void *completion)
+{
+	complete(completion);
+}
+
+static inline int owl_dma_dump_all(struct dma_chan *chan)
+{
+	return chan->device->device_control(chan, DMA_TERMINATE_ALL, 0);
+}
+
+static inline void dump_spi_registers(struct owl_spi_data *aspi)
+{
+	pr_info("aspi: SPI0_CTL(0x%x) = 0x%x\n", (unsigned int)(aspi->base + SPI_CTL),
+	       owl_spi_readl(aspi, SPI_CTL));
+	pr_info("aspi: SPI0_STAT(0x%x) = 0x%x\n", (unsigned int)(aspi->base + SPI_STAT),
+	       owl_spi_readl(aspi, SPI_STAT));
+	pr_info("aspi: SPI0_CLKDIV(0x%x) = 0x%x\n", (unsigned int)(aspi->base + SPI_CLKDIV),
+	       owl_spi_readl(aspi, SPI_CLKDIV));
+}
+
+int owl_spi_wait_till_ready(struct owl_spi_data *aspi)
+{
+	int i;
+
+	for (i = 0; i < MAX_SPI_POLL_LOOPS; i++) {
+		if (owl_spi_readl(aspi, SPI_STAT) & SPI_STAT_TCOM) {
+			owl_spi_writel(aspi, owl_spi_readl(aspi, SPI_STAT) | SPI_STAT_TCOM, SPI_STAT);
+			//dump_spi_registers(aspi);
+			pr_debug("wait num = %d\n", i);
+			return 1;
+		}
+	}
+
+	dump_spi_registers(aspi);
+
+	return -1;
+}
+
+static inline u32 spi_reg(struct owl_spi_data *aspi, u32 reg)
+{
+	return (unsigned int)(SPI0_BASE + reg);
+}
+
+static void print_spi_regs(unsigned int base)
+{
+    pr_err("SPI0_CTL(0x%x) = 0x%x \n", base+SPI_CTL, act_readl(base+SPI_CTL));
+    pr_err("SPI0_CLKDIV(0x%x) = 0x%x \n", base+SPI_CLKDIV, act_readl(base+SPI_CLKDIV));
+    pr_err("SPI0_STAT(0x%x) = 0x%x \n", base+SPI_STAT, act_readl(base+SPI_STAT));
+    pr_err("SPI0_TCNT(0x%x) = 0x%x \n", base+SPI_TCNT, act_readl(base+SPI_TCNT));
+    pr_err("SPI0_SEED(0x%x) = 0x%x \n", base+SPI_SEED, act_readl(base+SPI_SEED));
+    pr_err("SPI0_TXCR(0x%x) = 0x%x \n", base+SPI_TXCR, act_readl(base+SPI_TXCR));
+    pr_err("SPI0_RXCR(0x%x) = 0x%x \n", base+SPI_RXCR, act_readl(base+SPI_RXCR));
+}
+
+static void print_dma_regs()
+{
+    pr_err("BDMA0_MODE(0x%x) = 0x%x \n", BDMA0_BASE + (0x30 * DMA_CHANNEL) + BDMA_MODE, \
+            act_readl(BDMA0_BASE + (0x30 * DMA_CHANNEL) + BDMA_MODE));
+    pr_err("BDMA0_SRC(0x%x) = 0x%x \n", BDMA0_BASE + (0x30 * DMA_CHANNEL) + BDMA_SRC, \
+            act_readl(BDMA0_BASE + (0x30 * DMA_CHANNEL) + BDMA_SRC));
+    pr_err("BDMA0_DST(0x%x) = 0x%x \n", BDMA0_BASE + (0x30 * DMA_CHANNEL) + BDMA_DST, \
+            act_readl(BDMA0_BASE + (0x30 * DMA_CHANNEL) + BDMA_DST));
+    pr_err("BDMA0_CNT(0x%x) = 0x%x \n", BDMA0_BASE + (0x30 * DMA_CHANNEL) + BDMA_CNT, \
+            act_readl(BDMA0_BASE + (0x30 * DMA_CHANNEL) + BDMA_CNT));
+    pr_err("BDMA0_REM(0x%x) = 0x%x \n", BDMA0_BASE + (0x30 * DMA_CHANNEL) + BDMA_REM, \
+            act_readl(BDMA0_BASE + (0x30 * DMA_CHANNEL) + BDMA_REM));
+    pr_err("BDMA0_CMD(0x%x) = 0x%x \n", BDMA0_BASE + (0x30 * DMA_CHANNEL) + BDMA_CMD, \
+            act_readl(BDMA0_BASE + (0x30 * DMA_CHANNEL) + BDMA_CMD));
+    pr_err("BDMA0_CACHE(0x%x) = 0x%x \n", BDMA0_BASE + (0x30 * DMA_CHANNEL) + BDMA_CACHE, \
+            act_readl(BDMA0_BASE + (0x30 * DMA_CHANNEL) + BDMA_CACHE));
+}
+
+static int owl_spi_write_by_dma(struct owl_spi_data *aspi,
+	    struct spi_transfer *xfer)
+{
+    int trig = owl_spi_get_dma_trig((u32)aspi->phys);
+	struct dma_slave_config tx_conf = {
+		.dst_addr = spi_reg(aspi, SPI_TXDAT),
+		.direction = DMA_MEM_TO_DEV,
+	};
+	struct owl_dma_slave tx_atslave = {
+        .mode = DMA_MODE_DT(trig) | DMA_MODE_ST_DDR | DMA_MODE_SAM_INC | DMA_MODE_DAM_CONST,
+		.dma_dev = aspi->dma_tx_channel->device->dev,
+	};
+
+	struct dma_chan *txchan = aspi->dma_tx_channel;
+	unsigned int pages;
+	int len, left;
+	void *tx_buf;
+	int tx_sglen;
+	struct dma_async_tx_descriptor *txdesc;
+	u32 val;
+	int retval;
+
+	struct completion tx_cmp;
+	dma_cookie_t		cookie;
+	enum dma_status		status;
+
+	/* Create sglists for the transfers */
+	left = xfer->len;
+	tx_buf = (void*)xfer->tx_buf;
+	
+	pages = DIV_ROUND_UP(xfer->len, PAGE_SIZE);
+	retval = sg_alloc_table(&aspi->sgt_tx, pages, GFP_ATOMIC);
+	if (retval)
+		goto err_slave;
+
+    txchan->private = (void *)&tx_atslave;
+    retval = dmaengine_slave_config(txchan, &tx_conf);
+    if (retval) {
+    	pr_err("call the write slave config error\n");
+    	goto err_slave;
+    }
+
+    val = owl_spi_readl(aspi, SPI_CTL);
+    val &= (~(SPI_CTL_RWC(3) | SPI_CTL_RDIC(3) | SPI_CTL_TDIC(3) | \
+    	SPI_CTL_SDT(7) | SPI_CTL_DTS | SPI_CTL_TIEN | SPI_CTL_RIEN | \
+    	SPI_CTL_TDEN | SPI_CTL_RDEN) | SPI_CTL_DAWS(3));
+    val |= (SPI_CTL_RWC(1) | SPI_CTL_RDIC(3) | SPI_CTL_TDIC(3) | \
+    	SPI_CTL_TDEN | SPI_CTL_DAWS(2));
+    if (xfer->tx_nbits == SPI_NBITS_DUAL)
+        val |= (0x1 << 12);
+    else
+        val &= ~(0x1 << 12);
+    owl_spi_writel(aspi, val, SPI_CTL);
+
+	while(left > 0) {
+		len = left > MAX_SPI_DMA_LEN ? MAX_SPI_DMA_LEN : left;
+		left -= len;
+		
+        //stat must be clear first, stop the last dma xfer.
+        owl_spi_writel(aspi, 0x30 | SPI_STAT_TCOM, SPI_STAT);
+	
+		owl_spi_writel(aspi, len/4, SPI_TXCR);
+
+		/* Fill in the scatterlists for the TX buffers */
+		owl_spi_setup_dma_scatter(tx_buf, len, &aspi->sgt_tx);
+		tx_sglen = dma_map_sg(txchan->device->dev, aspi->sgt_tx.sgl,
+				   aspi->sgt_tx.nents, DMA_TO_DEVICE);
+		if (!tx_sglen)
+			goto err_sgmap;
+
+		tx_buf += len;
+
+		/* Send scatterlists */
+		txdesc = dmaengine_prep_slave_sg(txchan,
+					      aspi->sgt_tx.sgl,
+					      tx_sglen,
+					      DMA_MEM_TO_DEV,
+					      0);
+		if (!txdesc)
+			goto err_desc;
+
+		init_completion(&tx_cmp);
+	
+		txdesc->callback = spi_callback;
+		txdesc->callback_param = &tx_cmp;
+
+		cookie = dmaengine_submit(txdesc);
+		if (dma_submit_error(cookie)) {
+			pr_err("submit write error!\n");
+			goto err_desc;
+		}
+
+		dma_async_issue_pending(txchan);
+
+		if (!wait_for_completion_timeout(&tx_cmp, msecs_to_jiffies(100))) {
+			pr_err("wait_for_completion timeout while send by dma\n");
+            dmaengine_terminate_all(txchan);
+			//owl_dma_dump_all(txchan);
+			goto err_desc;
+		}
+
+		status = dma_async_is_tx_complete(txchan, cookie, NULL, NULL);
+		if (status != DMA_SUCCESS) {
+			pr_err("transfer not succeed\n");
+			goto err_desc;
+		}
+
+		dma_unmap_sg(txchan->device->dev, aspi->sgt_tx.sgl,
+			     aspi->sgt_tx.nents, DMA_TO_DEVICE);
+	}
+	sg_free_table(&aspi->sgt_tx);
+	return 0;
+
+err_desc:
+	dmaengine_terminate_all(txchan);
+err_sgmap:
+	sg_free_table(&aspi->sgt_tx);
+err_slave:
+	return -EINVAL;
+}
+
+#ifdef DMA_DIRECT
+//Test success, about 11M/s.
+static int owl_spi_read_by_dma(struct owl_spi_data *aspi,
+			   struct spi_transfer *xfer)
+{
+	void *rx_buf;
+    int len, left, devid, trig;
+	unsigned int val, mode;
+    dma_addr_t rx_addr;
+
+	left = xfer->len;
+    rx_buf = xfer->rx_buf;
+
+    val = owl_spi_readl(aspi, SPI_CTL);
+    val &= (~(SPI_CTL_RWC(3) | SPI_CTL_RDIC(3) | SPI_CTL_TDIC(3) | \
+    	SPI_CTL_SDT(7) | SPI_CTL_DTS | SPI_CTL_TIEN | SPI_CTL_RIEN | \
+    	SPI_CTL_TDEN | SPI_CTL_RDEN) | SPI_CTL_DAWS(3));
+    val |= (SPI_CTL_RWC(2) | SPI_CTL_RDIC(3) | SPI_CTL_TDIC(3) | \
+    	SPI_CTL_SDT(1) | SPI_CTL_DTS | SPI_CTL_RDEN | \
+        SPI_CTL_DAWS(2));
+
+    //Support for dual wire read.
+    if (xfer->rx_nbits == SPI_NBITS_DUAL)
+        val |= (0x1 << 12);
+    else
+        val &= ~(0x1 << 12);
+    owl_spi_writel(aspi, val, SPI_CTL);
+
+    devid = aspi->dma_rx_channel->dev->dev_id;
+    trig = owl_spi_get_dma_trig((u32)aspi->phys);
+
+    if (rx_buf) {
+        while (left > 0) {
+		    len = left > MAX_SPI_DMA_LEN ? MAX_SPI_DMA_LEN : left;
+            mode = DMA_MODE_ST(trig) | DMA_MODE_DT_DDR | DMA_MODE_SAM_CONST | DMA_MODE_DAM_INC;
+            rx_addr = dma_map_single(aspi->dma_rx_channel->device->dev, xfer->rx_buf + (xfer->len - left), len, DMA_DEV_TO_MEM);
+            
+            //stat must be clear first, stop the last dma xfer.
+            owl_spi_writel(aspi, 0x30 | SPI_STAT_TCOM, SPI_STAT);
+
+            owl_spi_writel(aspi, len/4, SPI_TCNT);
+            owl_spi_writel(aspi, len/4, SPI_RXCR);
+            
+            SET_DMA_SRC_ADDR(devid, SPI0_RXDAT);
+            SET_DMA_DST_ADDR(devid, rx_addr);
+            SET_DMA_MODE(devid, mode);
+            SET_DMA_COUNT(devid, len);
+            
+            START_DMA(devid);
+            
+            //wait util dma xfer finish.
+            while(act_readl(BDMA0_BASE + (0x30 * devid) + BDMA_CMD));
+            STOP_DMA(devid);
+            dma_unmap_single(aspi->dma_rx_channel->device->dev, rx_addr, len, DMA_DEV_TO_MEM);
+		    left -= len;
+        }
+    }
+
+	return 0;
+}
+#endif
+
+#ifdef DMA_SINGLE
+//Test success, about 8.5M/s.
+static int owl_spi_read_by_dma(struct owl_spi_data *aspi,
+			   struct spi_transfer *xfer)
+{
+    int trig;
+    trig = owl_spi_get_dma_trig((u32)aspi->phys);
+
+	struct dma_slave_config rx_conf = {
+		.src_addr = spi_reg(aspi, SPI_RXDAT),
+		.direction = DMA_DEV_TO_MEM,
+	};
+	struct owl_dma_slave rx_atslave = {
+        .mode = DMA_MODE_ST(trig) | DMA_MODE_DT_DDR | DMA_MODE_SAM_CONST | DMA_MODE_DAM_INC,
+		.dma_dev = aspi->dma_rx_channel->device->dev,
+	};
+	struct dma_chan *rxchan = aspi->dma_rx_channel;
+	unsigned int pages;
+	int len, left;
+	void *rx_buf;
+	int rx_sglen;
+	struct dma_async_tx_descriptor *rxdesc;
+	
+	u32 val;
+	int retval;
+
+	struct completion rx_cmp;
+	dma_cookie_t		cookie;
+	enum dma_status		status;
+    dma_addr_t rx_addr;
+	
+	/* Create sglists for the transfers */
+	left = xfer->len;
+	rx_buf = xfer->rx_buf;
+	
+    rxchan->private = (void *)&rx_atslave;
+    retval = dmaengine_slave_config(rxchan, &rx_conf);
+    if (retval) {
+    	pr_err("call the read slave config error\n");
+    	goto err_slave;
+    }
+
+    val = owl_spi_readl(aspi, SPI_CTL);
+    val &= (~(SPI_CTL_RWC(3) | SPI_CTL_RDIC(3) | SPI_CTL_TDIC(3) | \
+    	SPI_CTL_SDT(7) | SPI_CTL_DTS | SPI_CTL_TIEN | SPI_CTL_RIEN | \
+    	SPI_CTL_TDEN | SPI_CTL_RDEN) | SPI_CTL_DAWS(3));
+    val |= (SPI_CTL_RWC(2) | SPI_CTL_RDIC(3) | SPI_CTL_TDIC(3) | \
+    	SPI_CTL_SDT(1) | SPI_CTL_DTS | SPI_CTL_RDEN | \
+        SPI_CTL_DAWS(2));
+
+    //Support for dual wire read.
+    if (xfer->rx_nbits == SPI_NBITS_DUAL)
+        val |= (0x1 << 12);
+    else
+        val &= ~(0x1 << 12);
+    owl_spi_writel(aspi, val, SPI_CTL);
+
+
+	while(left > 0) {
+		len = left > MAX_SPI_DMA_LEN ? MAX_SPI_DMA_LEN : left;
+
+        //stat must be clear first, stop the last dma xfer.
+        owl_spi_writel(aspi, 0x30 | SPI_STAT_TCOM, SPI_STAT);
+
+		owl_spi_writel(aspi, len/4, SPI_TCNT);
+		owl_spi_writel(aspi, len/4, SPI_RXCR);
+
+        rx_addr = dma_map_single(aspi->dma_rx_channel->device->dev, xfer->rx_buf + (xfer->len - left), len, DMA_DEV_TO_MEM);
+		rxdesc = dmaengine_prep_slave_single(rxchan, rx_addr, len, DMA_DEV_TO_MEM, 0);
+		if (!rxdesc)
+			goto err_desc;
+
+		init_completion(&rx_cmp);
+	
+		rxdesc->callback = spi_callback;
+		rxdesc->callback_param = &rx_cmp;
+	
+		cookie = dmaengine_submit(rxdesc);
+		if (dma_submit_error(cookie)) {
+			pr_err("submit read error!\n");
+			goto err_desc;
+		}
+
+		dma_async_issue_pending(rxchan);
+
+		if (!wait_for_completion_timeout(&rx_cmp, msecs_to_jiffies(100))) {
+			pr_err("read wait_for_completion timeout while receive by dma in line %d \n", __LINE__);
+			//owl_dma_dump_all(rxchan);
+			goto err_desc;
+		}
+	
+		status = dma_async_is_tx_complete(rxchan, cookie, NULL, NULL);
+		if (status != DMA_SUCCESS) {
+			pr_err("transfer not succeed\n");
+			goto err_desc;
+		}
+        dma_unmap_single(aspi->dma_rx_channel->device->dev, rx_addr, len, DMA_DEV_TO_MEM);
+		left -= len;
+	}
+	return 0;
+	
+err_desc:
+	dmaengine_terminate_all(rxchan);
+err_slave:
+	return -EINVAL;
+}
+#endif
+
+#ifdef DMA_SG
+//Test success, about 9.5M/s.
+static int owl_spi_read_by_dma(struct owl_spi_data *aspi,
+			   struct spi_transfer *xfer)
+{
+    int trig;
+    trig = owl_spi_get_dma_trig((u32)aspi->phys);
+
+	struct dma_slave_config rx_conf = {
+		.src_addr = spi_reg(aspi, SPI_RXDAT),
+		.direction = DMA_DEV_TO_MEM,
+	};
+	struct owl_dma_slave rx_atslave = {
+        .mode = DMA_MODE_ST(trig) | DMA_MODE_DT_DDR | DMA_MODE_SAM_CONST | DMA_MODE_DAM_INC,
+		.dma_dev = aspi->dma_rx_channel->device->dev,
+	};
+	struct dma_chan *rxchan = aspi->dma_rx_channel;
+	unsigned int pages;
+	int len, left;
+	void *rx_buf;
+	int rx_sglen;
+	struct dma_async_tx_descriptor *rxdesc;
+	
+	u32 val;
+	int retval;
+
+	struct completion rx_cmp;
+	dma_cookie_t		cookie;
+	enum dma_status		status;
+	
+	/* Create sglists for the transfers */
+	left = xfer->len;
+	rx_buf = xfer->rx_buf;
+	
+	owl_spi_dump_regs(aspi);
+	pages = DIV_ROUND_UP(xfer->len, PAGE_SIZE);
+	retval = sg_alloc_table(&aspi->sgt_rx, pages, GFP_ATOMIC);
+	if (retval)
+		goto err_slave;
+
+    rxchan->private = (void *)&rx_atslave;
+    retval = dmaengine_slave_config(rxchan, &rx_conf);
+    if (retval) {
+    	pr_err("call the read slave config error\n");
+    	goto err_slave;
+    }
+
+    val = owl_spi_readl(aspi, SPI_CTL);
+    val &= (~(SPI_CTL_RWC(3) | SPI_CTL_RDIC(3) | SPI_CTL_TDIC(3) | \
+    	SPI_CTL_SDT(7) | SPI_CTL_DTS | SPI_CTL_TIEN | SPI_CTL_RIEN | \
+    	SPI_CTL_TDEN | SPI_CTL_RDEN) | SPI_CTL_DAWS(3));
+    val |= (SPI_CTL_RWC(2) | SPI_CTL_RDIC(3) | SPI_CTL_TDIC(3) | \
+    	SPI_CTL_SDT(1) | SPI_CTL_DTS | SPI_CTL_RDEN | \
+        SPI_CTL_DAWS(2));
+
+    //Support for dual wire read.
+    if (xfer->rx_nbits == SPI_NBITS_DUAL)
+        val |= (0x1 << 12);
+    else
+        val &= ~(0x1 << 12);
+    owl_spi_writel(aspi, val, SPI_CTL);
+
+	while(left > 0) {
+		len = left > MAX_SPI_DMA_LEN ? MAX_SPI_DMA_LEN : left;
+		left -= len;
+
+        //stat must be clear first, stop the last dma xfer.
+        owl_spi_writel(aspi, 0x30 | SPI_STAT_TCOM, SPI_STAT);
+
+		owl_spi_writel(aspi, len / 4, SPI_TCNT);
+		owl_spi_writel(aspi, len / 4, SPI_RXCR);
+        //print_spi_regs(SPI0_BASE);
+        //print_dma_regs();
+		
+		/* Fill in the scatterlists for the RX buffers */
+		owl_spi_setup_dma_scatter(rx_buf, len, &aspi->sgt_rx);
+		rx_sglen = dma_map_sg(rxchan->device->dev, aspi->sgt_rx.sgl,
+				   aspi->sgt_rx.nents, DMA_FROM_DEVICE);
+		if (!rx_sglen)
+			goto err_sgmap;
+
+		rx_buf += len;
+		
+		/* Send scatterlists */
+		rxdesc = dmaengine_prep_slave_sg(rxchan,
+					      aspi->sgt_rx.sgl,
+					      rx_sglen,
+					      DMA_DEV_TO_MEM,
+					      0);
+		if (!rxdesc)
+			goto err_desc;
+
+		init_completion(&rx_cmp);
+	
+		rxdesc->callback = spi_callback;
+		rxdesc->callback_param = &rx_cmp;
+	
+		cookie = dmaengine_submit(rxdesc);
+		if (dma_submit_error(cookie)) {
+			pr_err("submit read error!\n");
+			goto err_desc;
+		}
+
+		dma_async_issue_pending(rxchan);
+
+		//pr_debug("read start dma\n");
+		if (!wait_for_completion_timeout(&rx_cmp, msecs_to_jiffies(100))) {
+			pr_err("read wait_for_completion timeout while receive by dma in line %d \n", __LINE__);
+			//owl_dma_dump_all(rxchan);
+			goto err_desc;
+		}
+	
+		status = dma_async_is_tx_complete(rxchan, cookie, NULL, NULL);
+		if (status != DMA_SUCCESS) {
+			pr_err("transfer not succeed\n");
+			goto err_desc;
+		}
+	
+		dma_unmap_sg(rxchan->device->dev, aspi->sgt_rx.sgl,
+			     aspi->sgt_rx.nents, DMA_FROM_DEVICE);
+	}
+	sg_free_table(&aspi->sgt_rx);
+	return 0;
+	
+err_desc:
+	dmaengine_terminate_all(rxchan);
+err_sgmap:
+	sg_free_table(&aspi->sgt_rx);
+err_slave:
+	return -EINVAL;
+}
+#endif
+
+static int owl_spi_write_read_by_dma(struct owl_spi_data *aspi,
+			   struct spi_transfer *xfer)
+{
+    int trig = owl_spi_get_dma_trig((u32)aspi->phys);
+
+	struct dma_slave_config tx_conf = {
+		.dst_addr = spi_reg(aspi, SPI_TXDAT),
+		.direction = DMA_MEM_TO_DEV,
+	};
+	struct owl_dma_slave tx_atslave = {
+        .mode = DMA_MODE_DT(trig) | DMA_MODE_ST_DDR | DMA_MODE_SAM_INC | DMA_MODE_DAM_CONST,
+		.dma_dev = aspi->dma_tx_channel->device->dev,
+	};
+	struct dma_slave_config rx_conf = {
+		.src_addr = spi_reg(aspi, SPI_RXDAT),
+		.direction = DMA_DEV_TO_MEM,
+	};
+	struct owl_dma_slave rx_atslave = {
+        .mode = DMA_MODE_ST(trig) | DMA_MODE_DT_DDR | DMA_MODE_SAM_CONST | DMA_MODE_DAM_INC,
+		.dma_dev = aspi->dma_rx_channel->device->dev,
+	};
+
+	struct dma_chan *txchan = aspi->dma_tx_channel;
+	struct dma_chan *rxchan = aspi->dma_rx_channel;
+	unsigned int pages;
+	int len, left;
+	void *tx_buf, *rx_buf;
+	int rx_sglen, tx_sglen;
+	struct dma_async_tx_descriptor *rxdesc;
+	struct dma_async_tx_descriptor *txdesc;
+	
+	u32 val;
+	int retval;
+
+	struct completion rx_cmp, tx_cmp;
+	dma_cookie_t		cookie;
+	enum dma_status		status;
+
+	/* Create sglists for the transfers */
+	left = xfer->len;
+	tx_buf = (void*)xfer->tx_buf;
+	rx_buf = xfer->rx_buf;
+
+	pages = DIV_ROUND_UP(xfer->len, PAGE_SIZE);
+	retval = sg_alloc_table(&aspi->sgt_tx, pages, GFP_ATOMIC);
+	if (retval)
+		goto err_slave;
+	retval = sg_alloc_table(&aspi->sgt_rx, pages, GFP_ATOMIC);
+	if (retval)
+		goto err_slave;
+
+	while(left > 0) {
+		len = left > MAX_SPI_DMA_LEN ? MAX_SPI_DMA_LEN : left;
+		left -= len;
+
+        //stat must be clear first, stop the last dma xfer.
+        owl_spi_writel(aspi, 0x30 | SPI_STAT_TCOM, SPI_STAT);
+		val = owl_spi_readl(aspi, SPI_CTL);
+		val &= (~(SPI_CTL_RWC(3) | SPI_CTL_RDIC(3) | SPI_CTL_TDIC(3) | \
+			SPI_CTL_SDT(7) | SPI_CTL_DTS | SPI_CTL_TIEN | SPI_CTL_RIEN | \
+			SPI_CTL_TDEN | SPI_CTL_RDEN) | SPI_CTL_DAWS(3));
+		val |= (SPI_CTL_RWC(0) | SPI_CTL_RDIC(3) | SPI_CTL_TDIC(3) | \
+			SPI_CTL_SDT(1) | SPI_CTL_DTS | SPI_CTL_RDEN | \
+			SPI_CTL_TDEN | SPI_CTL_DAWS(2));
+		owl_spi_writel(aspi, val, SPI_CTL);
+	
+		owl_spi_writel(aspi, len/4, SPI_TXCR);
+		owl_spi_writel(aspi, len/4, SPI_RXCR);
+
+		txchan->private = (void *)&tx_atslave;
+		retval = dmaengine_slave_config(txchan, &tx_conf);
+		if (retval) {
+			pr_err("call the write slave config error\n");
+			goto err_slave;
+		}
+		rxchan->private = (void *)&rx_atslave;
+		retval = dmaengine_slave_config(rxchan, &rx_conf);
+		if (retval) {
+			pr_err("call the read slave config error\n");
+			goto err_slave;
+		}
+
+		/* Fill in the scatterlists for the TX buffers */
+		owl_spi_setup_dma_scatter(tx_buf, len, &aspi->sgt_tx);
+		tx_sglen = dma_map_sg(txchan->device->dev, aspi->sgt_tx.sgl,
+				   aspi->sgt_tx.nents, DMA_TO_DEVICE);
+		if (!tx_sglen)
+			goto err_sgmap;
+		owl_spi_setup_dma_scatter(rx_buf, len, &aspi->sgt_rx);
+		rx_sglen = dma_map_sg(rxchan->device->dev, aspi->sgt_rx.sgl,
+				   aspi->sgt_rx.nents, DMA_FROM_DEVICE);
+		if (!rx_sglen)
+			goto err_sgmap;
+
+		tx_buf += len;
+		rx_buf += len;
+
+		/* Send scatterlists */
+		txdesc = dmaengine_prep_slave_sg(txchan,
+					      aspi->sgt_tx.sgl,
+					      tx_sglen,
+					      DMA_MEM_TO_DEV,
+					      0);
+		if (!txdesc)
+			goto err_desc;	
+		rxdesc = dmaengine_prep_slave_sg(rxchan,
+					      aspi->sgt_rx.sgl,
+					      rx_sglen,
+					      DMA_DEV_TO_MEM,
+					      0);
+		if (!rxdesc)
+			goto err_desc;
+
+		init_completion(&tx_cmp);
+		txdesc->callback = spi_callback;
+		txdesc->callback_param = &tx_cmp;
+		cookie = dmaengine_submit(txdesc);
+		if (dma_submit_error(cookie)) {
+			pr_err("submit write error!\n");
+			goto err_desc;
+		}
+
+		init_completion(&rx_cmp);
+		rxdesc->callback = spi_callback;
+		rxdesc->callback_param = &rx_cmp;
+		cookie = dmaengine_submit(rxdesc);
+		if (dma_submit_error(cookie)) {
+			pr_err("submit read error!\n");
+			goto err_desc;
+		}
+
+		dma_async_issue_pending(txchan);
+		dma_async_issue_pending(rxchan);
+
+		pr_debug("write&read start dma\n");
+		if (!wait_for_completion_timeout(&tx_cmp, 5 * HZ)) {
+			pr_err("write wait_for_completion timeout while send by dma\n");
+			owl_dma_dump_all(txchan);
+			goto err_desc;
+		}
+		if (!wait_for_completion_timeout(&rx_cmp, 1 * HZ)) {
+			pr_err("read wait_for_completion timeout while receive by dma in line %d \n", __LINE__);
+			owl_dma_dump_all(rxchan);
+			goto err_desc;
+		}
+	
+		status = dma_async_is_tx_complete(txchan, cookie, NULL, NULL);
+		if (status != DMA_SUCCESS) {
+			pr_err("transfer not succeed\n");
+			goto err_desc;
+		}
+		status = dma_async_is_tx_complete(rxchan, cookie, NULL, NULL);
+		if (status != DMA_SUCCESS) {
+			pr_err("transfer not succeed\n");
+			goto err_desc;
+		}
+	
+		if (owl_spi_readl(aspi, SPI_STAT) &
+		    (SPI_STAT_RFER | SPI_STAT_TFER | SPI_STAT_BEB)) {
+			pr_err("spi state error while send by dma\n");
+			dump_spi_registers(aspi);
+			goto err_desc;
+		}
+
+		dma_unmap_sg(txchan->device->dev, aspi->sgt_tx.sgl,
+			     aspi->sgt_tx.nents, DMA_TO_DEVICE);
+		dma_unmap_sg(rxchan->device->dev, aspi->sgt_rx.sgl,
+			     aspi->sgt_rx.nents, DMA_FROM_DEVICE);
+	}
+	sg_free_table(&aspi->sgt_tx);
+	sg_free_table(&aspi->sgt_rx);
+	return 0;
+	
+err_desc:
+	dmaengine_terminate_all(rxchan);
+	dmaengine_terminate_all(txchan);
+err_sgmap:
+	sg_free_table(&aspi->sgt_rx);
+	sg_free_table(&aspi->sgt_tx);
+err_slave:
+	return -EINVAL;
+}
+#endif
 
 static int owl_spi_write_read(struct owl_spi_data *aspi,
 		struct spi_transfer *xfer)
 {
-	int word_len, len, count;
+	int word_len = 0, len = 0, count = 0, retval = 0;
 
 	word_len = aspi->cur_bits_per_word;
 	len = xfer->len;
 
-	spi_clear_stat(aspi);
+#ifdef CONFIG_DMA_ATS3605
+    //if read len larger than 64 bytes and len align 4, use dma read.
+    if ((len > 64) && (len % 4 == 0) && aspi->enable_dma) {
+		if (xfer->tx_buf && (!xfer->rx_buf)) {
+			retval = owl_spi_write_by_dma(aspi, xfer);
+        } else if ((!xfer->tx_buf) && xfer->rx_buf) {
+			retval = owl_spi_read_by_dma(aspi, xfer);
+		} else if((xfer->tx_buf) && (xfer->rx_buf)) {
+			retval = owl_spi_write_read_by_dma(aspi, xfer);
+  		} else {
+			pr_err("cannot find valid xfer buffer\n");
+			return 0;
+		}
 
-	switch (word_len) {
-	case 8:
-		count = owl_spi_write_read_8bit(aspi, xfer);
-		break;
-	case 16:
-		count = owl_spi_write_read_16bit(aspi, xfer);
-		break;
-	case 32:
-		count = owl_spi_write_read_32bit(aspi, xfer);
-		break;
-	default:
-		count = 0;
-		break;
-	}
+		if (retval)
+			return 0;
+		else
+			return len;
+    } else {
+	    spi_clear_stat(aspi);
+        if (word_len == 8)
+		    count = owl_spi_write_read_8bit(aspi, xfer);
+        else if (word_len == 16)
+		    count = owl_spi_write_read_16bit(aspi, xfer);
+        else
+		    count = owl_spi_write_read_32bit(aspi, xfer);
 
-	if (count < 0)
-		return count;
+	    if (count < 0)
+	    	return count;
 
-	return len - count;
+	    return len - count;
+    }
+#else
+   spi_clear_stat(aspi);
+   if (word_len == 8)
+       count = owl_spi_write_read_8bit(aspi, xfer);
+   else if (word_len == 16)
+       count = owl_spi_write_read_16bit(aspi, xfer);
+   else
+       count = owl_spi_write_read_32bit(aspi, xfer);
+
+   if (count < 0)
+   	return count;
+
+   return len - count;
+#endif
 }
 
 static int owl_spi_handle_msg(struct owl_spi_data *aspi,
@@ -540,8 +1361,6 @@ static int owl_spi_handle_msg(struct owl_spi_data *aspi,
 	int ret, status = 0;
 	u32 speed;
 	u8 bits_per_word;
-
-	spi_dbg(aspi->master, "%d:\n", __LINE__);
 
 	msg->status = -EINPROGRESS;
 
@@ -557,8 +1376,8 @@ static int owl_spi_handle_msg(struct owl_spi_data *aspi,
 		bits_per_word = xfer->bits_per_word ? : spi->bits_per_word;
 		speed = xfer->speed_hz ? : spi->max_speed_hz;
 
-		spi_dbg(aspi->master, "%d: bits_per_word %d, len %d\n", __LINE__,
-			bits_per_word, xfer->len);
+		//dev_dbg(&spi->dev, "%d: bits_per_word %d, len %d\n", __LINE__,
+		//	bits_per_word, xfer->len);
 
 		if ((bits_per_word != 8) && (bits_per_word != 16) &&
 			(bits_per_word != 32)) {
@@ -583,9 +1402,9 @@ static int owl_spi_handle_msg(struct owl_spi_data *aspi,
 			owl_spi_config(aspi);
 		}
 
-		if (xfer->tx_buf)
-			owl_spi_dump_mem("[msg] tx buf",
-					xfer->tx_buf, xfer->len);
+		//if (xfer->tx_buf)
+		//	owl_spi_dump_mem("[msg] tx buf",
+		//			xfer->tx_buf, xfer->len);
 
 		if (xfer->cs_change)
 			enable_cs(spi);
@@ -596,9 +1415,9 @@ static int owl_spi_handle_msg(struct owl_spi_data *aspi,
 			goto out;
 		}
 
-		if (xfer->rx_buf)
-			owl_spi_dump_mem("[msg] rx buf", xfer->rx_buf,
-					xfer->len);
+		//if (xfer->rx_buf)
+		//	owl_spi_dump_mem("[msg] rx buf", xfer->rx_buf,
+		//			xfer->len);
 
 		msg->actual_length += ret;
 
@@ -618,8 +1437,6 @@ out:
 
 	spi_finalize_current_message(aspi->master);
 
-	spi_dbg(aspi->master, "%d:\n", __LINE__);
-
 	return status;
 }
 
@@ -627,11 +1444,8 @@ static int owl_spi_transfer_one_message(struct spi_master *master,
 				      struct spi_message *msg)
 {
 	struct owl_spi_data *aspi = spi_master_get_devdata(master);
-	int ret;
 
-	ret = owl_spi_handle_msg(aspi, msg);
-
-	return ret;
+	return owl_spi_handle_msg(aspi, msg);
 }
 
 static int owl_spi_setup(struct spi_device *spi)
@@ -659,16 +1473,112 @@ static int owl_spi_init_hw(struct owl_spi_data *aspi)
 	unsigned int val;
 
 	val = owl_spi_readl(aspi, SPI_CTL);
-	val &= ~(SPI_CTL_RWC_MASK | SPI_CTL_TDIC_MASK | SPI_CTL_SDT_MASK |
-		SPI_CTL_DTS | SPI_CTL_TIEN | SPI_CTL_RIEN | SPI_CTL_TDEN |
+	val &= ~(SPI_CTL_RWC_MASK | SPI_CTL_TDIC_MASK | SPI_CTL_SDT_MASK | \
+		SPI_CTL_DTS | SPI_CTL_TIEN | SPI_CTL_RIEN | SPI_CTL_TDEN | \
 		SPI_CTL_RDEN);
 	val |= SPI_CTL_EN | SPI_CTL_SSCO;
 	owl_spi_writel(aspi, val, SPI_CTL);
 
 	spi_clear_stat(aspi);
 
-	/* 2MHz by default */
-	owl_spi_baudrate_set(aspi, 2000000);
+	/* 120MHz by default */
+	owl_spi_baudrate_set(aspi, 120000000);
+
+	return 0;
+}
+
+#ifdef CONFIG_DMA_ATS3605
+static int owl_spi_dma_probe(struct owl_spi_data *aspi)
+{
+	dma_cap_mask_t mask;
+
+	if (!aspi->enable_dma) {
+		pr_debug("spi dma is disabled\n");
+		return 0;
+	}
+
+	/* Try to acquire a generic DMA engine slave channel */
+	dma_cap_zero(mask);
+	dma_cap_set(DMA_SLAVE, mask);
+	/*
+	 * We need both RX and TX channels to do DMA, else do none
+	 * of them.
+	 */
+	aspi->dma_rx_channel = dma_request_slave_channel(aspi->dev, "rx");
+	if (!aspi->dma_rx_channel) {
+		pr_err("no RX DMA channel!\n");
+		goto err_no_rxchan;
+	}
+
+	aspi->dma_tx_channel = dma_request_slave_channel(aspi->dev, "tx");
+	if (!aspi->dma_tx_channel) {
+		pr_err("no TX DMA channel!\n");
+		goto err_no_txchan;
+	}
+
+	pr_debug("setup for DMA on RX %s, TX %s\n",
+		 dma_chan_name(aspi->dma_rx_channel),
+		 dma_chan_name(aspi->dma_tx_channel));
+
+	return 0;
+
+err_no_txchan:
+	dma_release_channel(aspi->dma_rx_channel);
+	aspi->dma_rx_channel = NULL;
+err_no_rxchan:
+	pr_err("Failed to work in dma mode, work without dma!\n");
+	return -ENODEV;
+}
+
+static void owl_spi_unmap_free_dma_scatter(struct owl_spi_data *aspi)
+{
+	/* Unmap and free the SG tables */
+    if (&aspi->sgt_rx) {
+	    dma_unmap_sg(aspi->dma_rx_channel->device->dev, aspi->sgt_rx.sgl,
+	    	     aspi->sgt_rx.nents, DMA_FROM_DEVICE);
+	    sg_free_table(&aspi->sgt_rx);
+    }
+    if (&aspi->sgt_tx) {
+	    dma_unmap_sg(aspi->dma_tx_channel->device->dev, aspi->sgt_tx.sgl,
+	    	     aspi->sgt_tx.nents, DMA_TO_DEVICE);
+	    sg_free_table(&aspi->sgt_tx);
+    }
+}
+
+static void owl_spi_terminate_dma(struct owl_spi_data *aspi)
+{
+	struct dma_chan *rxchan = aspi->dma_rx_channel;
+	struct dma_chan *txchan = aspi->dma_tx_channel;
+
+    if (rxchan)
+	    dmaengine_terminate_all(rxchan);
+    if (txchan)
+	    dmaengine_terminate_all(txchan);
+	owl_spi_unmap_free_dma_scatter(aspi);
+	aspi->dma_running = false;
+}
+
+static void owl_spi_dma_remove(struct owl_spi_data *aspi)
+{
+	if (aspi->dma_running)
+		owl_spi_terminate_dma(aspi);
+	if (aspi->dma_tx_channel)
+		dma_release_channel(aspi->dma_tx_channel);
+	if (aspi->dma_rx_channel)
+		dma_release_channel(aspi->dma_rx_channel);
+}
+#endif
+
+static int owl_spi_remove(struct platform_device *pdev)
+{
+	struct spi_master *master = dev_get_drvdata(&pdev->dev);
+	struct owl_spi_data *aspi = spi_master_get_devdata(master);
+
+#ifdef CONFIG_DMA_ATS3605
+	owl_spi_dma_remove(aspi);
+#endif
+	clk_disable_unprepare(aspi->clk);
+	spi_unregister_master(master);
 
 	return 0;
 }
@@ -715,6 +1625,8 @@ static int owl_spi_probe(struct platform_device *pdev)
 		goto free_master;
 	}
 
+    aspi->dev = &pdev->dev;
+
 	/* SPI controller initializations */
 	owl_spi_init_hw(aspi);
 
@@ -734,7 +1646,13 @@ static int owl_spi_probe(struct platform_device *pdev)
 	master->dev.of_node = np;
 
 	aspi->master = master;
-	spin_lock_init(&aspi->lock);
+
+#ifdef CONFIG_DMA_ATS3605
+	aspi->enable_dma = 1;
+	if(owl_spi_dma_probe(aspi) < 0)
+		goto remove_dma;
+#endif
+
 	init_completion(&aspi->xfer_completion);
 
 	ret = spi_register_master(master);
@@ -747,26 +1665,18 @@ static int owl_spi_probe(struct platform_device *pdev)
 
 disable_clk:
 	clk_disable_unprepare(aspi->clk);
+#ifdef CONFIG_DMA_ATS3605
+remove_dma:
+	owl_spi_dma_remove(aspi);
+#endif
 free_master:
 	spi_master_put(master);
 	return ret;
 }
 
-static int owl_spi_remove(struct platform_device *pdev)
-{
-	struct spi_master *master = dev_get_drvdata(&pdev->dev);
-	struct owl_spi_data *aspi = spi_master_get_devdata(master);
-
-	spi_unregister_master(master);
-	clk_disable_unprepare(aspi->clk);
-
-	return 0;
-}
-
 static const struct of_device_id owl_spi_dt_ids[] = {
 	{ .compatible = "actions,s900-spi" },
 	{ .compatible = "actions,s700-spi" },
-	{ .compatible = "actions,s500-spi" },
 	{ .compatible = "actions,ats3605-spi" },
 };
 

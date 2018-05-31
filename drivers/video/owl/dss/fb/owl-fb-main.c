@@ -15,7 +15,7 @@
  * Change log:
  *	2015/8/28: Created by Lipeng.
  */
-#define DEBUG
+#define DEBUGX
 
 #include <linux/types.h>
 #include <linux/init.h>
@@ -45,6 +45,7 @@ struct owl_fb_info {
 	u32			pseudo_palette[17];
 
 	struct fb_info		*fbi;
+	enum owl_dss_state	state;
 
 	struct owl_panel	*panel;
 	struct owl_de_path	*path;
@@ -76,8 +77,46 @@ static int owl_fb_blank(int blank, struct fb_info *fbi)
 {
 	struct owl_fb_info *ofbi = FBI_TO_OFBI(fbi);
 	struct device *dev = fbi->dev;
+	struct fb_event event;
+	int fb_state;
 
-	dev_dbg(dev, "%s\n", __func__);
+	dev_dbg(dev, "%s, blank %d, ofbi state %d\n",
+			__func__, blank, ofbi->state);
+	
+	if (!PANEL_IS_PRIMARY(ofbi->panel))
+		return 0;
+
+	switch (blank) {
+	case FB_BLANK_UNBLANK:
+		if (ofbi->state == OWL_DSS_STATE_ON)
+			return 0;
+
+		owl_panel_enable(ofbi->panel);
+		owl_de_path_enable(ofbi->path);
+ 		owl_panel_refresh_frame(ofbi->panel);
+
+		fb_state = FB_BLANK_UNBLANK;
+		event.data = &fb_state;
+		fb_notifier_call_chain(FB_EVENT_BLANK, &event);
+		
+		ofbi->state = OWL_DSS_STATE_ON;
+		break;
+	case FB_BLANK_POWERDOWN:
+		if (ofbi->state == OWL_DSS_STATE_OFF)
+			return 0;
+		
+		fb_state = FB_BLANK_POWERDOWN;
+		event.data = &fb_state;
+		fb_notifier_call_chain(FB_EVENT_BLANK, &event);
+		
+		owl_de_path_disable(ofbi->path);
+		owl_panel_disable(ofbi->panel);
+
+		ofbi->state = OWL_DSS_STATE_OFF;
+		break;
+	default:
+		return -EINVAL;
+	}
 
 	return 0;
 }
@@ -183,6 +222,10 @@ static void __ofbi_set_fix(struct owl_fb_info *ofbi)
 		}
 	}
 
+	/* panel`s name for user space */
+	memcpy(&fix->id[0], ofbi->panel->desc.name,
+				sizeof(ofbi->panel->desc.name));
+
 	fix->accel = FB_ACCEL_NONE;
 	fix->xpanstep = 1;
 	fix->ypanstep = 1;
@@ -193,6 +236,7 @@ static void __ofbi_set_video_info(struct owl_fb_info *ofbi)
 	struct owl_de_video *video = ofbi->video;
 
 	struct fb_info *fbi = ofbi->fbi;
+	struct device *dev = fbi->device;
 	struct fb_fix_screeninfo *fix = &fbi->fix;
 	struct fb_var_screeninfo *var = &fbi->var;
 
@@ -201,9 +245,9 @@ static void __ofbi_set_video_info(struct owl_fb_info *ofbi)
 	owl_de_video_get_info(video, &v_info);
 
 	if (var->bits_per_pixel == 32)
-		v_info.color_mode = OWL_DSS_COLOR_BGRX8888;
+		v_info.color_mode = OWL_DSS_COLOR_BGRA8888;
 	else if (var->bits_per_pixel == 16)
-		v_info.color_mode = OWL_DSS_COLOR_RGB565;
+		v_info.color_mode = OWL_DSS_COLOR_BGR565;
 	else	/* TODO */
 		v_info.color_mode = OWL_DSS_COLOR_BGRA8888;
 
@@ -225,11 +269,18 @@ static void __ofbi_set_video_info(struct owl_fb_info *ofbi)
 	v_info.mmu_enable = false;
 
 	v_info.n_planes = 1;
-	v_info.addr[0] = (unsigned long)ofbi->paddr;
 	v_info.offset[0] = var->yoffset * fix->line_length
 				+ var->xoffset * (var->bits_per_pixel >> 3);
+	/* Unit: byte */
 	v_info.pitch[0] = (var->bits_per_pixel >> 3) * v_info.width;
+	v_info.addr[0] = (unsigned long)ofbi->paddr + v_info.offset[0];
 
+	dev_dbg(dev, "v_info pitch %d, bits_per_pixel %d\n",
+			v_info.pitch[0], var->bits_per_pixel);
+	/* you can use other values as you like */
+	v_info.brightness = owl_panel_brightness_get(ofbi->panel);
+	v_info.contrast = owl_panel_contrast_get(ofbi->panel);
+	v_info.saturation = owl_panel_saturation_get(ofbi->panel);
 	owl_de_video_set_info(video, &v_info);
 }
 
@@ -258,11 +309,13 @@ static int owl_fb_set_par(struct fb_info *fbi)
 
 	__ofbi_set_fix(ofbi);
 
+#if 0
 	__ofbi_set_video_info(ofbi);
 
 	/* apply path info and video info */
 	owl_de_path_apply(ofbi->path);
-
+ 	owl_panel_refresh_frame(ofbi->panel);
+#endif
 	return 0;
 }
 
@@ -274,7 +327,6 @@ static int owl_fb_pan_display(struct fb_var_screeninfo *var,
 
 	dev_dbg(dev, "%s: offset, %ux%u\n",
 		__func__, var->xoffset, var->yoffset);
-
 	if (var->xoffset == fbi->var.xoffset &&
 	    var->yoffset == fbi->var.yoffset)
 		return 0;
@@ -284,6 +336,7 @@ static int owl_fb_pan_display(struct fb_var_screeninfo *var,
 
 	__ofbi_set_video_info(ofbi);
 	owl_de_path_apply(ofbi->path);
+ 	owl_panel_refresh_frame(ofbi->panel);
 
 	return 0;
 }
@@ -414,13 +467,38 @@ static int owl_fb_init_ofbi(struct owl_fb_info *ofbi)
 	dev_dbg(dev, "%s: id %d\n", __func__, ofbi->id);
 
 	path = owl_de_path_get_by_type(owl_panel_get_type(ofbi->panel));
+
+#ifdef CONFIG_VIDEO_OWL_DE_ATS3605
+	switch (ofbi->panel->desc.type) {
+	case OWL_DISPLAY_TYPE_HDMI:
+		video = owl_de_video_get_by_index(0);
+	break;
+	case OWL_DISPLAY_TYPE_LCD:
+		video = owl_de_video_get_by_index(1);
+	break;
+	default:
+		dev_err(dev, "%s: unsupported panel types %d\n",
+				__func__, ofbi->panel->desc.type);
+		return -ENODEV;
+	}
+#else
 	video = owl_de_video_get_by_index(ofbi->id);
+#endif
+
 	if (path == NULL || video == NULL) {
 		dev_err(dev, "%s: get de path or de video failed\n", __func__);
 		return -ENODEV;
 	}
 	ofbi->path = path;
 	ofbi->video = video;
+
+	if (owl_de_path_is_enabled(path))
+		ofbi->state = OWL_DSS_STATE_ON;
+	else
+		ofbi->state = OWL_DSS_STATE_OFF;
+
+	/* update panel's state to ofbi's state */
+	ofbi->panel->state = ofbi->state;
 
 	owl_de_path_attach(path, video);
 

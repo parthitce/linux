@@ -41,6 +41,7 @@
 #define	OPCODE_WRSR		0x01	/* Write status register 1 byte */
 #define	OPCODE_NORM_READ	0x03	/* Read data bytes (low frequency) */
 #define	OPCODE_FAST_READ	0x0b	/* Read data bytes (high frequency) */
+#define	OPCODE_DUAL_READ        0x3b    /* Read data bytes (Dual SPI) */
 #define	OPCODE_PP		0x02	/* Page program (up to 256 bytes) */
 #define	OPCODE_BE_4K		0x20	/* Erase 4KiB block */
 #define	OPCODE_BE_32K		0x52	/* Erase 32KiB block */
@@ -48,6 +49,10 @@
 #define	OPCODE_SE		0xd8	/* Sector erase (usually 64KiB) */
 #define	OPCODE_RDID		0x9f	/* Read JEDEC ID */
 
+/* 4-byte address opcodes - used on Spansion and some Macronix flashes. */
+#define	OPCODE_NORM_READ_4B	0x13	/* Read data bytes (low frequency) */
+#define	OPCODE_FAST_READ_4B	0x0c	/* Read data bytes (high frequency) */
+#define	OPCODE_DUAL_READ_4B	0x3c    /* Read data bytes (Dual SPI) */
 /* Used for SST flashes only. */
 #define	OPCODE_BP		0x02	/* Byte program */
 #define	OPCODE_WRDI		0x04	/* Write disable */
@@ -71,11 +76,18 @@
 
 /* Define max times to check status register before we give up. */
 #define	MAX_READY_WAIT_JIFFIES	(40 * HZ)	/* M25P16 specs 40s max chip erase */
-#define	MAX_CMD_SIZE		5
+#define	MAX_CMD_SIZE		6
 
 #define JEDEC_MFR(_jedec_id)	((_jedec_id) >> 16)
 
 /****************************************************************************/
+
+enum read_type {
+	M25P80_NORMAL = 0,
+	M25P80_FAST,
+	M25P80_DUAL,
+	M25P80_QUAD,
+};
 
 struct m25p {
 	struct spi_device	*spi;
@@ -84,8 +96,10 @@ struct m25p {
 	u16			page_size;
 	u16			addr_width;
 	u8			erase_opcode;
+	u8			read_opcode;
+	u8			program_opcode;
 	u8			*command;
-	bool			fast_read;
+	enum read_type		flash_read;
 };
 
 static inline struct m25p *mtd_to_m25p(struct mtd_info *mtd)
@@ -327,6 +341,38 @@ static int m25p80_erase(struct mtd_info *mtd, struct erase_info *instr)
 }
 
 /*
+ * Dummy Cycle calculation for different type of read.
+ * It can be used to support more commands with
+ * different dummy cycle requirements.
+ */
+static inline int m25p80_dummy_cycles_read(struct m25p *flash)
+{
+	switch (flash->flash_read) {
+	case M25P80_FAST:
+	case M25P80_DUAL:
+	case M25P80_QUAD:
+		return 1;
+	case M25P80_NORMAL:
+		return 0;
+	default:
+		dev_err(&flash->spi->dev, "No valid read type supported\n");
+		return -1;
+	}
+}
+
+static inline unsigned int m25p80_rx_nbits(const struct m25p *flash)
+{
+	switch (flash->flash_read) {
+	case M25P80_DUAL:
+		return 2;
+	case M25P80_QUAD:
+		return 4;
+	default:
+		return 0;
+	}
+}
+
+/*
  * Read an address range from the flash chip.  The address range
  * may be any size provided it is within the physical boundaries.
  */
@@ -337,6 +383,7 @@ static int m25p80_read(struct mtd_info *mtd, loff_t from, size_t len,
 	struct spi_transfer t[2];
 	struct spi_message m;
 	uint8_t opcode;
+	int dummy;
 
 	pr_debug("%s: %s from 0x%08x, len %zd\n", dev_name(&flash->spi->dev),
 			__func__, (u32)from, len);
@@ -344,15 +391,18 @@ static int m25p80_read(struct mtd_info *mtd, loff_t from, size_t len,
 	spi_message_init(&m);
 	memset(t, 0, (sizeof t));
 
-	/* NOTE:
-	 * OPCODE_FAST_READ (if available) is faster.
-	 * Should add 1 byte DUMMY_BYTE.
-	 */
+	dummy =  m25p80_dummy_cycles_read(flash);
+	if (dummy < 0) {
+		dev_err(&flash->spi->dev, "No valid read command supported\n");
+		return -EINVAL;
+	}
+
 	t[0].tx_buf = flash->command;
-	t[0].len = m25p_cmdsz(flash) + (flash->fast_read ? 1 : 0);
+	t[0].len = m25p_cmdsz(flash) + dummy;
 	spi_message_add_tail(&t[0], &m);
 
 	t[1].rx_buf = buf;
+	t[1].rx_nbits = m25p80_rx_nbits(flash);
 	t[1].len = len;
 	spi_message_add_tail(&t[1], &m);
 
@@ -365,20 +415,14 @@ static int m25p80_read(struct mtd_info *mtd, loff_t from, size_t len,
 		return 1;
 	}
 
-	/* FIXME switch to OPCODE_FAST_READ.  It's required for higher
-	 * clocks; and at this writing, every chip this driver handles
-	 * supports that opcode.
-	 */
-
 	/* Set up the write data buffer. */
-	opcode = flash->fast_read ? OPCODE_FAST_READ : OPCODE_NORM_READ;
+	opcode = flash->read_opcode;
 	flash->command[0] = opcode;
 	m25p_addr2cmd(flash, from, flash->command);
 
 	spi_sync(flash->spi, &m);
 
-	*retlen = m.actual_length - m25p_cmdsz(flash) -
-			(flash->fast_read ? 1 : 0);
+	*retlen = m.actual_length - m25p_cmdsz(flash) - dummy;
 
 	mutex_unlock(&flash->lock);
 
@@ -422,7 +466,7 @@ static int m25p80_write(struct mtd_info *mtd, loff_t to, size_t len,
 	write_enable(flash);
 
 	/* Set up the opcode in the write buffer. */
-	flash->command[0] = OPCODE_PP;
+	flash->command[0] = flash->program_opcode;
 	m25p_addr2cmd(flash, to, flash->command);
 
 	page_offset = to & (flash->page_size - 1);
@@ -682,6 +726,9 @@ struct flash_info {
 #define	SECT_4K		0x01		/* OPCODE_BE_4K works uniformly */
 #define	M25P_NO_ERASE	0x02		/* No erase command needed */
 #define	SST_WRITE	0x04		/* use SST byte programming */
+#define	M25P_NO_FR	0x08		/* Can't do fastread */
+#define	M25P80_DUAL_READ	0x20    /* Flash supports Dual Read */
+#define	M25P80_QUAD_READ	0x40    /* Flash supports Quad Read */
 };
 
 #define INFO(_jedec_id, _ext_id, _sector_size, _n_sectors, _flags)	\
@@ -729,7 +776,7 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "en25q32b", INFO(0x1c3016, 0, 64 * 1024,  64, 0) },
 	{ "en25p64", INFO(0x1c2017, 0, 64 * 1024, 128, 0) },
 	{ "en25q64", INFO(0x1c3017, 0, 64 * 1024, 128, SECT_4K) },
-	{ "en25qh128a", INFO(0x1c7018, 0, 64 * 1024, 256, SECT_4K) },
+	{ "en25qh128a", INFO(0x1c7018, 0, 64 * 1024, 256, SECT_4K | M25P80_DUAL_READ) },
 	{ "en25qh256", INFO(0x1c7019, 0, 64 * 1024, 512, 0) },
 
 	/* Everspin */
@@ -751,7 +798,7 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "mx25l1606e",  INFO(0xc22015, 0, 64 * 1024,  32, SECT_4K) },
 	{ "mx25l3205d",  INFO(0xc22016, 0, 64 * 1024,  64, 0) },
 	{ "mx25l6405d",  INFO(0xc22017, 0, 64 * 1024, 128, 0) },
-	{ "mx25l12805d", INFO(0xc22018, 0, 64 * 1024, 256, SECT_4K) },
+	{ "mx25l12805d", INFO(0xc22018, 0, 64 * 1024, 256, SECT_4K | M25P80_DUAL_READ) },
 	{ "mx25l12855e", INFO(0xc22618, 0, 64 * 1024, 256, 0) },
 	{ "mx25l25635e", INFO(0xc22019, 0, 64 * 1024, 512, 0) },
 	{ "mx25l25655e", INFO(0xc22619, 0, 64 * 1024, 512, 0) },
@@ -843,7 +890,7 @@ static const struct spi_device_id m25p_ids[] = {
 	{ "w25q64", INFO(0xef4017, 0, 64 * 1024, 128, SECT_4K) },
 	{ "w25q80", INFO(0xef5014, 0, 64 * 1024,  16, SECT_4K) },
 	{ "w25q80bl", INFO(0xef4014, 0, 64 * 1024,  16, SECT_4K) },
-	{ "w25q128", INFO(0xef4018, 0, 64 * 1024, 256, SECT_4K) },
+	{ "w25q128", INFO(0xef4018, 0, 64 * 1024, 256, SECT_4K | M25P80_DUAL_READ) },
 	{ "w25q256", INFO(0xef4019, 0, 64 * 1024, 512, SECT_4K) },
 
 	/* Catalyst / On Semiconductor -- non-JEDEC */
@@ -964,8 +1011,7 @@ static int m25p_probe(struct spi_device *spi)
 	flash = kzalloc(sizeof *flash, GFP_KERNEL);
 	if (!flash)
 		return -ENOMEM;
-	flash->command = kmalloc(MAX_CMD_SIZE + (flash->fast_read ? 1 : 0),
-					GFP_KERNEL);
+	flash->command = kmalloc(MAX_CMD_SIZE, GFP_KERNEL);
 	if (!flash->command) {
 		kfree(flash);
 		return -ENOMEM;
@@ -1028,15 +1074,42 @@ static int m25p_probe(struct spi_device *spi)
 	flash->page_size = info->page_size;
 	flash->mtd.writebufsize = flash->page_size;
 
-	flash->fast_read = false;
-#ifdef CONFIG_OF
-	if (np && of_property_read_bool(np, "m25p,fast-read"))
-		flash->fast_read = true;
-#endif
+	if (np) {
+		/* If we were instantiated by DT, use it */
+		if (of_property_read_bool(np, "m25p,fast-read"))
+			flash->flash_read = M25P80_FAST;
+		else
+			flash->flash_read = M25P80_NORMAL;
+	} else {
+		/* If we weren't instantiated by DT, default to fast-read */
+		flash->flash_read = M25P80_FAST;
+	}
 
-#ifdef CONFIG_M25PXX_USE_FAST_READ
-	flash->fast_read = true;
-#endif
+	/* Some devices cannot do fast-read, no matter what DT tells us */
+	if (info->flags & M25P_NO_FR)
+		flash->flash_read = M25P80_NORMAL;
+
+	/* Quad/Dual-read mode takes precedence over fast/normal */
+	if (spi->mode & SPI_RX_DUAL && info->flags & M25P80_DUAL_READ)
+		flash->flash_read = M25P80_DUAL;
+
+	/* Default commands */
+	switch (flash->flash_read) {
+	case M25P80_DUAL:
+		flash->read_opcode = OPCODE_DUAL_READ;
+		break;
+	case M25P80_FAST:
+		flash->read_opcode = OPCODE_FAST_READ;
+		break;
+	case M25P80_NORMAL:
+		flash->read_opcode = OPCODE_NORM_READ;
+		break;
+	default:
+		dev_err(&flash->spi->dev, "No Read opcode defined\n");
+		return -EINVAL;
+	}
+
+	flash->program_opcode = OPCODE_PP;
 
 	if (info->addr_width)
 		flash->addr_width = info->addr_width;

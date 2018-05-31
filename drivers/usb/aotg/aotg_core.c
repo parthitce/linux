@@ -217,8 +217,8 @@ static void aotg_set_hcd_phy(int id)
 		aotg_DD_set_phy(aotg_data[id].base, 0xf4, 0x9b);
 		aotg_DD_set_phy(aotg_data[id].base, 0xe7, 0xa1);
 		aotg_DD_set_phy(aotg_data[id].base, 0xf4, 0xbb);
-		aotg_DD_set_phy(aotg_data[id].base, 0xe0, 0x31);
-		aotg_DD_set_phy(aotg_data[id].base, 0xe0, 0x35);
+		aotg_DD_set_phy(aotg_data[id].base, 0xe0, 0x21);
+		aotg_DD_set_phy(aotg_data[id].base, 0xe0, 0x25);
 		aotg_DD_set_phy(aotg_data[id].base, 0xf4, 0x9b);
 
 		value = usb_current_calibrate();
@@ -227,6 +227,7 @@ static void aotg_set_hcd_phy(int id)
 		value |=  (0xa<<4);
 		aotg_DD_set_phy(aotg_data[id].base, 0xe4, value);
 		aotg_DD_set_phy(aotg_data[id].base, 0xf0, 0xfc);
+		pr_info("PHY: Disable hysterisys mode\n");
 	} else {
 		BUG_ON(1);
 	}

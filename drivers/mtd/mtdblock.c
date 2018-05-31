@@ -263,6 +263,22 @@ static int mtdblock_readsect(struct mtd_blktrans_dev *dev,
 	return do_cached_read(mtdblk, block<<9, 512, buf);
 }
 
+//Add for spi read, read 4KBytes each time.
+static int mtdblock_read_nsect(struct mtd_blktrans_dev *dev,
+			      unsigned long block, char *buf, int blk_cnt)
+{
+	struct mtdblk_dev *mtdblk = container_of(dev, struct mtdblk_dev, mbd);
+	struct mtd_info *mtd = mtdblk->mbd.mtd;
+	size_t retlen;
+    int ret = mtd_read(mtd, block<<9, 512 * blk_cnt, &retlen, buf);
+    if (ret)
+    	return ret;
+    if (retlen != 512 * blk_cnt)
+    	return -EIO;
+
+    return 0;
+}
+
 static int mtdblock_writesect(struct mtd_blktrans_dev *dev,
 			      unsigned long block, char *buf)
 {
@@ -380,6 +396,7 @@ static struct mtd_blktrans_ops mtdblock_tr = {
 	.flush		= mtdblock_flush,
 	.release	= mtdblock_release,
 	.readsect	= mtdblock_readsect,
+	.read_nsect	= mtdblock_read_nsect,
 	.writesect	= mtdblock_writesect,
 	.add_mtd	= mtdblock_add_mtd,
 	.remove_dev	= mtdblock_remove_dev,

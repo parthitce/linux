@@ -176,6 +176,10 @@ int owl_de_mmu_init(struct device *dev)
 {
 	void __iomem *vaddr;
 
+	/* IC ats3605 not support mmu functions */
+	if (owl_de_is_ats3605())
+		return 0;
+
 	/* mmu.base_phys must 64bytes align */
 	vaddr = dma_alloc_coherent(dev, MMU_TABLE_SIZE,
 				   &mmu.base_phys, GFP_KERNEL);

@@ -217,7 +217,8 @@ dtb-$(CONFIG_ARCH_VT8500) += vt8500-bv07.dtb \
 	wm8850-w70v2.dtb
 dtb-$(CONFIG_ARCH_ZYNQ) += zynq-zc702.dtb
 
-dtb-$(CONFIG_ARCH_OWL) += ls360f_evb.dtb ls370a_evb.dtb ats3605_upgrade.dtb ls360f_upgrade.dtb hobot_evb.dtb ls360f_evb_lcd.dtb
+dtb-$(CONFIG_ARCH_OWL) += ls360f_evb.dtb ls370a_evb.dtb ats3605_upgrade.dtb ls360f_upgrade.dtb hobot_evb.dtb ls360f_evb_lcd.dtb \
+	ls360f_evb_multimic.dtb ls360f_multimic_upgrade.dtb ls360f_evb_wibox.dtb ls360f_nand_zxf86.dtb ls360f_nand_gjlx.dtb 
 
 targets += dtbs
 targets += $(dtb-y)

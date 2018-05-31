@@ -35,7 +35,6 @@ struct asoc_dai_resource {
     void __iomem    *baseptr; /*pointer to every virtual base*/
     struct clk      *i2stx_clk;
     struct clk	    *i2srx_clk;
-    struct clk      *spdif_clk;
 	struct clk      *clk;
     int             irq;
     unsigned int    setting;
@@ -232,8 +231,8 @@ int snd_antipop_i2s_clk_set(void)
 	unsigned long reg_val;
 	int rate, ret = -1;
 
-	rate = 44100;
-	reg_val = 45158400;
+	rate = 48000;
+	reg_val = 49152000;
 
 	clk_prepare(dai_res.clk);
 	ret = clk_set_rate(dai_res.clk, reg_val);
@@ -272,15 +271,10 @@ static int s900_dai_record_clk_set(int rate)
 		reg_val = 49152000;
 
 	clk_prepare_enable(dai_res.i2srx_clk);
-	printk(KERN_ERR"tdm s900_dai_clk_set %d!!\n",rate);
+	printk(KERN_ERR"s900_dai_record_clk_set %d!!\n",rate);
 	ret = clk_set_rate(dai_res.i2srx_clk, rate << 8);
 	if (ret) {
 		snd_dbg("i2stx clk rate set error!!\n");
-		return ret;
-	}
-	ret = clk_set_rate(dai_res.spdif_clk, (rate << 8) * 3 );//supply 12.288M for 20810 as MCLK
-	if (ret) {
-		snd_dbg("spdif clk rate set error!!\n");
 		return ret;
 	}
 
@@ -357,8 +351,8 @@ static int s900_dai_record_mode_set(struct s900_pcm_priv *pcm_priv,
 		/* enable i2s rx */
 		snd_dai_writel(snd_dai_readl(I2S_CTL) | 0x2, I2S_CTL);
 
-		/* i2s rx 00: TDM 4-Channel Mode A*/
-		snd_dai_writel(snd_dai_readl(I2S_CTL) & ~(0x3 << 8) | (0x1 << 8), I2S_CTL);
+		/* i2s rx 00: 2.0-Channel Mode */
+		snd_dai_writel(snd_dai_readl(I2S_CTL) & ~(0x3 << 8), I2S_CTL);
 		//snd_dai_writel(snd_dai_readl(I2S_CTL) & ~(0x7 << 4), I2S_CTL);
 	}
 	dai_mode_i2srx_count++;
@@ -437,43 +431,6 @@ static int s900_dai_mode_unset(struct s900_pcm_priv *pcm_priv)
 	return 0;
 }
 
-static int s900_dai_set_sysclk(struct snd_soc_dai *dai, int clk_id,
-		unsigned int freq, int dir)
-{
-	unsigned long reg_val;
-	int ret;
-	reg_val = 49152000;
-	
-	clk_prepare(dai_res.clk);
-	ret = clk_set_rate(dai_res.clk, reg_val);
-	if (ret < 0) {
-		snd_err("audiopll set error!\n");
-		return ret;
-	}
-	
-	ret = clk_set_rate(dai_res.spdif_clk, ((freq * 3) << 8));//supply 12.288M  as MCLK 
-	if (ret) {
-		snd_dbg("spdif clk rate set error!!\n");
-		return ret;
-	}
-	set_dai_reg_base(MFP_NUM);
-	snd_dai_writel(snd_dai_readl(DEBUG_SEL) & ~(0x1F), DEBUG_SEL);
-	snd_dai_writel(snd_dai_readl(DEBUG_OEN0) | (1<<28), DEBUG_OEN0);
-	set_dai_reg_base(CMU_NUM);
-	snd_dai_writel((1<<31)|25, CMU_DIGITALDEBUG);
-	snd_dai_writel(snd_dai_readl(CMU_DEVCLKEN0) | (1<<23), CMU_DEVCLKEN0);
-
-	if (dir  == SND_SOC_CLOCK_IN){
-		clk_prepare_enable(dai_res.i2srx_clk);
-		ret = clk_set_rate(dai_res.i2srx_clk, freq << 8);
-		if (ret) {
-			snd_dbg("i2stx clk rate set error!!\n");
-			return ret;
-		}
-	}
-	return 0;
-}
-
 static int s900_dai_startup(struct snd_pcm_substream *substream,
 		struct snd_soc_dai *dai)
 {
@@ -543,18 +500,16 @@ static int s900_dai_hw_free(struct snd_pcm_substream *substream,
 
 struct snd_soc_dai_ops s900_dai_dai_ops = {
 	.startup	= s900_dai_startup,
-	.set_sysclk = s900_dai_set_sysclk,
 	.hw_params = s900_dai_hw_params,
 	.hw_free = s900_dai_hw_free,
 };
 
-#define S900_STEREO_CAPTURE_RATES SNDRV_PCM_RATE_16000
+#define S900_STEREO_CAPTURE_RATES SNDRV_PCM_RATE_8000_96000
 #define S900_STEREO_PLAYBACK_RATES SNDRV_PCM_RATE_8000_192000
 #define S900_FORMATS SNDRV_PCM_FMTBIT_S16_LE
 
-struct snd_soc_dai_driver s900_dai[] = {
-{
-	.name = "owl-audio-i2s-6wire-tx",
+struct snd_soc_dai_driver s900_dai = {
+	.name = "owl-audio-i2s",
 	.id = S900_AIF_I2S,
 	.playback = {
 		.stream_name = "s900 dai Playback",
@@ -563,20 +518,14 @@ struct snd_soc_dai_driver s900_dai[] = {
 		.rates = S900_STEREO_PLAYBACK_RATES,
 		.formats = SNDRV_PCM_FMTBIT_S32_LE,
 	},
-	.ops = &s900_dai_dai_ops,
-},
-{
-	.name = "owl-audio-i2s-6wire-rx",
-	.id = S900_AIF_I2S,
 	.capture = {
 		.stream_name = "s900 dai Capture",
-		.channels_min = 4,
+		.channels_min = 2,
 		.channels_max = 4,
 		.rates = S900_STEREO_CAPTURE_RATES,
 		.formats = SNDRV_PCM_FMTBIT_S32_LE,
 	},
 	.ops = &s900_dai_dai_ops,
-}	
 };
 
 static const struct snd_soc_component_driver s900_component = {
@@ -745,12 +694,6 @@ static int s900_dai_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	dai_res.spdif_clk= devm_clk_get(&pdev->dev, "spdif");
-	if (IS_ERR(dai_res.spdif_clk)) {
-		snd_err("no spdif clock defined\n");
-		//ret = PTR_ERR(dai_res.spdif_clk);
-		//return ret;
-	}
 	dai_res.dma_params[0].dma_chan= dma_request_slave_channel(&pdev->dev, "tx");
 	if (!dai_res.dma_params[0].dma_chan) {
 		dev_warn(&pdev->dev, "request tx chan failed\n");
@@ -768,7 +711,7 @@ static int s900_dai_probe(struct platform_device *pdev)
 	pdev->dev.init_name = "owl-audio-i2s";
 
 	return snd_soc_register_component(&pdev->dev, &s900_component,
-					 s900_dai, 2);
+					 &s900_dai, 1);
 
 }
 
@@ -795,10 +738,6 @@ static int s900_dai_remove(struct platform_device *pdev)
 		dai_res.i2srx_clk = NULL;
 	}
 
-	if (dai_res.spdif_clk) {
-		devm_clk_put(&pdev->dev, dai_res.spdif_clk);
-		dai_res.spdif_clk = NULL;
-	}
 	if (dai_res.clk) {
 		devm_clk_put(&pdev->dev, dai_res.clk);
 		dai_res.clk = NULL;
