@@ -75,8 +75,8 @@
 				hfp = <157>;
 
 				vsw = <5>;
-				vbp = <23>;
-				vfp = <12>;
+				vbp = <18>;
+				vfp = <7>;
 
 				/* 0: FB_VMODE_NONINTERLACED, 1:FB_VMODE_INTERLACED */
 				vmode = <0>;

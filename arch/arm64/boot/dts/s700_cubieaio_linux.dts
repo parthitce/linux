@@ -63,6 +63,28 @@
 		status = "okay";
 	};
 
+	spi0: spi@e0300000 {
+		status = "okay";
+		pinctrl-names = "default";
+		pinctrl-0 = <&spi0_state>;
+
+		spi0_state: spi0_default {
+			spi0_mfp {
+				actions,groups = "mfp1_20_19","mfp1_18_17","mfp1_9_7","mfp2_26_24";
+				actions,function = "spi0";
+			};
+			spi0_paddrv {
+				actions,groups = "paddrv1_11_10";
+				actions,paddrv = <2>;/*level 2*/
+			};
+		};
+
+		spidev@0 {
+			compatible ="rohm,dh2228fv";
+			reg = <0x0>;
+			spi-max-frequency = <500000>;
+		};
+	};
 
 	serial0: uart@e0120000 {
                dmas = <&dma DMA_DRQ_UART0_TX>, <&dma DMA_DRQ_UART0_RX>;
@@ -82,9 +104,19 @@
 		status = "okay";
 	};
 	serial5: uart@e012a000 {
-                dmas = <&dma DMA_DRQ_UART5_TX>, <&dma DMA_DRQ_UART5_RX>;
-                dma-names = "tx", "rx";
-                         status = "okay";
+		status = "okay";
+
+		dmas = <&dma DMA_DRQ_UART5_TX>, <&dma DMA_DRQ_UART5_RX>;
+		dma-names = "tx", "rx";
+		pinctrl-names = "default";
+		pinctrl-0 = <&serial5_state>;
+
+		serial5_state: serial5_default {
+			serial_5 {
+				actions,groups = "mfp2_21","mfp2_20";
+				actions,function = "uart5";
+			};
+		};
 	};
 
 	i2c1: i2c@e0174000 {
@@ -268,8 +300,10 @@
 
 	owl_aotg_config {
 		compatible = "actions,owl-aotg-config";
-		usb_cam_shield1 = "e01d0000";
-		usb_cam_shield2 = "e01d8000";
+
+		/* shield cameras on USB_2.0 */
+//		usb_cam_shield1 = "e01d0000";
+//		usb_cam_shield2 = "e01d8000";
 	};
 
 	wifi_bt_power_ctl {
@@ -598,18 +632,7 @@
 			reg = <0x60>;
 		};
 	};	
-	
-	
-       spi0: spi@e0300000 {
-                status = "okay";
-                pinctrl-names = "default";
-                pinctrl-0 = <&spi0_state_default>;
-                spidev@0 {
-                        compatible ="rohm,dh2228fv";
-                        reg = <0x0>;
-                        spi-max-frequency = <500000>;
-                };
-        };
+
 //	isp0: isp@0xe0268000 {
 //			mirror_flip = <3>;  /* bit-0:rear camera; bit-1:front camera; 0: no flip,no mirror; 1: no flip,horizontal mirror; 2:vertical flip,no mirror; 3: vertical flip,horizontal mirror */
 
