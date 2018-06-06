@@ -67,7 +67,7 @@
 	spi0: spi@e0300000 {
 		status = "okay";
 		pinctrl-names = "default";
-		pinctrl-0 = <&spi0_state>;
+		pinctrl-0 = <&spi0_state_default>;
 		spidev@0 {
 			compatible ="rohm,dh2228fv";
 			reg = <0x0>;
@@ -101,7 +101,7 @@
 		dmas = <&dma DMA_DRQ_UART5_TX>, <&dma DMA_DRQ_UART5_RX>;
 		dma-names = "tx", "rx";
 		pinctrl-names = "default";
-		pinctrl-0 = <&serial5_state>;
+		pinctrl-0 = <&serial5_state_default>;
 
 	};
 
