@@ -75,16 +75,17 @@
 	};
 
 	serial0: uart@e0120000 {
-               dmas = <&dma DMA_DRQ_UART0_TX>, <&dma DMA_DRQ_UART0_RX>;
-                dma-names = "tx", "rx";
-                status = "okay";
-        };
+		dmas = <&dma DMA_DRQ_UART0_TX>, <&dma DMA_DRQ_UART0_RX>;
+		dma-names = "tx", "rx";
+		status = "okay";
+	};
 
 	//FOR BT
 	serial2: uart@e0124000 {
+		status = "okay";
+
 		dmas = <&dma DMA_DRQ_UART2_TX>, <&dma DMA_DRQ_UART2_RX>;
 		dma-names = "tx", "rx";
-		status = "okay";
 		pinctrl-names = "default";
 		pinctrl-0 = <&serial2_state_default>;
 	};
@@ -102,10 +103,13 @@
 	};
 
 	i2c1: i2c@e0174000 {
+		i2c_num = <1>;
+		clock-frequency = <400000>;
 		status = "okay";
-                i2c_num = <1>;
-                clock-frequency = <400000>;
-                pinctrl-names = "default";
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_i2c1_default>;
+
 		mpu6500@68 {
 		compatible = "owl-gyrosensor";
 		interrupt-parent = <&gpioa>;
@@ -297,7 +301,7 @@
 		#wifi_wakeup_host_gpios = <&gpiod 19 0>; 	/* GPIOD19 */
 	};
 
-		i2c0: i2c@e0170000 {
+	i2c0: i2c@e0170000 {
 		i2c_num = <0>;
 		clock-frequency = <400000>;
 		status = "okay";
@@ -321,7 +325,7 @@
 				compatible = "actions,atc2603c-onoff";
 			};
 
-			rtc{
+			rtc {
 				compatible = "actions,atc2603c-rtc";
 			};
 
@@ -339,12 +343,12 @@
 				#interrupt-cells = <2>;
 			};
 
-			atc260x-adckeypad{
-#define KEY_HOME				172
-#define KEY_MENU				139
-#define KEY_BACK				158
-#define KEY_VOLUMEDOWN				114
-#define KEY_VOLUMEUP				115
+			atc260x-adckeypad {
+				#define KEY_HOME				172
+				#define KEY_MENU				139
+				#define KEY_BACK				158
+				#define KEY_VOLUMEDOWN				114
+				#define KEY_VOLUMEUP				115
 				keymapsize = <5>;                   /* number of ADC key */
 				filter_dep = <3>;                   /* depth of the moving average filter (length of filter queue) */
 				variance = <10>;                    /* filter will not output until the difference between every two ADC samples in the filter queue goes below this value */
@@ -356,7 +360,7 @@
 				compatible = "actions,atc2603c-adckeypad";
 				status = "okay";                /* enable/disable ADC key function (okay or disabled) */
 			};
-			atc260x-irkeypad{
+			atc260x-irkeypad {
 				compatible = "actions,atc2603c-irkeypad";
 				status = "okay";
 				config {
@@ -383,13 +387,13 @@
 			 now snd-soc-atv5302.ko is first installed.
 			 1, earphone_detect_level use the third value of earphone_gpios
 			 2, commonly, we shouldn't change the value of speaker_gain and earphone_gain*/
-			atc260x-audio{
+			atc260x-audio {
 				compatible = "actions,atc2603c-audio";
 				status = "okay";
 				pinctrl-names = "default";
 				pinctrl-0 = <&i2s0_state_default>;
 				//earphone_detect_gpios = <&gpio 21 0>; /*0: high, 1: low GPIOA21 0*/
-				speaker_en_gpios = <&gpiob 8 1>; /*GPIOD(30) 0: high, 1: low*/
+				speaker_en_gpios = <&gpiob 8 1>; /*GPIOb(8) 0: high, 1: low*/
 				earphone_output_mode = <1>; /*0: direct mode, 1: undirect mode*/
 				mic_num = <1>; /*just suport 1, 2*/
 				mic0_gain = < 0xf 0xf >; /*<Lchannel,Rchannel> [0x0~0xF]*/
@@ -403,11 +407,11 @@
 				adc_level = <0>; /*adc plugin level, 1:high vol when plugin; 0:low vol when plug in*/
 			};
 
-			atc260x-hwmon{
+			atc260x-hwmon {
 				compatible = "actions,atc2603c-hwmon";
 			};
 
-			atc260x-charger{
+			atc260x-charger {
 				compatible = "actions,atc2603c-charger";
 				rsense = <20>;/*unit:mohm*/
 				bat_type = <1>;/*0:4.18v; 1:4.2v; 2:4.3v; 3:4.35v*/
@@ -422,7 +426,7 @@
 				usb_adapter_as_ac = <1>;/*0:usb ada keep itself; 1:usb ada used as DCIN when usb plug and batv<3.3v during minicharge*/
 				usb_pc_ctl_mode = <2>; /*0:disable vbus ctl;1:current limited;2:voltage limited*/
 			};
-			atc2603c-battery{
+			atc2603c-battery {
 				compatible = "actions,atc2603c-battery";
 				capacity = < 5300 >;                              /*mAh, the full capacity of battery used*/
 				taper_voltage = < 4180 >;                         /*mV,the one close to the full capacity*/
@@ -514,7 +518,7 @@
 				status = "disabled";
 			};
 
-			ldo1: ldo1{
+			ldo1: ldo1 {
 				compatible = "actions,atc2603c-ldo1","actions,atc2603c-ldo";
 				regulator-name = "ldo1";
 				regulator-min-microvolt  = <2800000>;
@@ -522,7 +526,7 @@
 				regulator-always-on;
 			};
 
-			ldo2: ldo2{
+			ldo2: ldo2 {
 				compatible = "actions,atc2603c-ldo2","actions,atc2603c-ldo";
 				regulator-name = "ldo2";
 				regulator-min-microvolt  = <2600000>;
@@ -530,7 +534,7 @@
 				regulator-always-on;
 			};
 
-			ldo3: ldo3{
+			ldo3: ldo3 {
 				compatible = "actions,atc2603c-ldo3","actions,atc2603c-ldo";
 				regulator-name = "ldo3";
 				regulator-min-microvolt  = <1500000>;
@@ -538,11 +542,11 @@
 				regulator-always-on;
 			};
 
-			ldo4: ldo4{
+			ldo4: ldo4 {
 				status = "disabled";
 			};
 
-			ldo5: ldo5{
+			ldo5: ldo5 {
 				compatible = "actions,atc2603c-ldo5","actions,atc2603c-ldo";
 				regulator-name = "ldo5";
 				regulator-min-microvolt  = <3100000>;
@@ -550,7 +554,7 @@
 				regulator-always-on;
 			};
 
-			ldo6: ldo6{
+			ldo6: ldo6 {
 				compatible = "actions,atc2603c-ldo6","actions,atc2603c-ldo";
 				regulator-name = "ldo6";
 				regulator-min-microvolt  = <700000>;
@@ -558,7 +562,7 @@
 				regulator-always-on;
 			};
 
-			ldo7: ldo7{
+			ldo7: ldo7 {
 				compatible = "actions,atc2603c-ldo7","actions,atc2603c-ldo";
 				regulator-name = "ldo7";
 				regulator-min-microvolt  = <1800000>;
@@ -567,22 +571,22 @@
 				regulator-suspend-off;
 			};
 
-			ldo8: ldo8{
+			ldo8: ldo8 {
 				compatible = "actions,atc2603c-ldo8","actions,atc2603c-ldo";
 				regulator-name = "ldo8";
 				regulator-min-microvolt  = <2300000>;
 				regulator-max-microvolt = <3300000>;
 			};
 
-			ldo9: ldo9{
+			ldo9: ldo9 { 
 				status = "disabled";
 			};
 
-			ldo10: ldo10{
+			ldo10: ldo10 {
 				status = "disabled";
 			};
 
-			ldo11: ldo11{
+			ldo11: ldo11 {
 				compatible = "actions,atc2603c-ldo11","actions,atc2603c-ldo";
 				regulator-name = "ldo11";
 				regulator-min-microvolt  = <2600000>;
@@ -590,7 +594,7 @@
 				regulator-always-on;
 			};
 
-			switch1:switch1{
+			switch1:switch1 {
 				compatible = "actions,atc2603c-switch1","actions,atc2603c-switch";
 				regulator-name = "switch1";
 				regulator-min-microvolt  = <3000000>;
@@ -598,7 +602,7 @@
 				regulator-always-on;
 			};
 
-			switch2:switch2{
+			switch2:switch2 {
 				status = "disabled";
 			};
 		};
@@ -613,53 +617,54 @@
 			compatible = "actions,hdmi_read_edid";
 			reg = <0x60>;
 		};
-	};	
-
+	};
 //	isp0: isp@0xe0268000 {
-//			mirror_flip = <3>;  /* bit-0:rear camera; bit-1:front camera; 0: no flip,no mirror; 1: no flip,horizontal mirror; 2:vertical flip,no mirror; 3: vertical flip,horizontal mirror */
+//		mirror_flip = <3>;  /* bit-0:rear camera; bit-1:front camera; 0: no flip,no mirror; 1: no flip,horizontal mirror; 2:vertical flip,no mirror; 3: vertical flip,horizontal mirror */
+//
+//		avdd-src = "regulator";  /* only: "gpio", "regulator" */
+//		avdd-regulator = "ldo1"; /* only when vbus-src is "regulator" */
+//		avdd-regulator-scope = <2800000 2810000>;  /* uV */
+//		dvdd-src = "regulator";  /* only: "gpio", "regulator" */
+//		dvdd-regulator = "ldo7";
+//		dvdd-regulator-scope = <1800000 1810000>;  /* uV */
+//
+//		board_type = "evb";/* "ces" or "evb"*/
+//		sensors = "dual"; /* "dual", "front" or "rear" */
+//		pwdn-rear-gpios = <&gpioc 17 1>; /* GPIOA27 */
+//		pwdn-front-gpios = <&gpioc 15 1>; /* GPIOA26 */
+//		reset-gpios = <&gpioc 16 1>; /*GPIOB15*/
+//		pinctrl-names = "csi_mipi";
+//		pinctrl-0 = <&isp0_state_csi_mipi>;
+//
+//		status = "okay"; /* create platform-device */
+//	};
+//
+//	sensors: isp-sensor {
+//		compatible = "sensor_common";
+//		i2c_adapter = <&i2c2>; /* 0-3 begin from enabled ones */
+//
+//		status = "disabled";
+//	};
 
-//			avdd-src = "regulator";  /* only: "gpio", "regulator" */
-//		        avdd-regulator = "ldo1"; /* only when vbus-src is "regulator" */
-//		        avdd-regulator-scope = <2800000 2810000>;  /* uV */
-//			dvdd-src = "regulator";  /* only: "gpio", "regulator" */
-//		        dvdd-regulator = "ldo7";
-//		        dvdd-regulator-scope = <1800000 1810000>;  /* uV */
+	thermal0: thermal@e01b00f0 {
+		compatible = "actions,gt7-thermal";
+		reg = <0 0xe01b00f0 0 0x04>;
+		id = <0>;
+		//clocks = <&clock CLK_THERMAL_SENSOR>;
+		clocks = <&clock CLK_THERMAL_SENSOR>;
+		clock-names = "thermal_sensor";
+	};
 
-//			board_type = "evb";/* "ces" or "evb"*/
-//			sensors = "dual"; /* "dual", "front" or "rear" */
-//			pwdn-rear-gpios = <&gpioc 17 1>; /* GPIOA27 */
-//			pwdn-front-gpios = <&gpioc 15 1>; /* GPIOA26 */
-//			reset-gpios = <&gpioc 16 1>; /*GPIOB15*/
-//			pinctrl-names = "csi_mipi";
-//			pinctrl-0 = <&isp0_state_csi_mipi>;
-
-//			status = "okay"; /* create platform-device */
-//		};
-
-		sensors: isp-sensor {
-			compatible = "sensor_common";
-			i2c_adapter = <&i2c2>; /* 0-3 begin from enabled ones */
-
-			status = "disabled";
-		};
-
-		thermal0: thermal@e01b00f0 {
-			compatible = "actions,gt7-thermal";
-			reg = <0 0xe01b00f0 0 0x04>;
-			id = <0>;
-			//clocks = <&clock CLK_THERMAL_SENSOR>;
-			clocks = <&clock CLK_THERMAL_SENSOR>;
-			clock-names = "thermal_sensor";
-		};
+	
 
 	gpu@e0340000 {
 		default_freq = <400>;
 
 		operating-points = <240000 1050000
-                            320000 1100000
-                            400000 1125000>;
-        gpuvdd-supply = <&vdd_gpu_dcdc>;
-    };
+				    320000 1100000
+                            	    400000 1125000>;
+        	gpuvdd-supply = <&vdd_gpu_dcdc>;
+	};
 
 	owl-audio-hdmi@0xe02c0000 {
 		compatible = "actions,s700-audio-hdmi";
