@@ -4,6 +4,7 @@
  */
 
 #include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/clock/actions,s700-cmu.h>
 
 / {
 	compatible = "actions,s700";
@@ -87,6 +88,12 @@
 		#clock-cells = <0>;
 	};
 
+	losc: losc {
+		compatible = "fixed-clock";
+		clock-frequency = <32768>;
+		#clock-cells = <0>;
+	};
+
 	soc {
 		compatible = "simple-bus";
 		#address-cells = <2>;
@@ -103,6 +110,50 @@
 			interrupt-controller;
 			#interrupt-cells = <3>;
 		};
+
+/*
+               sirq: interrupt-controller@e01b0000 {
+                       compatible = "actions,s700-sirq";
+                       reg = <0 0xe01b0000 0 0x1000>;
+                       interrupts = <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>,
+                               <GIC_SPI 14 IRQ_TYPE_LEVEL_HIGH>,
+                               <GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>;
+                       interrupt-controller;
+                       #interrupt-cells = <2>;
+                       sampling-rate-24m = <0 0 0>;
+                	pinctrl-names = "default";
+                	pinctrl-0 = <&sirq2_default>;
+               };
+*/
+        sirq: interrupt-controller@e01b0000 {
+                compatible = "actions,owl-sirq";
+                reg = <0 0xe01b0000 0 0x1000>;
+                interrupt-controller;
+                #interrupt-cells = <2>;
+		actions,sirq-offset = <0x200 0x200 0x200>;
+		actions,sirq-shared-reg;
+                pinctrl-names = "default";
+                pinctrl-0 = <&sirq2_default>;
+			interrupts = <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 14 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>;
+        };
+
+/*
+
+		sirq: interrupt-controller@e01b0000 {
+			compatible = "actions,s700-sirq";
+			reg = <0 0xe01b0000 0 0x1000>;
+			interrupts = <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 14 IRQ_TYPE_LEVEL_HIGH>,
+				<GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			sampling-rate-24m = <0 0 0>;
+                pinctrl-names = "default";
+                pinctrl-0 = <&sirq2_default>;
+		};
+*/
 
 		uart0: serial@e0120000 {
 			compatible = "actions,s900-uart", "actions,owl-uart";
@@ -153,6 +204,24 @@
 			status = "disabled";
 		};
 
+                i2c0: i2c@e0170000 {
+                        compatible = "actions,s900-i2c";
+                        reg = <0 0xe0170000 0 0x1000>;
+                        interrupts = <GIC_SPI 25 IRQ_TYPE_LEVEL_HIGH>;
+                        #address-cells = <1>;
+                        #size-cells = <0>;
+                        status = "disabled";
+                        pinctrl-names = "default";
+                        pinctrl-0 = <&i2c0_default>;
+                };
+
+		cmu: clock-controller@e0168000 {
+			compatible = "actions,s700-cmu";
+			reg = <0x0 0xe0168000 0x0 0x1000>;
+			clocks = <&hosc>, <&losc>;
+			#clock-cells = <1>;
+		};
+
 		sps: power-controller@e01b0100 {
 			compatible = "actions,s700-sps";
 			reg = <0x0 0xe01b0100 0x0 0x100>;
@@ -164,6 +233,12 @@
 			reg = <0x0 0xe024c000 0x0 0x4000>;
 			interrupts = <GIC_SPI 11 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "timer1";
+		};
+
+		pinctrl: pinctrl@e01b0000 {
+			compatible = "actions,s700-pinctrl";
+			reg = <0x0 0xe01b0000 0x0 0x1000>;
+			clocks = <&cmu CLK_GPIO>;
 		};
 	};
 };

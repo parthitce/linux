@@ -28,12 +28,6 @@
 		device_type = "memory";
 		reg = <0x1 0xe0000000 0x0 0x0>;
 	};
-
-	uart3_clk: uart3-clk {
-		compatible = "fixed-clock";
-		clock-frequency = <921600>;
-		#clock-cells = <0>;
-	};
 };
 
 &timer {
@@ -42,5 +36,46 @@
 
 &uart3 {
 	status = "okay";
-	clocks = <&uart3_clk>;
+	clocks = <&cmu CLK_UART3>;
+};
+
+&pinctrl {
+        i2c0_default: i2c0_default {
+                pinmux {
+                        groups = "i2c0_mfp";
+                        function = "i2c0";
+                };
+                pinconf {
+                        pins = "i2c0_sclk", "i2c0_sdata";
+                        bias-pull-up;
+                };
+        };
+
+	sirq2_default: sirq2_default {
+/*
+                pinmux {
+                        groups = "sirq2_dummy";
+                        function = "sirq2";
+                };
+*/
+		pinconf {
+			pins = "sirq2";
+                        bias-pull-pin-default;
+//                        bias-pull-up;
+		};
+	};
+};
+
+&i2c0 {
+        status = "okay";
+	clocks = <&cmu CLK_I2C0>;
+        atc260x: atc2603c@65 {
+                compatible = "actions,atc2603c";
+		interrupts = <2 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-parent = <&sirq>;
+		interrupt-controller;
+		#interrupt-cells = <1>;
+		actions,sirq-clk-sel = <0 0 0>;
+                reg = <0x65>;
+        };
 };
